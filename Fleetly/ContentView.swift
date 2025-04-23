@@ -11,7 +11,7 @@ struct MainTabView: View {
             DashboardHomeView()
                 .tabItem {
                     Image(systemName: "house.fill")
-                    Text("Home")
+                    Text("Homme")
                 }
 
             DriverManagerView()
