@@ -3,6 +3,7 @@ import Charts
 
 // Main Tab View
 struct MainTabView: View {
+    @ObservedObject var authVM: AuthViewModel
     var body: some View {
         TabView {
             DashboardHomeView()
@@ -232,6 +233,4 @@ struct AlertRowView: View {
     }
 }
 
-#Preview {
-    MainTabView()
-}
+

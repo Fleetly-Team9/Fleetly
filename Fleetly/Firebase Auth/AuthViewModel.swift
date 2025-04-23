@@ -7,28 +7,27 @@ class AuthViewModel: ObservableObject {
 
     private let service = FirebaseService.shared
 
+    /// Sign in, then fetch your User document (which contains the role).
     func login(email: String,
                password: String,
-               role: String,
                completion: @escaping (String?) -> Void) {
         Auth.auth().signIn(withEmail: email, password: password) { res, err in
             if let err = err {
-                completion(err.localizedDescription); return
+                completion(err.localizedDescription)
+                return
             }
             guard let uid = res?.user.uid else {
-                completion("No UID after login"); return
+                completion("No UID after login")
+                return
             }
-            // Fetch user by document ID = uid
             self.service.fetchUser(id: uid) { result in
                 switch result {
-                case .success(let u) where u.role == role:
+                case .success(let u):
                     DispatchQueue.main.async {
                         self.user = u
                         self.isLoggedIn = true
                     }
                     completion(nil)
-                case .success:
-                    completion("Role mismatch.")
                 case .failure(let e):
                     completion(e.localizedDescription)
                 }
@@ -36,6 +35,7 @@ class AuthViewModel: ObservableObject {
         }
     }
 
+    /// Driver-only signup remains unchanged
     func signupDriver(name: String,
                       email: String,
                       phone: String,
@@ -74,4 +74,5 @@ class AuthViewModel: ObservableObject {
             }
         }
     }
+    
 }
