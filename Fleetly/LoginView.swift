@@ -50,13 +50,7 @@ struct LoginView: View {
                         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
                     
                     // Role Picker
-                    Picker("Role", selection: $role) {
-                        Text("Manager").tag("manager")
-                        Text("Driver").tag("driver")
-                        Text("Maintenance").tag("maintenance")
-                    }
-                    .pickerStyle(SegmentedPickerStyle())
-                    .padding(.vertical, 8)
+                    
                     
                     // Forgot Password
                     Button("Forgot Password?") {
@@ -99,7 +93,7 @@ struct LoginView: View {
                 Spacer()
                 
                 // Sign Up Link (for drivers only)
-                if role == "driver" {
+                
                     HStack {
                         Text("Don't have an account?")
                             .font(.system(.subheadline, design: .rounded))
@@ -112,7 +106,7 @@ struct LoginView: View {
                         .foregroundStyle(.blue)
                     }
                     .padding(.bottom, 24)
-                }
+                
             }
         }
         .sheet(isPresented: $showSignUp) {
