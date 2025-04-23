@@ -16,7 +16,7 @@ struct FMSApp: App {
                     // Route by role
                     switch user.role {
                     case "manager":
-                        MainTabView(authVM: authVM)
+                        ManagerDashboardView(authVM: authVM)
                     case "driver":
                         DriverDashboardView(authVM: authVM)
                     case "maintenance":
