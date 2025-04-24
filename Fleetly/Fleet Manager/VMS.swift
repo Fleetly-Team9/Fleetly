@@ -1,7 +1,9 @@
 import SwiftUI
+import FirebaseDatabaseInternal
+import FirebaseFirestore
 
 // MARK: - Model
-struct Vehicle: Identifiable, Equatable {
+struct Vehicle: Identifiable, Codable, Equatable{
     let id: UUID
     var make: String
     var model: String
@@ -13,21 +15,70 @@ struct Vehicle: Identifiable, Equatable {
     var assignedDriverId: UUID? // Nullable to indicate unassigned or assigned driver
 }
 
-enum VehicleType: String, CaseIterable, Identifiable {
+enum VehicleType: String, CaseIterable, Identifiable, Codable{
     case car = "Car"
     case truck = "Truck"
     case van = "Van"
     case bus = "Bus"
-    
+
     var id: String { self.rawValue }
 }
 
-enum VehicleStatus: String, CaseIterable, Identifiable {
+enum VehicleStatus: String, CaseIterable, Identifiable, Codable{
     case active = "Active"
     case inMaintenance = "In Maintenance"
     case deactivated = "Deactivated"
-    
+
     var id: String { self.rawValue }
+}
+
+func saveVehicleToFirestore(_ vehicle: Vehicle) {
+    let db = Firestore.firestore()
+
+    // Convert Vehicle to a dictionary
+    let vehicleData: [String: Any] = [
+        "id": vehicle.id.uuidString,
+        "make": vehicle.make,
+        "model": vehicle.model,
+        "year": vehicle.year,
+        "vin": vehicle.vin,
+        "licensePlate": vehicle.licensePlate,
+        "vehicleType": vehicle.vehicleType.rawValue,
+        "status": vehicle.status.rawValue,
+        "assignedDriverId": vehicle.assignedDriverId?.uuidString ?? NSNull()
+    ]
+
+    db.collection("vehicles").document(vehicle.id.uuidString).setData(vehicleData) { error in
+        if let error = error {
+            print("Error saving vehicle: \(error.localizedDescription)")
+        } else {
+            print("Vehicle saved successfully.")
+        }
+    }
+}
+
+func deleteVehicleFromFirestore(vehicleId: UUID) {
+    let db = Firestore.firestore()
+    db.collection("vehicles").document(vehicleId.uuidString).delete { error in
+        if let error = error {
+            print("Error deleting vehicle from Firestore: \(error.localizedDescription)")
+        } else {
+            print("Vehicle deleted from Firestore successfully.")
+        }
+    }
+}
+
+func deleteVehicleFromRealtimeDB(vehicleId: UUID) {
+    let db = Database.database().reference()
+    let vehicleRef = db.child("vehicles").child(vehicleId.uuidString)
+
+    vehicleRef.removeValue { error, _ in
+        if let error = error {
+            print("Error deleting vehicle from Realtime DB: \(error.localizedDescription)")
+        } else {
+            print("Vehicle deleted from Realtime DB successfully.")
+        }
+    }
 }
 
 struct VehiclePlaceholderView: View {
@@ -79,9 +130,6 @@ struct VehiclePlaceholderView: View {
     }
 }
 
-
-
-
 // MARK: - ViewModel
 class VehicleManagerViewModel: ObservableObject {
     @Published var vehicles: [Vehicle] = []
@@ -107,40 +155,56 @@ class VehicleManagerViewModel: ObservableObject {
     func delete(vehicle: Vehicle) {
         if let index = vehicles.firstIndex(of: vehicle) {
             recentlyDeleted = vehicles.remove(at: index)
+            deleteVehicleFromFirestore(vehicleId: vehicle.id) // Delete from Firestore
+            deleteVehicleFromRealtimeDB(vehicleId: vehicle.id) // Also delete from Realtime DB
         }
     }
 
     func undoDelete() {
         if let vehicle = recentlyDeleted {
             vehicles.append(vehicle)
+            saveVehicleToFirestore(vehicle) // Re-save to Firestore when undoing delete
             recentlyDeleted = nil
         }
     }
 
     func add(vehicle: Vehicle) {
         vehicles.append(vehicle)
+        saveVehicleToFirestore(vehicle) // Save to Firestore on add
     }
 
     func update(vehicle: Vehicle) {
         if let index = vehicles.firstIndex(where: { $0.id == vehicle.id }) {
             vehicles[index] = vehicle
+            saveVehicleToFirestore(vehicle) // Save to Firestore on update
         }
     }
-
-    func assignVehicle(to driver: Driver, vehicle: Vehicle) {
-        if let index = vehicles.firstIndex(where: { $0.id == vehicle.id }) {
-            var updatedVehicle = vehicle
-            updatedVehicle.assignedDriverId = driver.id
-            vehicles[index] = updatedVehicle
+    
+    func fetchVehiclesFromFirestore() {
+          let db = Firestore.firestore()
+        db.collection("vehicles").getDocuments { (snapshot, error) in
+             if let error = error {
+                    print("Error fetching vehicles: \(error.localizedDescription)")
+                    return
+               }
+                guard let documents = snapshot?.documents else {
+                    print("No vehicles found")
+                    return
+                }
+                self.vehicles = documents.compactMap { doc -> Vehicle? in
+                    do {
+                        let data = try doc.data(as: Vehicle.self)
+                        return data
+                    } catch {
+                        print("Error decoding vehicle: \(error.localizedDescription)")
+                        return nil
+                    }
+                }
+            }
         }
-    }
-
-    func unassignVehicle(vehicle: Vehicle) {
-        if let index = vehicles.firstIndex(where: { $0.id == vehicle.id }) {
-            var updatedVehicle = vehicle
-            updatedVehicle.assignedDriverId = nil
-            vehicles[index] = updatedVehicle
-        }
+    
+    func loadVehicles() {
+        fetchVehiclesFromFirestore()
     }
 }
 
@@ -152,6 +216,10 @@ struct VehicleManagementView: View {
     @State private var showingAddVehicle = false
     @State private var editingVehicle: Vehicle? = nil
     @State private var showingAssignDriver = false
+    @State private var showingDeleteConfirmation = false
+    @State private var vehicleToDelete: Vehicle?
+    @State private var showingContextMenu = false
+    @State private var selectedVehicle: Vehicle?
 
     var body: some View {
         NavigationStack {
@@ -163,33 +231,35 @@ struct VehicleManagementView: View {
                 } else {
                     List {
                         ForEach(viewModel.filteredVehicles) { vehicle in
-                            VehicleCard(vehicle: vehicle) {
-                                withAnimation {
-                                    viewModel.delete(vehicle: vehicle)
+                            VehicleCard(vehicle: vehicle)
+                                .onTapGesture {
+                                    selectedVehicle = vehicle
                                 }
-                            }
-                            .onTapGesture {
-                                editingVehicle = vehicle
-                            }
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) {
-                                    withAnimation {
-                                        viewModel.delete(vehicle: vehicle)
+                                .onLongPressGesture {
+                                    selectedVehicle = vehicle
+                                    showingContextMenu = true
+                                }
+                                .listRowSeparator(.hidden)
+                                .listRowBackground(Color.clear)
+                                .confirmationDialog(
+                                    "Vehicle Options",
+                                    isPresented: $showingContextMenu,
+                                    presenting: selectedVehicle
+                                ) { vehicle in
+                                    Button("Edit") {
+                                        editingVehicle = vehicle
                                     }
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
+                                    
+                                    Button("Delete", role: .destructive) {
+                                        vehicleToDelete = vehicle
+                                        showingDeleteConfirmation = true
+                                    }
+                                    
+                                    Button("Cancel", role: .cancel) {}
+                                } message: { vehicle in
+                                    Text("\(vehicle.make) \(vehicle.model)")
                                 }
-                                Button {
-                                    editingVehicle = vehicle
-                                    showingAssignDriver = true
-                                } label: {
-                                    Label("Assign", systemImage: "person.fill")
-                                }
-                                .tint(.blue)
-                            }
                         }
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
                     }
                     .listStyle(.plain)
                 }
@@ -219,6 +289,21 @@ struct VehicleManagementView: View {
                     AssignDriverView(viewModel: viewModel, vehicle: vehicle)
                 }
             }
+            .alert(isPresented: $showingDeleteConfirmation) {
+                Alert(
+                    title: Text("Delete Vehicle?"),
+                    message: Text("Are you sure you want to delete this vehicle? This action cannot be undone."),
+                    primaryButton: .destructive(Text("Delete")) {
+                        if let vehicleToDelete = vehicleToDelete {
+                            withAnimation {
+                                viewModel.delete(vehicle: vehicleToDelete)
+                            }
+                        }
+                        vehicleToDelete = nil
+                    },
+                    secondaryButton: .cancel()
+                )
+            }
             .overlay(alignment: .bottom) {
                 if let _ = viewModel.recentlyDeleted {
                     UndoToast {
@@ -231,6 +316,7 @@ struct VehicleManagementView: View {
             .onAppear {
                 let driverVM = DriverManagerViewModel()
                 viewModel.drivers = driverVM.drivers
+                viewModel.loadVehicles() // Fetch vehicles from Firestore
             }
         }
     }
@@ -239,88 +325,41 @@ struct VehicleManagementView: View {
 // MARK: - Card View
 struct VehicleCard: View {
     var vehicle: Vehicle
-    var onDelete: () -> Void
-
-    @State private var offsetX: CGFloat = 0
-    @GestureState private var isDragging = false
 
     var body: some View {
-        ZStack(alignment: .trailing) {
-            // Background delete button (on the right)
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Spacer()
-                Button {
-                    withAnimation {
-                        onDelete()
-                    }
-                } label: {
-                    Image(systemName: "trash")
-                        .foregroundColor(.white)
-                        .padding()
-                        .background(Color.red)
-                        .clipShape(Circle())
-                }
-                .padding(.trailing)
-                .opacity(offsetX < -100 ? 1 : 0)
-            }
+                Image(systemName: "car.fill")
+                    .foregroundColor(.blue)
+                    .font(.system(size: 26))
 
-            // Foreground card
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Image(systemName: "car.fill")
-                        .foregroundColor(.blue)
-                        .font(.system(size: 26))
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("\(vehicle.make) \(vehicle.model) (\(vehicle.year))")
-                            .font(.title3.bold())
-                        Text("Plate: \(vehicle.licensePlate)")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(vehicle.make) \(vehicle.model) (\(vehicle.year))")
+                        .font(.title3.bold())
+                    Text("Plate: \(vehicle.licensePlate)")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Text("Status: \(vehicle.status.rawValue)")
+                        .font(.subheadline)
+                        .foregroundColor(vehicle.status == .deactivated ? .red : vehicle.status == .inMaintenance ? .orange : .green)
+                    if let driverId = vehicle.assignedDriverId {
+                        Text("Assigned to: Driver ID \(driverId.uuidString.prefix(8))...")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
-                        Text("Status: \(vehicle.status.rawValue)")
+                    } else {
+                        Text("Unassigned")
                             .font(.subheadline)
-                            .foregroundColor(vehicle.status == .deactivated ? .red : vehicle.status == .inMaintenance ? .orange : .green)
-                        if let driverId = vehicle.assignedDriverId {
-                            Text("Assigned to: Driver ID \(driverId.uuidString.prefix(8))...")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        } else {
-                            Text("Unassigned")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
+                            .foregroundColor(.secondary)
                     }
-                    Spacer()
                 }
+                Spacer()
             }
-            .padding()
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 20))
-            .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
-            .offset(x: offsetX)
-            .padding(.vertical, 4)
-            .gesture(
-                DragGesture()
-                    .updating($isDragging) { value, state, _ in
-                        state = true
-                    }
-                    .onChanged { value in
-                        offsetX = min(0, value.translation.width)
-                    }
-                    .onEnded { value in
-                        if value.translation.width < -100 {
-                            withAnimation {
-                                onDelete()
-                            }
-                        } else {
-                            withAnimation {
-                                offsetX = 0
-                            }
-                        }
-                    }
-            )
         }
-        .animation(.spring(), value: offsetX)
+        .padding()
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
+        .padding(.vertical, 4)
     }
 }
 
@@ -390,6 +429,7 @@ struct VehicleFormView: View {
                         } else {
                             viewModel.update(vehicle: vehicle)
                         }
+
                         dismiss()
                     }
                     .disabled(make.isEmpty || model.isEmpty || year.isEmpty || vin.isEmpty || licensePlate.isEmpty)
@@ -411,7 +451,6 @@ struct VehicleFormView: View {
 }
 
 // MARK: - Assign Driver View
-// MARK: - Assign Driver View
 struct AssignDriverView: View {
     @Environment(\.dismiss) var dismiss
     @ObservedObject var viewModel: VehicleManagerViewModel
@@ -431,33 +470,6 @@ struct AssignDriverView: View {
                     }
                     .pickerStyle(.menu)
                 }
-            }
-            .navigationTitle("Assign Driver")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        if let vehicle = vehicle, let driverId = selectedDriverId {
-                            if driverId == nil {
-                                viewModel.unassignVehicle(vehicle: vehicle)
-                            } else {
-                                if let driver = viewModel.drivers.first(where: { $0.id == driverId }) {
-                                    viewModel.assignVehicle(to: driver, vehicle: vehicle)
-                                }
-                            }
-                        }
-                        dismiss()
-                    }
-                }
-            }
-            .onAppear {
-                selectedDriverId = vehicle?.assignedDriverId
             }
         }
     }
@@ -488,6 +500,8 @@ struct UndoToast: View {
         }
     }
 }
+
+//hellooo
 
 #Preview {
     VehicleManagementView()
