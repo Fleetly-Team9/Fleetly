@@ -10,71 +10,33 @@ class AuthViewModel: ObservableObject {
 
     private let service = FirebaseService.shared
     private let db = Firestore.firestore()
-    private var verificationID: String?
-       @Published var otpVerificationRequired = false
     /// Sign in, then fetch your User document (which contains the role).
     func login(email: String,
-                 password: String,
-                 completion: @escaping (String?) -> Void) {
-          Auth.auth().signIn(withEmail: email, password: password) { res, err in
-              if let err = err {
-                  completion(err.localizedDescription)
-                  return
-              }
-              guard let uid = res?.user.uid else {
-                  completion("No UID after login")
-                  return
-              }
-              self.service.fetchUser(id: uid) { result in
-                  switch result {
-                  case .success(let u):
-                      DispatchQueue.main.async {
-                          self.user = u
-                          self.startPhoneVerification(phone: u.phone) { err in
-                              if let err = err {
-                                  completion("Phone verification failed: \(err)")
-                              } else {
-                                  self.otpVerificationRequired = true
-                                  completion(nil)
-                              }
-                          }
-                      }
-                  case .failure(let e):
-                      completion(e.localizedDescription)
-                  }
-              }
-          }
-      }
-
-      private func startPhoneVerification(phone: String, completion: @escaping (String?) -> Void) {
-          PhoneAuthProvider.provider().verifyPhoneNumber(phone, uiDelegate: nil) { verificationID, error in
-              if let error = error {
-                  completion(error.localizedDescription)
-                  return
-              }
-              self.verificationID = verificationID
-              completion(nil)
-          }
-      }
-
-      func verifyOTP(code: String, completion: @escaping (String?) -> Void) {
-          guard let verificationID = verificationID else {
-              completion("Missing verification ID")
-              return
-          }
-          let credential = PhoneAuthProvider.provider().credential(withVerificationID: verificationID, verificationCode: code)
-          Auth.auth().currentUser?.link(with: credential) { authResult, error in
-              if let error = error {
-                  completion(error.localizedDescription)
-                  return
-              }
-              DispatchQueue.main.async {
-                  self.isLoggedIn = true
-                  self.otpVerificationRequired = false
-              }
-              completion(nil)
-          }
-      }
+               password: String,
+               completion: @escaping (String?) -> Void) {
+        Auth.auth().signIn(withEmail: email, password: password) { res, err in
+            if let err = err {
+                completion(err.localizedDescription)
+                return
+            }
+            guard let uid = res?.user.uid else {
+                completion("No UID after login")
+                return
+            }
+            self.service.fetchUser(id: uid) { result in
+                switch result {
+                case .success(let u):
+                    DispatchQueue.main.async {
+                        self.user = u
+                        self.isLoggedIn = true
+                    }
+                    completion(nil)
+                case .failure(let e):
+                    completion(e.localizedDescription)
+                }
+            }
+        }
+    }
 
     /// Driver-only signup remains unchanged
     func signupDriver(
