@@ -12,7 +12,7 @@ struct FMSApp: App {
             NavigationView {
                 if authVM.isLoggedIn, let user = authVM.user {
                     switch user.role {
-                    case "manager":     MainTabView(authVM: authVM)
+                    case "manager":     MainTabView()
                     case "driver":      DriverDashboardView(authVM: authVM)
                     case "maintenance": MaintenanceDashboardView(authVM: authVM)
                     default:            Text("Unknown role").foregroundColor(.red)

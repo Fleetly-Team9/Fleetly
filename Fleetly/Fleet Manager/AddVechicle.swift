@@ -422,16 +422,17 @@ struct AssignDriverView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section(header: Text("Assign Driver")) {
-                    Picker("Select Driver", selection: $selectedDriverId) {
-                        Text("Unassign").tag(nil as UUID?) // Explicitly tag with nil
-                        ForEach(viewModel.drivers) { driver in
-                            Text(driver.name).tag(driver.id as UUID?) // Match the optional type
+                            Section(header: Text("Assign Driver")) {
+                                Picker("Select Driver", selection: $selectedDriverId) {
+                                    Text("Unassign").tag(nil as UUID?)
+                                    ForEach(viewModel.drivers) { driver in
+                                        Text("\(driver.firstName) \(driver.lastName)")
+                                            .tag(driver.id as UUID?)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                            }
                         }
-                    }
-                    .pickerStyle(.menu)
-                }
-            }
             .navigationTitle("Assign Driver")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

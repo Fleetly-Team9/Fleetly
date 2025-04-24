@@ -1,9 +1,10 @@
 import SwiftUI
 import Charts
 
-// Main Tab View
+
+
+
 struct MainTabView: View {
-    @ObservedObject var authVM: AuthViewModel
     var body: some View {
         TabView {
             DashboardHomeView()
@@ -23,11 +24,28 @@ struct MainTabView: View {
                     Image(systemName: "car.2.fill")
                     Text("Vehicles")
                 }
+
+          
         }
     }
 }
 
-// Dashboard Home View
+#Preview {
+    MainTabView()
+}
+
+// MARK: - Placeholder Views (Unchanged)
+struct UserManagementView: View {
+    var body: some View {
+        NavigationView {
+            Text("User Management Screen")
+                .navigationTitle("Users")
+        }
+    }
+}
+
+
+
 struct DashboardHomeView: View {
     var body: some View {
         NavigationView {
@@ -49,26 +67,28 @@ struct DashboardHomeView: View {
 
                     // MARK: - Quick Actions
                     VStack(alignment: .center, spacing: 8) {
-                        Text("Quick Actions")
-                            .font(.headline)
-                            .padding(.horizontal)
+                                            Text("Quick Actions")
+                                                .font(.headline)
+                                                .padding(.horizontal)
 
                         HStack(spacing: 20) {
-                            QuickActionButton(icon: "person.fill.badge.plus", title: "Assign")
+                            QuickActionButton(icon: "person.fill.badge.plus", title: "Assign ")
                             QuickActionButton(icon: "calendar.badge.clock", title: "Maintain")
                             QuickActionButton(icon: "doc.text.magnifyingglass", title: "Reports")
                             QuickActionButton(icon: "map.fill", title: "Track")
                         }
-                        .padding(.horizontal)
-                    }
-                    .padding()
-                    .background(Color.white)
-                    .cornerRadius(30)
-                    .shadow(radius: 4)
-                    .padding(.horizontal)
+                                            .padding(.horizontal)
+                                        }
+                                        .padding() // Inner padding for content
+                                        .background(Color(.white))
+                                        .cornerRadius(30) // Rounded corners
+                                        .shadow(radius: 4) // Subtle shadow
+                                        .padding(.horizontal)
+                    
 
                     // MARK: - Analytics and Alerts
                     VStack(alignment: .leading, spacing: 16) {
+
                         // Chart Section
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Performance Overview")
@@ -103,16 +123,11 @@ struct DashboardHomeView: View {
                 .padding(.bottom, 20)
             }
             .background(Color(.systemGroupedBackground))
-            .navigationTitle("Hello, Fleet!")
-            .navigationBarTitleDisplayMode(.inline) // Ensures title stays fixed and centered
+            .navigationTitle("Hello,Fleet !") // Fixed navigation bar title
         }
     }
 }
 
-// Placeholder Views
-
-// Rest of the code remains unchanged (StatCardGridView, QuickActionButton, ChartView, etc.)
-// Including these for completeness
 struct QuickActionButton: View {
     let icon: String
     let title: String
@@ -133,6 +148,9 @@ struct QuickActionButton: View {
     }
 }
 
+
+
+// MARK: - Stat Card View
 struct StatCardGridView: View {
     var icon: String
     var title: String
@@ -167,6 +185,36 @@ struct StatCardGridView: View {
     }
 }
 
+// MARK: - Dashboard Button
+struct DashboardButton: View {
+    let icon: String
+    let title: String
+    let color: Color
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 36))
+                .foregroundColor(.white)
+                .padding(16)
+                .background(color)
+                .clipShape(Circle())
+            Text(title)
+                .font(.headline)
+                .fontWeight(.medium)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, minHeight: 140)
+        .padding()
+        .background(.regularMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 24))
+        .shadow(color: .gray.opacity(0.15), radius: 6, x: 0, y: 3)
+    }
+}
+
+// MARK: - Chart View (Mock Data)
 struct ChartView: View {
     var body: some View {
         Chart {
@@ -205,6 +253,7 @@ struct MockData {
     ]
 }
 
+// MARK: - Alert Row
 struct AlertRowView: View {
     let message: String
     let time: String
@@ -232,5 +281,6 @@ struct AlertRowView: View {
         .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
     }
 }
+
 
 

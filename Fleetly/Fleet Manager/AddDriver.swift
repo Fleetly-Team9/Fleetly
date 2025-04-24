@@ -3,20 +3,31 @@ import SwiftUI
 // MARK: - Model
 struct Driver: Identifiable, Equatable {
     let id: UUID
-    var name: String
+    var firstName: String
+    var lastName: String
     var aadhaarNumber: String
-    var panCardNumber: String
     var age: String
-    var licenseNumber: String
-    var phoneNumber: String
-    var licenseValidUpto: String
+    var contactNumber: String
     var role: Role
+    var gender: Gender? // Optional, only for Driver
+    var email: String? // Optional, only for Driver
+    var licenseNumber: String? // Optional, only for Driver
+    var licenseValidUpto: String? // Optional, only for Driver
 }
 
 // Enum for Role
 enum Role: String, CaseIterable, Identifiable {
     case driver = "Driver"
     case maintenancePersonnel = "Maintenance Personnel"
+    
+    var id: String { self.rawValue }
+}
+
+// Enum for Gender
+enum Gender: String, CaseIterable, Identifiable {
+    case male = "Male"
+    case female = "Female"
+    case other = "Other"
     
     var id: String { self.rawValue }
 }
@@ -30,10 +41,10 @@ class DriverManagerViewModel: ObservableObject {
 
     var filteredDrivers: [Driver] {
         let filtered = drivers.filter {
-            searchText.isEmpty || $0.name.lowercased().contains(searchText.lowercased())
+            searchText.isEmpty || "\($0.firstName) \($0.lastName)".lowercased().contains(searchText.lowercased())
         }
         return filtered.sorted {
-            sortAscending ? $0.name < $1.name : $0.name > $1.name
+            sortAscending ? $0.firstName < $1.firstName : $0.firstName > $1.firstName
         }
     }
 
@@ -60,6 +71,7 @@ class DriverManagerViewModel: ObservableObject {
         }
     }
 }
+
 // MARK: - Placeholder View
 struct DriverPlaceholderView: View {
     var onCreate: () -> Void
@@ -109,7 +121,6 @@ struct DriverPlaceholderView: View {
         )
     }
 }
-
 
 // MARK: - Main View
 struct DriverManagerView: View {
@@ -221,14 +232,16 @@ struct DriverCard: View {
                         .font(.system(size: 26))
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(driver.name)
+                        Text("\(driver.firstName) \(driver.lastName)")
                             .font(.title3.bold())
                         Text("Role: \(driver.role.rawValue)")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
-                        Text("License Status: \(licenseStatus)")
-                            .font(.subheadline)
-                            .foregroundColor(licenseStatus == "Expired" ? .red : .green)
+                        if driver.role == .driver, let licenseValidUpto = driver.licenseValidUpto {
+                            Text("License Status: \(licenseStatus)")
+                                .font(.subheadline)
+                                .foregroundColor(licenseStatus == "Expired" ? .red : .green)
+                        }
                     }
                     Spacer()
                 }
@@ -267,13 +280,17 @@ struct DriverCard: View {
     }
 
     private func updateLicenseStatus() {
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd"
-        if let validUptoDate = dateFormatter.date(from: driver.licenseValidUpto),
-           let currentDate = dateFormatter.date(from: dateFormatter.string(from: Date())) {
-            licenseStatus = validUptoDate >= currentDate ? "Active" : "Expired"
+        if driver.role == .driver, let validUpto = driver.licenseValidUpto {
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy-MM-dd"
+            if let validUptoDate = dateFormatter.date(from: validUpto),
+               let currentDate = dateFormatter.date(from: dateFormatter.string(from: Date())) {
+                licenseStatus = validUptoDate >= currentDate ? "Active" : "Expired"
+            } else {
+                licenseStatus = "Unknown"
+            }
         } else {
-            licenseStatus = "Unknown"
+            licenseStatus = "N/A"
         }
     }
 }
@@ -283,12 +300,14 @@ struct DriverFormView: View {
     @Environment(\.dismiss) var dismiss
     @ObservedObject var viewModel: DriverManagerViewModel
 
-    @State private var name = ""
+    @State private var firstName = ""
+    @State private var lastName = ""
     @State private var aadhaarNumber = ""
-    @State private var panCardNumber = ""
     @State private var age = ""
+    @State private var contactNumber = ""
+    @State private var gender: Gender = .male
+    @State private var email = ""
     @State private var licenseNumber = ""
-    @State private var phoneNumber = ""
     @State private var licenseValidUpto = Date()
     @State private var role: Role = .driver
 
@@ -297,8 +316,9 @@ struct DriverFormView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section(header: Text("User Details")) {
-                    TextField("Name", text: $name)
+                Section(header: Text("Personnel Details")) {
+                    TextField("First Name", text: $firstName)
+                    TextField("Last Name", text: $lastName)
                     TextField("Aadhaar Number", text: $aadhaarNumber)
                         .keyboardType(.numberPad)
                         .onChange(of: aadhaarNumber) { newValue in
@@ -309,28 +329,18 @@ struct DriverFormView: View {
                                 aadhaarNumber = digits.formatAadhaar()
                             }
                         }
-                    TextField("PAN Card Number", text: $panCardNumber)
-                        .keyboardType(.asciiCapable)
-                        .textInputAutocapitalization(.characters)
-                        .onChange(of: panCardNumber) { newValue in
-                            let formatted = formatPAN(newValue)
-                            panCardNumber = formatted
-                        }
                     TextField("Age", text: $age)
                         .keyboardType(.numberPad)
-                    TextField("License Number", text: $licenseNumber)
-                    TextField("Phone Number", text: $phoneNumber)
+                    TextField("Contact Number", text: $contactNumber)
                         .keyboardType(.numberPad)
-                        .onChange(of: phoneNumber) { newValue in
+                        .onChange(of: contactNumber) { newValue in
                             let digits = newValue.filter { $0.isNumber }
                             if digits.count > 10 {
-                                phoneNumber = String(digits.prefix(10))
+                                contactNumber = String(digits.prefix(10))
                             } else {
-                                phoneNumber = digits
+                                contactNumber = digits
                             }
                         }
-                    DatePicker("License Valid Upto", selection: $licenseValidUpto, displayedComponents: [.date])
-                        .datePickerStyle(.compact)
                     Picker("Role", selection: $role) {
                         ForEach(Role.allCases) { role in
                             Text(role.rawValue).tag(role)
@@ -338,8 +348,25 @@ struct DriverFormView: View {
                     }
                     .pickerStyle(.menu)
                 }
+
+                if role == .driver {
+                    Section(header: Text("Driver Details")) {
+                        Picker("Gender", selection: $gender) {
+                            ForEach(Gender.allCases) { gender in
+                                Text(gender.rawValue).tag(gender)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        TextField("Email", text: $email)
+                            .keyboardType(.emailAddress)
+                            .textContentType(.emailAddress)
+                        TextField("License Number", text: $licenseNumber)
+                        DatePicker("License Valid Upto", selection: $licenseValidUpto, displayedComponents: [.date])
+                            .datePickerStyle(.compact)
+                    }
+                }
             }
-            .navigationTitle(editingDriver == nil ? "Add Driver" : "Edit Driver")
+            .navigationTitle(editingDriver == nil ? "Add Personnel" : "Edit Personnel")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -352,17 +379,19 @@ struct DriverFormView: View {
                     Button("Save") {
                         let dateFormatter = DateFormatter()
                         dateFormatter.dateFormat = "yyyy-MM-dd"
-                        let licenseValidUptoStr = dateFormatter.string(from: licenseValidUpto)
+                        let licenseValidUptoStr = role == .driver ? dateFormatter.string(from: licenseValidUpto) : nil
                         let driver = Driver(
                             id: editingDriver?.id ?? UUID(),
-                            name: name,
+                            firstName: firstName,
+                            lastName: lastName,
                             aadhaarNumber: aadhaarNumber,
-                            panCardNumber: panCardNumber,
                             age: age,
-                            licenseNumber: licenseNumber,
-                            phoneNumber: phoneNumber,
-                            licenseValidUpto: licenseValidUptoStr,
-                            role: role
+                            contactNumber: contactNumber,
+                            role: role,
+                            gender: role == .driver ? gender : nil,
+                            email: role == .driver ? email : nil,
+                            licenseNumber: role == .driver ? licenseNumber : nil,
+                            licenseValidUpto: licenseValidUptoStr
                         )
                         if editingDriver == nil {
                             viewModel.add(driver: driver)
@@ -371,69 +400,44 @@ struct DriverFormView: View {
                         }
                         dismiss()
                     }
-                    .disabled(name.isEmpty || aadhaarNumber.isEmpty || panCardNumber.isEmpty || age.isEmpty || licenseNumber.isEmpty || phoneNumber.isEmpty || phoneNumber.count != 10 || aadhaarNumber.replacingOccurrences(of: "-", with: "").count != 12 || panCardNumber.count != 10)
+                    .disabled(!isFormValid)
                 }
             }
             .onAppear {
                 if let driver = editingDriver {
-                    name = driver.name
+                    firstName = driver.firstName
+                    lastName = driver.lastName
                     aadhaarNumber = driver.aadhaarNumber.formatAadhaar()
-                    panCardNumber = driver.panCardNumber
                     age = driver.age
-                    licenseNumber = driver.licenseNumber
-                    phoneNumber = driver.phoneNumber
+                    contactNumber = driver.contactNumber
+                    role = driver.role
+                    gender = driver.gender ?? .male
+                    email = driver.email ?? ""
+                    licenseNumber = driver.licenseNumber ?? ""
                     let dateFormatter = DateFormatter()
                     dateFormatter.dateFormat = "yyyy-MM-dd"
-                    if let date = dateFormatter.date(from: driver.licenseValidUpto) {
+                    if let date = driver.licenseValidUpto.flatMap({ dateFormatter.date(from: $0) }) {
                         licenseValidUpto = date
                     }
-                    role = driver.role
                 }
             }
         }
     }
 
-    // Helper function to format Aadhaar number
-    private func formatAadhaar() -> String {
-        let digits = aadhaarNumber.replacingOccurrences(of: "-", with: "").filter { $0.isNumber }
-        guard digits.count <= 12 else { return String(digits.prefix(12)).formatAadhaar() }
-        var formatted = digits
-        if formatted.count > 4 {
-            formatted.insert("-", at: formatted.index(formatted.startIndex, offsetBy: 4))
-        }
-        if formatted.count > 9 {
-            formatted.insert("-", at: formatted.index(formatted.startIndex, offsetBy: 9))
-        }
-        return formatted
-    }
-
-    // Helper function to format PAN number
-    private func formatPAN(_ value: String) -> String {
-        let allowedChars = value.uppercased().filter { $0.isLetter || $0.isNumber }
-        guard allowedChars.count <= 10 else { return String(allowedChars.prefix(10)) }
+    private var isFormValid: Bool {
+        let commonValid = !firstName.isEmpty &&
+                          !lastName.isEmpty &&
+                          aadhaarNumber.replacingOccurrences(of: "-", with: "").count == 12 &&
+                          !age.isEmpty &&
+                          contactNumber.count == 10
         
-        var formatted = allowedChars
-        if formatted.count > 5 {
-            formatted.insert("-", at: formatted.index(formatted.startIndex, offsetBy: 5))
-        }
-        if formatted.count > 3 {
-            formatted.insert("-", at: formatted.index(formatted.startIndex, offsetBy: 3))
-        }
-        
-        
-        let components = formatted.split(separator: "-")
-        var result = ""
-        if components.count >= 4 {
-            let ss = components[0].prefix(2)
-            let rr = components[1].prefix(2)
-            let yyyy = components[2].prefix(4)
-            let nnnnnn = components[3].prefix(6)
-            result = "\(ss)-\(rr)-\(yyyy)-\(nnnnnn)"
+        if role == .driver {
+            return commonValid &&
+                   !email.isEmpty &&
+                   !licenseNumber.isEmpty
         } else {
-            result = formatted
+            return commonValid
         }
-        
-        return String(result.prefix(12))
     }
 }
 
@@ -454,9 +458,7 @@ extension String {
 }
 
 // MARK: - Undo Toast
-
-
-struct UndoToast1   : View {
+struct UndoToast1: View {
     var undoAction: () -> Void
     @State private var isVisible = true
 
