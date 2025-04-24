@@ -8,13 +8,21 @@ class AuthViewModel: ObservableObject {
     @Published var isLoggedIn = false
     @Published var isSigningUp = false
 
+    // MFA / OTP state:
+    @Published var isWaitingForOTP = false
+    @Published var otpError: String?
+    private var verificationID: String?
+    private var pendingUser: User?
+
     private let service = FirebaseService.shared
     private let db = Firestore.firestore()
-    /// Sign in, then fetch your User document (which contains the role).
+
+    /// Email/password login → fetch User → send OTP
     func login(email: String,
                password: String,
                completion: @escaping (String?) -> Void) {
-        Auth.auth().signIn(withEmail: email, password: password) { res, err in
+        Auth.auth().signIn(withEmail: email, password: password) { [weak self] res, err in
+            guard let self = self else { return }
             if let err = err {
                 completion(err.localizedDescription)
                 return
@@ -23,12 +31,16 @@ class AuthViewModel: ObservableObject {
                 completion("No UID after login")
                 return
             }
+            // Fetch full user document (so we get phone, role, etc.)
             self.service.fetchUser(id: uid) { result in
                 switch result {
                 case .success(let u):
+                    // Hold user until OTP verified
+                    self.pendingUser = u
+                    // Kick off OTP to their phone
+                    self.sendOTP(to: u.phone)
                     DispatchQueue.main.async {
-                        self.user = u
-                        self.isLoggedIn = true
+                        self.isWaitingForOTP = true
                     }
                     completion(nil)
                 case .failure(let e):
@@ -37,6 +49,49 @@ class AuthViewModel: ObservableObject {
             }
         }
     }
+
+    private func sendOTP(to phone: String) {
+        PhoneAuthProvider.provider()
+            .verifyPhoneNumber(phone, uiDelegate: nil) { [weak self] id, error in
+                DispatchQueue.main.async {
+                    if let error = error {
+                        self?.otpError = error.localizedDescription
+                    } else {
+                        self?.verificationID = id
+                        self?.otpError = nil
+                    }
+                }
+            }
+    }
+
+    /// Call this once user enters the code
+    func verifyOTP(code: String, completion: @escaping (Bool, String?) -> Void) {
+        guard let id = verificationID else {
+            completion(false, "No verification ID")
+            return
+        }
+        let credential = PhoneAuthProvider.provider()
+            .credential(withVerificationID: id, verificationCode: code)
+
+        // Link the SMS credential to the existing session
+        Auth.auth().currentUser?.link(with: credential) { [weak self] res, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    completion(false, error.localizedDescription)
+                } else if let user = self?.pendingUser {
+                    // OTP passed! finalize login
+                    self?.user = user
+                    self?.isLoggedIn = true
+                    self?.isWaitingForOTP = false
+                    completion(true, nil)
+                } else {
+                    completion(false, "Unknown error")
+                }
+            }
+        }
+    }
+
+    
 
     /// Driver-only signup remains unchanged
     func signupDriver(
