@@ -1,24 +1,23 @@
 import Foundation
 
 struct User: Identifiable, Codable {
-    // Now 'id' is the document ID and satisfies Identifiable
-    let id: String
-    let name: String
+    let id: String                     // Firestore doc ID / Auth UID
+    let name: String                   // firstName + " " + lastName
     let email: String
     let phone: String
-    let role: String                     // "manager", "driver", "maintenance"
-    let drivingLicenseNumber: String?
+    let role: String                   // always "driver" here
+    let gender: String?
+    let age: Int?
+    let disability: String?
     let aadharNumber: String?
-    let drivingLicenseDocUrl: String?
-    let aadharDocUrl: String?
+    let drivingLicenseNumber: String?
+    let aadharDocUrl: String?          // Storage download URL
+    let licenseDocUrl: String?         // Storage download URL
 
-    // Map our 'id' property to Firestore field "uid"
     enum CodingKeys: String, CodingKey {
         case id = "uid"
-        case name, email, phone, role
-        case drivingLicenseNumber, aadharNumber
-        case drivingLicenseDocUrl, aadharDocUrl
+        case name, email, phone, role, gender, age, disability
+        case aadharNumber, drivingLicenseNumber
+        case aadharDocUrl, licenseDocUrl
     }
-
-    // Default initializer and Codable conformance suffice—no manual init needed.
 }
