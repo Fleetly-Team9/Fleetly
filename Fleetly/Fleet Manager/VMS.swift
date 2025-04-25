@@ -284,11 +284,6 @@ struct VehicleManagementView: View {
             .sheet(item: $editingVehicle) { vehicle in
                 VehicleFormView(viewModel: viewModel, editingVehicle: vehicle)
             }
-            .sheet(isPresented: $showingAssignDriver) {
-                if let vehicle = editingVehicle {
-                    AssignDriverView(viewModel: viewModel, vehicle: vehicle)
-                }
-            }
             .alert(isPresented: $showingDeleteConfirmation) {
                 Alert(
                     title: Text("Delete Vehicle?"),
@@ -450,30 +445,6 @@ struct VehicleFormView: View {
     }
 }
 
-// MARK: - Assign Driver View
-struct AssignDriverView: View {
-    @Environment(\.dismiss) var dismiss
-    @ObservedObject var viewModel: VehicleManagerViewModel
-    var vehicle: Vehicle?
-
-    @State private var selectedDriverId: UUID?
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section(header: Text("Assign Driver")) {
-                    Picker("Select Driver", selection: $selectedDriverId) {
-                        Text("Unassign").tag(nil as UUID?) // Explicitly tag with nil
-                        ForEach(viewModel.drivers) { driver in
-                            Text(driver.name).tag(driver.id as UUID?) // Match the optional type
-                        }
-                    }
-                    .pickerStyle(.menu)
-                }
-            }
-        }
-    }
-}
 // MARK: - Undo Toast
 struct UndoToast: View {
     var undoAction: () -> Void
