@@ -19,7 +19,8 @@ struct SignupView: View {
     @Environment(\.dismiss) var dismiss
     @State private var isAgeValid: Bool = true
     @State private var isLoading = false
-    @State private var showEmailVerification = false
+    @State private var showOTPVerification = false
+       @State private var showWaitingApproval = false
 
     let genders = ["Male", "Female"]
 
@@ -28,35 +29,16 @@ struct SignupView: View {
             LinearGradient(colors: [.gray.opacity(0.1), .white], startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
 
-            if showEmailVerification {
-                VStack(spacing: 24) {
-                    Image(systemName: "envelope.badge")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 100)
-                        .foregroundStyle(.blue)
-
-                    Text("Verify Your Email")
-                        .font(.title2.bold())
-                        .multilineTextAlignment(.center)
-
-                    Text("We’ve sent a verification link to your email. Please check your inbox and verify your email to complete registration.")
-                        .font(.body)
-                        .foregroundColor(.gray)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-
-                    Button("Got it") {
-                        dismiss()
-                    }
-                    .font(.headline)
-                    .padding()
-                    .background(.blue)
-                    .foregroundColor(.white)
-                    .clipShape(Capsule())
-                }
-                .padding()
-            } else {
+            if showWaitingApproval {
+                           waitingApprovalView
+                       } else if showOTPVerification {
+                           OTPVerificationView(authVM: authVM, onVerificationComplete: { success in
+                               if success {
+                                   showOTPVerification = false
+                                   showWaitingApproval = true
+                               }
+                           })
+                       } else {
                 ScrollView {
                     VStack(spacing: 24) {
                         VStack(spacing: 10) {
@@ -178,7 +160,8 @@ struct SignupView: View {
 
                                     let formatted = formattedParts.joined(separator: "-")
                                     license = formatted.prefix(19).description
-                                }
+                                }// In SignupView.swift
+                               
                         }
                         .padding(.horizontal, 24)
 
@@ -250,7 +233,48 @@ struct SignupView: View {
                 }
             }
         }
+        .sheet(isPresented: $showOTPVerification) {
+            OTPVerificationView(authVM: authVM) { success in
+                if success {
+                    showOTPVerification = false
+                    showWaitingApproval = true
+                }
+            }
+        }
     }
+    private var waitingApprovalView: some View {
+            VStack(spacing: 24) {
+                Image(systemName: "clock.badge.checkmark")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 100)
+                    .foregroundStyle(.blue)
+
+                Text("Waiting for Approval")
+                    .font(.title2.bold())
+                    .multilineTextAlignment(.center)
+
+                Text("Your registration is complete! We've sent your details to our manager for verification.")
+                    .font(.body)
+                    .foregroundColor(.gray)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+
+                Button("Got it")
+                {
+                    dismiss()
+                }
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .frame(height: 50)
+                .padding()
+                .background(.blue)
+                .foregroundColor(.white)
+                .clipShape(Capsule())
+            }
+            .padding()
+        }
+    
 
     private var isFormValid: Bool {
         !firstName.isEmpty &&
@@ -297,8 +321,7 @@ struct SignupView: View {
                 if let err = err {
                     self.error = err
                 } else {
-                    showEmailVerification = true
-                }
+                    showOTPVerification = true                }
             }
         }
     }
