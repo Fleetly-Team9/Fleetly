@@ -1,9 +1,10 @@
 import SwiftUI
-import FirebaseDatabaseInternal
+import Firebase
 import FirebaseFirestore
+import FirebaseDatabaseInternal
 
 // MARK: - Model
-struct Vehicle: Identifiable, Codable, Equatable{
+struct Vehicle: Identifiable, Codable, Equatable {
     let id: UUID
     var make: String
     var model: String
@@ -15,7 +16,7 @@ struct Vehicle: Identifiable, Codable, Equatable{
     var assignedDriverId: UUID? // Nullable to indicate unassigned or assigned driver
 }
 
-enum VehicleType: String, CaseIterable, Identifiable, Codable{
+enum VehicleType: String, CaseIterable, Identifiable, Codable {
     case car = "Car"
     case truck = "Truck"
     case van = "Van"
@@ -24,7 +25,7 @@ enum VehicleType: String, CaseIterable, Identifiable, Codable{
     var id: String { self.rawValue }
 }
 
-enum VehicleStatus: String, CaseIterable, Identifiable, Codable{
+enum VehicleStatus: String, CaseIterable, Identifiable, Codable {
     case active = "Active"
     case inMaintenance = "In Maintenance"
     case deactivated = "Deactivated"
@@ -32,55 +33,254 @@ enum VehicleStatus: String, CaseIterable, Identifiable, Codable{
     var id: String { self.rawValue }
 }
 
-func saveVehicleToFirestore(_ vehicle: Vehicle) {
-    let db = Firestore.firestore()
-
-    // Convert Vehicle to a dictionary
-    let vehicleData: [String: Any] = [
-        "id": vehicle.id.uuidString,
-        "make": vehicle.make,
-        "model": vehicle.model,
-        "year": vehicle.year,
-        "vin": vehicle.vin,
-        "licensePlate": vehicle.licensePlate,
-        "vehicleType": vehicle.vehicleType.rawValue,
-        "status": vehicle.status.rawValue,
-        "assignedDriverId": vehicle.assignedDriverId?.uuidString ?? NSNull()
-    ]
-
-    db.collection("vehicles").document(vehicle.id.uuidString).setData(vehicleData) { error in
-        if let error = error {
-            print("Error saving vehicle: \(error.localizedDescription)")
-        } else {
-            print("Vehicle saved successfully.")
+// MARK: - ViewModel
+class VehicleManagerViewModel: ObservableObject {
+    @Published var vehicles: [Vehicle] = []
+    @Published var searchText: String = ""
+    @Published var recentlyDeleted: Vehicle?
+    @Published var isLoading: Bool = false
+    @Published var errorMessage: String?
+    @Published var typeFilter: VehicleType? = nil
+    @Published var statusFilter: VehicleStatus? = nil
+    @Published var activeFilters: [String] = []
+    @Published var selectedVehicle: Vehicle? = nil
+    
+    private var db = Firestore.firestore()
+    
+    init() {
+        fetchVehicles()
+    }
+    
+    var filteredVehicles: [Vehicle] {
+        let filtered = vehicles.filter { vehicle in
+            // Search filter
+            let matchesSearch = searchText.isEmpty ||
+            vehicle.make.lowercased().contains(searchText.lowercased()) ||
+            vehicle.model.lowercased().contains(searchText.lowercased()) ||
+            vehicle.licensePlate.lowercased().contains(searchText.lowercased()) ||
+            vehicle.vin.lowercased().contains(searchText.lowercased())
+            
+            // Type filter
+            let matchesType = typeFilter == nil || vehicle.vehicleType == typeFilter!
+            
+            // Status filter
+            let matchesStatus = statusFilter == nil || vehicle.status == statusFilter!
+            
+            return matchesSearch && matchesType && matchesStatus
         }
+        
+        // Sort by make
+        return filtered.sorted { $0.make < $1.make }
+    }
+    
+    func updateActiveFilters() {
+        activeFilters.removeAll()
+        
+        if typeFilter != nil {
+            activeFilters.append("Type: \(typeFilter!.rawValue)")
+        }
+        
+        if statusFilter != nil {
+            activeFilters.append("Status: \(statusFilter!.rawValue)")
+        }
+    }
+    
+    func fetchVehicles() {
+        isLoading = true
+        print("Fetching vehicles from Firestore...")
+
+        db.collection("vehicles").getDocuments { [weak self] (querySnapshot, error) in
+            guard let self = self else { return }
+            defer { self.isLoading = false }
+
+            if let error = error {
+                self.errorMessage = "Error fetching vehicles: \(error.localizedDescription)"
+                print(self.errorMessage!)
+                return
+            }
+
+            guard let documents = querySnapshot?.documents else {
+                print("No documents found.")
+                return
+            }
+
+            print("Number of vehicles fetched: \(documents.count)")
+
+            var loadedVehicles: [Vehicle] = []
+
+            for document in documents {
+                let data = document.data()
+
+                guard
+                    let idString = data["id"] as? String,
+                    let id = UUID(uuidString: idString),
+                    let make = data["make"] as? String,
+                    let model = data["model"] as? String,
+                    let year = data["year"] as? String,
+                    let vin = data["vin"] as? String,
+                    let licensePlate = data["licensePlate"] as? String,
+                    let vehicleTypeString = data["vehicleType"] as? String,
+                    let vehicleType = VehicleType(rawValue: vehicleTypeString),
+                    let statusString = data["status"] as? String,
+                    let status = VehicleStatus(rawValue: statusString)
+                else {
+                    print("Skipping document due to missing fields: \(document.documentID)")
+                    continue
+                }
+                
+                // Parse optional field
+                let assignedDriverIdString = data["assignedDriverId"] as? String
+                let assignedDriverId = assignedDriverIdString != nil ? UUID(uuidString: assignedDriverIdString!) : nil
+
+                let vehicle = Vehicle(
+                    id: id,
+                    make: make,
+                    model: model,
+                    year: year,
+                    vin: vin,
+                    licensePlate: licensePlate,
+                    vehicleType: vehicleType,
+                    status: status,
+                    assignedDriverId: assignedDriverId
+                )
+
+                loadedVehicles.append(vehicle)
+                print("Loaded vehicle: \(make) \(model), VIN: \(vin)")
+            }
+
+            DispatchQueue.main.async {
+                self.vehicles = loadedVehicles
+                print("Vehicles successfully loaded: \(self.vehicles.count)")
+            }
+        }
+    }
+
+    private func saveVehicleToFirestore(_ vehicle: Vehicle, completion: @escaping (Bool) -> Void) {
+        print("Saving vehicle with VIN: \(vehicle.vin)")
+        
+        let vehicleData: [String: Any] = [
+            "id": vehicle.id.uuidString,
+            "make": vehicle.make,
+            "model": vehicle.model,
+            "year": vehicle.year,
+            "vin": vehicle.vin,
+            "licensePlate": vehicle.licensePlate,
+            "vehicleType": vehicle.vehicleType.rawValue,
+            "status": vehicle.status.rawValue,
+            "assignedDriverId": vehicle.assignedDriverId?.uuidString ?? NSNull()
+        ]
+
+        db.collection("vehicles").document(vehicle.id.uuidString).setData(vehicleData) { [weak self] error in
+            guard let self = self else {
+                completion(false)
+                return
+            }
+
+            if let error = error {
+                self.errorMessage = "Error saving vehicle: \(error.localizedDescription)"
+                print("Firebase error: \(error.localizedDescription)")
+                completion(false)
+                return
+            }
+            
+            print("Vehicle successfully saved to Firestore with ID: \(vehicle.id.uuidString)")
+            completion(true)
+        }
+    }
+    
+    private func deleteVehicleFromFirestore(vehicleId: UUID) {
+        isLoading = true
+        
+        db.collection("vehicles").document(vehicleId.uuidString).delete { [weak self] error in
+            guard let self = self else { return }
+            self.isLoading = false
+            
+            if let error = error {
+                self.errorMessage = "Error deleting vehicle: \(error.localizedDescription)"
+                print("Delete error: \(error.localizedDescription)")
+                return
+            }
+            
+            print("Vehicle successfully deleted from Firestore")
+            
+            if let index = self.vehicles.firstIndex(where: { $0.id == vehicleId }) {
+                self.recentlyDeleted = self.vehicles.remove(at: index)
+                print("Vehicle removed from local array")
+            }
+        }
+    }
+    
+    private func deleteVehicleFromRealtimeDB(vehicleId: UUID) {
+        let db = Database.database().reference()
+        let vehicleRef = db.child("vehicles").child(vehicleId.uuidString)
+
+        vehicleRef.removeValue { error, _ in
+            if let error = error {
+                print("Error deleting vehicle from Realtime DB: \(error.localizedDescription)")
+            } else {
+                print("Vehicle deleted from Realtime DB successfully.")
+            }
+        }
+    }
+    
+    func delete(vehicle: Vehicle) {
+        deleteVehicleFromFirestore(vehicleId: vehicle.id)
+        deleteVehicleFromRealtimeDB(vehicleId: vehicle.id)
+    }
+    
+    func undoDelete() {
+        guard let vehicle = recentlyDeleted else { return }
+        
+        isLoading = true
+        
+        saveVehicleToFirestore(vehicle) { [weak self] success in
+            guard let self = self else { return }
+            self.isLoading = false
+            
+            if success {
+                self.vehicles.append(vehicle)
+                self.recentlyDeleted = nil
+            }
+        }
+    }
+    
+    func add(vehicle: Vehicle) {
+        saveVehicleToFirestore(vehicle) { [weak self] success in
+            guard let self = self else { return }
+            
+            if success {
+                DispatchQueue.main.async {
+                    self.vehicles.append(vehicle)
+                    print("Added new vehicle to local array: \(vehicle.make) \(vehicle.model)")
+                }
+            }
+        }
+    }
+    
+    func update(vehicle: Vehicle) {
+        saveVehicleToFirestore(vehicle) { [weak self] success in
+            guard let self = self else { return }
+            
+            if success {
+                DispatchQueue.main.async {
+                    if let index = self.vehicles.firstIndex(where: { $0.id == vehicle.id }) {
+                        self.vehicles[index] = vehicle
+                        print("Updated vehicle in local array at index \(index)")
+                    } else {
+                        self.vehicles.append(vehicle)
+                        print("Added updated vehicle to local array")
+                    }
+                }
+            }
+        }
+    }
+    
+    func refreshVehicles() {
+        fetchVehicles()
     }
 }
 
-func deleteVehicleFromFirestore(vehicleId: UUID) {
-    let db = Firestore.firestore()
-    db.collection("vehicles").document(vehicleId.uuidString).delete { error in
-        if let error = error {
-            print("Error deleting vehicle from Firestore: \(error.localizedDescription)")
-        } else {
-            print("Vehicle deleted from Firestore successfully.")
-        }
-    }
-}
-
-func deleteVehicleFromRealtimeDB(vehicleId: UUID) {
-    let db = Database.database().reference()
-    let vehicleRef = db.child("vehicles").child(vehicleId.uuidString)
-
-    vehicleRef.removeValue { error, _ in
-        if let error = error {
-            print("Error deleting vehicle from Realtime DB: \(error.localizedDescription)")
-        } else {
-            print("Vehicle deleted from Realtime DB successfully.")
-        }
-    }
-}
-
+// MARK: - Placeholder View
 struct VehiclePlaceholderView: View {
     var onCreate: () -> Void
 
@@ -107,7 +307,7 @@ struct VehiclePlaceholderView: View {
                     .fontWeight(.semibold)
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(Color.white)
+                    .background(Color.white.opacity(0.9))
                     .foregroundColor(.black)
                     .clipShape(Capsule())
                     .shadow(color: .black.opacity(0.1), radius: 5, x: 0, y: 5)
@@ -130,165 +330,153 @@ struct VehiclePlaceholderView: View {
     }
 }
 
-// MARK: - ViewModel
-class VehicleManagerViewModel: ObservableObject {
-    @Published var vehicles: [Vehicle] = []
-    @Published var drivers: [Driver] // Reference to existing drivers
-    @Published var searchText: String = ""
-    @Published var sortAscending: Bool = true
-    @Published var recentlyDeleted: Vehicle?
-    @Published var selectedDriver: Driver? // For assignment
-
-    var filteredVehicles: [Vehicle] {
-        let filtered = vehicles.filter {
-            searchText.isEmpty || "\($0.make) \($0.model)".lowercased().contains(searchText.lowercased())
-        }
-        return filtered.sorted {
-            sortAscending ? $0.make < $1.make : $0.make > $1.make
-        }
-    }
-
-    init(drivers: [Driver] = []) {
-        self.drivers = drivers
-    }
-
-    func delete(vehicle: Vehicle) {
-        if let index = vehicles.firstIndex(of: vehicle) {
-            recentlyDeleted = vehicles.remove(at: index)
-            deleteVehicleFromFirestore(vehicleId: vehicle.id) // Delete from Firestore
-            deleteVehicleFromRealtimeDB(vehicleId: vehicle.id) // Also delete from Realtime DB
-        }
-    }
-
-    func undoDelete() {
-        if let vehicle = recentlyDeleted {
-            vehicles.append(vehicle)
-            saveVehicleToFirestore(vehicle) // Re-save to Firestore when undoing delete
-            recentlyDeleted = nil
-        }
-    }
-
-    func add(vehicle: Vehicle) {
-        vehicles.append(vehicle)
-        saveVehicleToFirestore(vehicle) // Save to Firestore on add
-    }
-
-    func update(vehicle: Vehicle) {
-        if let index = vehicles.firstIndex(where: { $0.id == vehicle.id }) {
-            vehicles[index] = vehicle
-            saveVehicleToFirestore(vehicle) // Save to Firestore on update
-        }
-    }
-    
-    func fetchVehiclesFromFirestore() {
-          let db = Firestore.firestore()
-        db.collection("vehicles").getDocuments { (snapshot, error) in
-             if let error = error {
-                    print("Error fetching vehicles: \(error.localizedDescription)")
-                    return
-               }
-                guard let documents = snapshot?.documents else {
-                    print("No vehicles found")
-                    return
-                }
-                self.vehicles = documents.compactMap { doc -> Vehicle? in
-                    do {
-                        let data = try doc.data(as: Vehicle.self)
-                        return data
-                    } catch {
-                        print("Error decoding vehicle: \(error.localizedDescription)")
-                        return nil
-                    }
-                }
-            }
-        }
-    
-    func loadVehicles() {
-        fetchVehiclesFromFirestore()
-    }
-}
-
-// MARK: - Main View
-import SwiftUI
-import UIKit
-
 // MARK: - Main View
 struct VehicleManagementView: View {
     @StateObject private var viewModel = VehicleManagerViewModel()
     @State private var showingAddVehicle = false
-    @State private var editingVehicle: Vehicle? = nil
-    @State private var showingAssignDriver = false
+    @State private var editingVehicle: Vehicle?
     @State private var showingDeleteConfirmation = false
     @State private var vehicleToDelete: Vehicle?
     @State private var showingContextMenu = false
-    @State private var selectedVehicle: Vehicle?
+    @State private var showingError = false
+    @State private var showingFilters = false
 
     var body: some View {
         NavigationStack {
             ZStack {
-                if viewModel.filteredVehicles.isEmpty {
-                    VehiclePlaceholderView {
-                        showingAddVehicle = true
-                    }
+                if viewModel.isLoading {
+                    loadingView
+                } else if viewModel.filteredVehicles.isEmpty {
+                    emptyStateView
                 } else {
-                    List {
-                        ForEach(viewModel.filteredVehicles) { vehicle in
-                            VehicleCard(vehicle: vehicle)
-                                .onTapGesture {
-                                    selectedVehicle = vehicle
-                                }
-                                .onLongPressGesture {
-                                    // Trigger haptic feedback
-                                    let generator = UINotificationFeedbackGenerator()
-                                    generator.notificationOccurred(.success) // Or .warning, .error
-                                    
-                                    selectedVehicle = vehicle
-                                    showingContextMenu = true
-                                }
-                                .listRowSeparator(.hidden)
-                                .listRowBackground(Color.clear)
-                                .confirmationDialog(
-                                    "Vehicle Options",
-                                    isPresented: $showingContextMenu,
-                                    presenting: selectedVehicle
-                                ) { vehicle in
-                                    Button("Edit") {
-                                        editingVehicle = vehicle
-                                    }
-                                    
-                                    Button("Delete", role: .destructive) {
-                                        vehicleToDelete = vehicle
-                                        showingDeleteConfirmation = true
-                                    }
-                                    
-                                    Button("Cancel", role: .cancel) {}
-                                } message: { vehicle in
-                                    Text("\(vehicle.make) \(vehicle.model)")
-                                }
-                        }
-                    }
-                    .listStyle(.plain)
+                    vehiclesListView
                 }
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Vehicle Management")
             .toolbar {
-                if !viewModel.filteredVehicles.isEmpty {
+                if !viewModel.isLoading {
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button {
                             showingAddVehicle = true
                         } label: {
                             Image(systemName: "plus.circle.fill")
-                                .font(.title2)
+                                .font(.title3)
+                        }
+                    }
+                    
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button {
+                            showingFilters = true
+                        } label: {
+                            Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                                .font(.title3)
+                                .overlay(alignment: .topTrailing) {
+                                    if !viewModel.activeFilters.isEmpty {
+                                        Circle()
+                                            .fill(Color.red)
+                                            .frame(width: 8, height: 8)
+                                            .offset(x: 2, y: -2)
+                                    }
+                                }
                         }
                     }
                 }
             }
+            .searchable(text: $viewModel.searchText, placement: .navigationBarDrawer(displayMode: .always))
             .sheet(isPresented: $showingAddVehicle) {
                 VehicleFormView(viewModel: viewModel, editingVehicle: nil)
             }
             .sheet(item: $editingVehicle) { vehicle in
                 VehicleFormView(viewModel: viewModel, editingVehicle: vehicle)
+            }
+            .sheet(item: $viewModel.selectedVehicle) { vehicle in
+                VehicleDetailView(vehicle: vehicle)
+            }
+            .confirmationDialog("Filter Options", isPresented: $showingFilters) {
+                Button("All Types") {
+                    viewModel.typeFilter = nil
+                    viewModel.updateActiveFilters()
+                }
+                ForEach(VehicleType.allCases) { type in
+                    Button(type.rawValue) {
+                        viewModel.typeFilter = type
+                        viewModel.updateActiveFilters()
+                    }
+                }
+                
+                Divider()
+                
+                Button("All Statuses") {
+                    viewModel.statusFilter = nil
+                    viewModel.updateActiveFilters()
+                }
+                ForEach(VehicleStatus.allCases) { status in
+                    Button(status.rawValue) {
+                        viewModel.statusFilter = status
+                        viewModel.updateActiveFilters()
+                    }
+                }
+                
+                Divider()
+                
+                Button("Reset All Filters") {
+                    viewModel.typeFilter = nil
+                    viewModel.statusFilter = nil
+                    viewModel.updateActiveFilters()
+                }
+                
+                Button("Cancel", role: .cancel) {}
+            }
+            .overlay(alignment: .bottom) {
+                if !viewModel.activeFilters.isEmpty {
+                    HStack {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(viewModel.activeFilters, id: \.self) { filter in
+                                    Text(filter)
+                                        .font(.caption)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                        .background(Color.blue.opacity(0.2))
+                                        .clipShape(Capsule())
+                                }
+                            }
+                            .padding(.horizontal)
+                        }
+                        
+                        Button {
+                            viewModel.typeFilter = nil
+                            viewModel.statusFilter = nil
+                            viewModel.updateActiveFilters()
+                        } label: {
+                            Text("Clear")
+                                .font(.caption)
+                                .foregroundColor(.blue)
+                        }
+                        .padding(.trailing)
+                    }
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial)
+                    .transition(.move(edge: .bottom))
+                    .animation(.easeInOut, value: viewModel.activeFilters)
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if let _ = viewModel.recentlyDeleted {
+                    UndoToastV {
+                        viewModel.undoDelete()
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .animation(.easeInOut, value: viewModel.recentlyDeleted)
+                }
+            }
+            .alert("Error", isPresented: $showingError) {
+                Button("OK") {
+                    viewModel.errorMessage = nil
+                }
+            } message: {
+                Text(viewModel.errorMessage ?? "Unknown error")
             }
             .alert(isPresented: $showingDeleteConfirmation) {
                 Alert(
@@ -305,20 +493,173 @@ struct VehicleManagementView: View {
                     secondaryButton: .cancel()
                 )
             }
-            .overlay(alignment: .bottom) {
-                if let _ = viewModel.recentlyDeleted {
-                    UndoToast {
-                        viewModel.undoDelete()
-                    }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .animation(.easeInOut, value: viewModel.recentlyDeleted)
+            .onAppear {
+                if FirebaseApp.app() == nil {
+                    FirebaseApp.configure()
+                }
+                viewModel.fetchVehicles()
+            }
+            .onChange(of: viewModel.errorMessage) { errorMessage in
+                if errorMessage != nil {
+                    showingError = true
                 }
             }
-            .onAppear {
-                let driverVM = DriverManagerViewModel()
-                viewModel.drivers = driverVM.drivers
-                viewModel.loadVehicles() // Fetch vehicles from Firestore
+        }
+    }
+
+    private var loadingView: some View {
+        ProgressView("Loading vehicles...")
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var emptyStateView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "car.fill")
+                .font(.system(size: 50))
+                .foregroundColor(.gray.opacity(0.6))
+
+            Text(viewModel.searchText.isEmpty ? "No Vehicles Found" : "No Results Found")
+                .font(.title2)
+                .fontWeight(.semibold)
+                .foregroundColor(.primary)
+
+            Text(viewModel.searchText.isEmpty ?
+                "Tap the button below to add a new vehicle." :
+                "No vehicles match your search criteria.")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+
+            if viewModel.searchText.isEmpty {
+                Button(action: {
+                    showingAddVehicle = true
+                }) {
+                    Text("Add Vehicle")
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.blue)
+                        .foregroundColor(.white)
+                        .clipShape(Capsule())
+                }
+                .padding(.top, 10)
+                .padding(.horizontal, 40)
             }
+        }
+        .padding()
+    }
+
+    private var vehiclesListView: some View {
+        List {
+            ForEach(viewModel.filteredVehicles) { vehicle in
+                VehicleCard(vehicle: vehicle)
+                    .swipeActions(edge: .trailing) {
+                        Button(role: .destructive) {
+                            vehicleToDelete = vehicle
+                            showingDeleteConfirmation = true
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
+                    .swipeActions(edge: .leading) {
+                        Button {
+                            editingVehicle = vehicle
+                        } label: {
+                            Label("Edit", systemImage: "pencil")
+                        }
+                        .tint(.blue)
+                    }
+                    .contextMenu {
+                        Button {
+                            editingVehicle = vehicle
+                        } label: {
+                            Label("Edit", systemImage: "pencil")
+                        }
+                        
+                        Button(role: .destructive) {
+                            vehicleToDelete = vehicle
+                            showingDeleteConfirmation = true
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
+                    .onTapGesture {
+                        viewModel.selectedVehicle = vehicle
+                    }
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+            }
+        }
+        .listStyle(.plain)
+        .refreshable {
+            viewModel.fetchVehicles()
+        }
+    }
+}
+
+// MARK: - Vehicle Detail View
+struct VehicleDetailView: View {
+    let vehicle: Vehicle
+    
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Basic Info Section
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Vehicle Information")
+                            .font(.headline)
+                            .padding(.bottom, 4)
+                        
+                        DetailRowV(label: "Make", value: vehicle.make)
+                        DetailRowV(label: "Model", value: vehicle.model)
+                        DetailRowV(label: "Year", value: vehicle.year)
+                        DetailRowV(label: "Type", value: vehicle.vehicleType.rawValue)
+                        DetailRowV(label: "Status", value: vehicle.status.rawValue)
+                            .foregroundColor(vehicle.status == .deactivated ? .red : vehicle.status == .inMaintenance ? .orange : .green)
+                    }
+                    .padding()
+                    .background(Color(.systemBackground))
+                    .cornerRadius(10)
+                    .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
+                    
+                    // Identification Section
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Identification")
+                            .font(.headline)
+                            .padding(.bottom, 4)
+                        
+                        DetailRowV(label: "VIN", value: vehicle.vin)
+                        DetailRowV(label: "License Plate", value: vehicle.licensePlate)
+                        DetailRowV(label: "Assigned Driver",
+                                 value: vehicle.assignedDriverId?.uuidString ?? "Not assigned")
+                    }
+                    .padding()
+                    .background(Color(.systemBackground))
+                    .cornerRadius(10)
+                    .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
+                }
+                .padding()
+            }
+            .navigationTitle("\(vehicle.make) \(vehicle.model)")
+            .navigationBarTitleDisplayMode(.inline)
+            .background(Color(.systemGroupedBackground))
+        }
+    }
+}
+
+struct DetailRowV: View {
+    let label: String
+    let value: String
+    
+    var body: some View {
+        HStack {
+            Text(label)
+                .foregroundColor(.gray)
+            Spacer()
+            Text(value)
+                .multilineTextAlignment(.trailing)
         }
     }
 }
@@ -328,39 +669,42 @@ struct VehicleCard: View {
     var vehicle: Vehicle
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "car.fill")
-                    .foregroundColor(.blue)
-                    .font(.system(size: 26))
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("\(vehicle.make) \(vehicle.model) (\(vehicle.year))")
-                        .font(.title3.bold())
-                    Text("Plate: \(vehicle.licensePlate)")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    Text("Status: \(vehicle.status.rawValue)")
-                        .font(.subheadline)
+        ZStack(alignment: .trailing) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Image(systemName: "car.fill")
                         .foregroundColor(vehicle.status == .deactivated ? .red : vehicle.status == .inMaintenance ? .orange : .green)
-                    if let driverId = vehicle.assignedDriverId {
-                        Text("Assigned to: Driver ID \(driverId.uuidString.prefix(8))...")
+                        .font(.system(size: 26))
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("\(vehicle.make) \(vehicle.model)")
+                            .font(.title3.bold())
+                        Text("\(vehicle.year) • \(vehicle.vehicleType.rawValue)")
+                            .font(.subheadline)
+                        Text(vehicle.licensePlate)
                             .font(.subheadline)
                             .foregroundColor(.secondary)
-                    } else {
-                        Text("Unassigned")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                        HStack {
+                            Text(vehicle.status.rawValue)
+                                .font(.subheadline)
+                                .foregroundColor(vehicle.status == .deactivated ? .red : vehicle.status == .inMaintenance ? .orange : .green)
+                            
+                            if vehicle.assignedDriverId != nil {
+                                Text("Assigned")
+                                    .font(.subheadline)
+                                    .foregroundColor(.blue)
+                            }
+                        }
                     }
+
+                    Spacer()
                 }
-                Spacer()
+                .padding()
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 20))
+                .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
             }
         }
-        .padding()
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-        .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
-        .padding(.vertical, 4)
     }
 }
 
@@ -376,19 +720,25 @@ struct VehicleFormView: View {
     @State private var licensePlate = ""
     @State private var vehicleType: VehicleType = .car
     @State private var status: VehicleStatus = .active
+    @State private var showAlert = false
+    @State private var isLoading = false
 
     var editingVehicle: Vehicle?
 
     var body: some View {
         NavigationStack {
             Form {
-                Section(header: Text("Vehicle Info")) {
+                Section(header: Text("Vehicle Details")) {
                     TextField("Make", text: $make)
+                        .textInputAutocapitalization(.words)
                     TextField("Model", text: $model)
+                        .textInputAutocapitalization(.words)
                     TextField("Year", text: $year)
                         .keyboardType(.numberPad)
                     TextField("VIN", text: $vin)
+                        .textInputAutocapitalization(.characters)
                     TextField("License Plate", text: $licensePlate)
+                        .textInputAutocapitalization(.characters)
                     Picker("Vehicle Type", selection: $vehicleType) {
                         ForEach(VehicleType.allCases) { type in
                             Text(type.rawValue).tag(type)
@@ -403,6 +753,13 @@ struct VehicleFormView: View {
                     .pickerStyle(.menu)
                 }
             }
+            .alert(isPresented: $showAlert) {
+                Alert(
+                    title: Text("Error"),
+                    message: Text("Please fill in all required fields"),
+                    dismissButton: .default(Text("OK"))
+                )
+            }
             .navigationTitle(editingVehicle == nil ? "Add Vehicle" : "Edit Vehicle")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -413,27 +770,17 @@ struct VehicleFormView: View {
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        let vehicle = Vehicle(
-                            id: editingVehicle?.id ?? UUID(),
-                            make: make,
-                            model: model,
-                            year: year,
-                            vin: vin,
-                            licensePlate: licensePlate,
-                            vehicleType: vehicleType,
-                            status: status,
-                            assignedDriverId: editingVehicle?.assignedDriverId
-                        )
-                        if editingVehicle == nil {
-                            viewModel.add(vehicle: vehicle)
-                        } else {
-                            viewModel.update(vehicle: vehicle)
+                    if isLoading {
+                        ProgressView()
+                    } else {
+                        Button("Save") {
+                            if isFormValid {
+                                saveVehicle()
+                            } else {
+                                showAlert = true
+                            }
                         }
-
-                        dismiss()
                     }
-                    .disabled(make.isEmpty || model.isEmpty || year.isEmpty || vin.isEmpty || licensePlate.isEmpty)
                 }
             }
             .onAppear {
@@ -449,10 +796,42 @@ struct VehicleFormView: View {
             }
         }
     }
+    
+    private var isFormValid: Bool {
+        !make.isEmpty &&
+        !model.isEmpty &&
+        !year.isEmpty &&
+        !vin.isEmpty &&
+        !licensePlate.isEmpty
+    }
+    
+    private func saveVehicle() {
+        isLoading = true
+        
+        let vehicle = Vehicle(
+            id: editingVehicle?.id ?? UUID(),
+            make: make,
+            model: model,
+            year: year,
+            vin: vin,
+            licensePlate: licensePlate,
+            vehicleType: vehicleType,
+            status: status,
+            assignedDriverId: editingVehicle?.assignedDriverId
+        )
+        
+        if editingVehicle == nil {
+            viewModel.add(vehicle: vehicle)
+        } else {
+            viewModel.update(vehicle: vehicle)
+        }
+        
+        dismiss()
+    }
 }
 
 // MARK: - Undo Toast
-struct UndoToast: View {
+struct UndoToastV: View {
     var undoAction: () -> Void
     @State private var isVisible = true
 
@@ -464,11 +843,11 @@ struct UndoToast: View {
                 Button("Undo", action: undoAction)
             }
             .padding()
-            .background(.thinMaterial)
+            .background(.ultraThinMaterial)
             .cornerRadius(12)
             .padding(.horizontal)
             .onAppear {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
                     withAnimation {
                         isVisible = false
                     }
@@ -477,8 +856,6 @@ struct UndoToast: View {
         }
     }
 }
-
-//hellooo
 
 #Preview {
     VehicleManagementView()

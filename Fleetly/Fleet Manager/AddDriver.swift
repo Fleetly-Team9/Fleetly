@@ -1,27 +1,17 @@
 import SwiftUI
 import Firebase
 import FirebaseFirestore
+import FirebaseAuth
+import PhotosUI
+import AVFoundation
+import FirebaseStorage
 
 // MARK: - Model
-struct Driver: Identifiable, Equatable {
-    let id: UUID
-    var firstName: String
-    var lastName: String
-    var aadhaarNumber: String
-    var age: String
-    var contactNumber: String
-    var role: Role
-    var gender: Gender? // Optional, only for Driver
-    var email: String? // Optional, only for Driver
-    var licenseNumber: String? // Optional, only for Driver
-    var licenseValidUpto: String? // Optional, only for Driver
-    var documentId: String? //For Firebase document ID
-}
 
 // Enum for Role
 enum Role: String, CaseIterable, Identifiable {
     case driver = "Driver"
-    case maintenancePersonnel = "Maintenance Personnel"
+    case maintenance = "Maintenance"
     
     var id: String { self.rawValue }
 }
@@ -35,40 +25,74 @@ enum Gender: String, CaseIterable, Identifiable {
 }
 
 // MARK: - ViewModel
-
-class DriverManagerViewModel: ObservableObject {
-    @Published var drivers: [Driver] = []
+class UserManagerViewModel: ObservableObject {
+    @Published var users: [User] = []
     @Published var searchText: String = ""
-    @Published var sortAscending: Bool = true
-    @Published var recentlyDeleted: Driver?
+    @Published var recentlyDeleted: User?
     @Published var isLoading: Bool = false
     @Published var errorMessage: String?
+    @Published var roleFilter: Role? = nil
+    @Published var availabilityFilter: Bool? = nil
+    @Published var activeFilters: [String] = []
+    @Published var selectedUser: User? = nil
     
     private var db = Firestore.firestore()
     
     init() {
-        fetchDrivers()
+        fetchUsers()
     }
     
-    var filteredDrivers: [Driver] {
-        let filtered = drivers.filter {
-            searchText.isEmpty || "\($0.firstName) \($0.lastName)".lowercased().contains(searchText.lowercased())
+    var filteredUsers: [User] {
+        let filtered = users.filter { user in
+            // Search filter
+            let matchesSearch = searchText.isEmpty ||
+            user.name.lowercased().contains(searchText.lowercased()) ||
+            user.phone.contains(searchText) ||
+            user.aadharNumber?.contains(searchText) ?? false ||
+            user.drivingLicenseNumber?.lowercased().contains(searchText.lowercased()) ?? false
+            
+            // Role filter
+            let matchesRole = roleFilter == nil || user.role == roleFilter!.rawValue.lowercased()
+            
+            // Availability filter
+            let matchesAvailability = availabilityFilter == nil || user.isAvailable == availabilityFilter
+            
+            return matchesSearch && matchesRole && matchesAvailability
         }
+        
+        // Sort: unapproved first, then by name
         return filtered.sorted {
-            sortAscending ? $0.firstName < $1.firstName : $0.firstName > $1.firstName
+            if let approved1 = $0.isApproved, let approved2 = $1.isApproved {
+                if approved1 != approved2 {
+                    return !approved1 // Show unapproved first
+                }
+            }
+            return $0.name < $1.name
         }
     }
     
-    func fetchDrivers() {
+    func updateActiveFilters() {
+        activeFilters.removeAll()
+        
+        if roleFilter != nil {
+            activeFilters.append("Role: \(roleFilter!.rawValue)")
+        }
+        
+        if availabilityFilter != nil {
+            activeFilters.append(availabilityFilter! ? "Available" : "Not Available")
+        }
+    }
+    
+    func fetchUsers() {
         isLoading = true
-        print("Fetching drivers from Firestore...")
+        print("Fetching users from Firestore...")
 
-        db.collection("Drivers").getDocuments { [weak self] (querySnapshot, error) in
+        db.collection("users").whereField("role", in: ["driver", "maintenance"]).getDocuments { [weak self] (querySnapshot, error) in
             guard let self = self else { return }
             defer { self.isLoading = false }
 
             if let error = error {
-                self.errorMessage = "Error fetching drivers: \(error.localizedDescription)"
+                self.errorMessage = "Error fetching users: \(error.localizedDescription)"
                 print(self.errorMessage!)
                 return
             }
@@ -78,206 +102,285 @@ class DriverManagerViewModel: ObservableObject {
                 return
             }
 
-            print("Number of drivers fetched: \(documents.count)")
+            print("Number of users fetched: \(documents.count)")
 
-            var loadedDrivers: [Driver] = []
+            var loadedUsers: [User] = []
 
             for document in documents {
                 let data = document.data()
 
                 guard
-                    let firstName = data["firstName"] as? String,
-                    let lastName = data["lastName"] as? String,
-                    let aadhaarNumber = data["aadhaarNumber"] as? String,
-                    let age = data["age"] as? String,
-                    let contactNumber = data["contactNumber"] as? String,
-                    let roleString = data["role"] as? String,
-                    let role = Role(rawValue: roleString)
+                    let name = data["name"] as? String,
+                    let email = data["email"] as? String,
+                    let phone = data["phone"] as? String,
+                    let role = data["role"] as? String
                 else {
                     print("Skipping document due to missing fields: \(document.documentID)")
                     continue
                 }
                 
                 // Parse optional fields
-                let gender = (data["gender"] as? String).flatMap { Gender(rawValue: $0) }
-                let email = data["email"] as? String
-                let licenseNumber = data["licenseNumber"] as? String
-                let licenseValidUpto = data["licenseValidUpto"] as? String
+                let gender = data["gender"] as? String
+                let age = data["age"] as? Int
+                let disability = data["disability"] as? String
+                let aadharNumber = data["aadharNumber"] as? String
+                let drivingLicenseNumber = data["drivingLicenseNumber"] as? String
+                let aadharDocUrl = data["aadharDocUrl"] as? String
+                let licenseDocUrl = data["licenseDocUrl"] as? String
+                let isApproved = data["isApproved"] as? Bool ?? true
+                let isAvailable = data["isAvailable"] as? Bool ?? true
 
-                let driver = Driver(
-                    id: UUID(),
-                    firstName: firstName,
-                    lastName: lastName,
-                    aadhaarNumber: aadhaarNumber,
-                    age: age,
-                    contactNumber: contactNumber,
+                let user = User(
+                    id: document.documentID,
+                    name: name,
+                    email: email,
+                    phone: phone,
                     role: role,
                     gender: gender,
-                    email: email,
-                    licenseNumber: licenseNumber,
-                    licenseValidUpto: licenseValidUpto,
-                    documentId: document.documentID
+                    age: age,
+                    disability: disability,
+                    aadharNumber: aadharNumber,
+                    drivingLicenseNumber: drivingLicenseNumber,
+                    aadharDocUrl: aadharDocUrl,
+                    licenseDocUrl: licenseDocUrl,
+                    isApproved: isApproved,
+                    isAvailable: isAvailable
                 )
 
-                loadedDrivers.append(driver)
-                print("Loaded driver with Aadhaar: \(aadhaarNumber), documentId: \(document.documentID)")
+                loadedUsers.append(user)
+                print("Loaded user with Aadhaar: \(aadharNumber ?? "N/A"), documentId: \(document.documentID)")
             }
 
             DispatchQueue.main.async {
-                self.drivers = loadedDrivers
-                print("Drivers successfully loaded: \(self.drivers.count)")
+                self.users = loadedUsers
+                print("Users successfully loaded: \(self.users.count)")
             }
         }
     }
 
-    private func saveDriverToFirestore(driver: Driver, documentId: String, completion: @escaping (Bool) -> Void) {
-        print("Saving driver with Aadhaar: \(driver.aadhaarNumber), documentId: \(documentId)")
+    func toggleAvailability(for userId: String) {
+        guard let index = users.firstIndex(where: { $0.id == userId }) else { return }
         
-        let driverData: [String: Any] = [
-            "id": driver.id.uuidString,
-            "firstName": driver.firstName,
-            "lastName": driver.lastName,
-            "aadhaarNumber": driver.aadhaarNumber,
-            "age": driver.age,
-            "contactNumber": driver.contactNumber,
-            "licenseNumber": driver.licenseNumber ?? "",
-            "licenseValidUpto": driver.licenseValidUpto ?? "",
-            "role": driver.role.rawValue,
-            "gender": driver.gender?.rawValue ?? "",
-            "email": driver.email ?? ""
+        var user = users[index]
+        user.isAvailable?.toggle()
+        
+        let userData: [String: Any] = [
+            "isAvailable": user.isAvailable ?? true
+        ]
+        
+        db.collection("users").document(userId).updateData(userData) { [weak self] error in
+            if let error = error {
+                self?.errorMessage = "Error updating availability: \(error.localizedDescription)"
+                print("Update error: \(error.localizedDescription)")
+                return
+            }
+            
+            DispatchQueue.main.async {
+                self?.users[index] = user
+                print("Availability toggled for user \(user.name)")
+            }
+        }
+    }
+
+    private func saveUserToFirestore(user: User, documentId: String, completion: @escaping (Bool) -> Void) {
+        print("Saving user with Aadhaar: \(user.aadharNumber ?? "N/A"), documentId: \(documentId)")
+        
+        let userData: [String: Any] = [
+            "uid": user.id,
+            "name": user.name,
+            "email": user.email,
+            "phone": user.phone,
+            "role": user.role,
+            "gender": user.gender ?? "",
+            "age": user.age ?? 0,
+            "disability": user.disability ?? "",
+            "aadharNumber": user.aadharNumber ?? "",
+            "drivingLicenseNumber": user.drivingLicenseNumber ?? "",
+            "aadharDocUrl": user.aadharDocUrl ?? "",
+            "licenseDocUrl": user.licenseDocUrl ?? "",
+            "isApproved":true,
+            "isAvailable": user.isAvailable ?? true
         ]
 
-        db.collection("Drivers").document(documentId).setData(driverData) { [weak self] error in
+        db.collection("users").document(documentId).setData(userData) { [weak self] error in
             guard let self = self else {
                 completion(false)
                 return
             }
 
             if let error = error {
-                self.errorMessage = "Error saving driver: \(error.localizedDescription)"
+                self.errorMessage = "Error saving user: \(error.localizedDescription)"
                 print("Firebase error: \(error.localizedDescription)")
                 completion(false)
                 return
             }
             
-            print("Driver successfully saved to Firestore with ID: \(documentId)")
+            print("User successfully saved to Firestore with ID: \(documentId)")
             completion(true)
         }
     }
     
-    func delete(driver: Driver) {
-        // Use Aadhaar number as document ID
-        let documentId = driver.aadhaarNumber
+    func delete(user: User) {
+        let documentId = user.id
         
         isLoading = true
         
-        // Delete from Firestore
-        db.collection("Drivers").document(documentId).delete { [weak self] error in
+        db.collection("users").document(documentId).delete { [weak self] error in
             guard let self = self else { return }
             self.isLoading = false
             
             if let error = error {
-                self.errorMessage = "Error deleting driver: \(error.localizedDescription)"
+                self.errorMessage = "Error deleting user: \(error.localizedDescription)"
                 print("Delete error: \(error.localizedDescription)")
                 return
             }
             
-            print("Driver successfully deleted from Firestore")
+            print("User successfully deleted from Firestore")
             
-            // Remove from local array if Firebase deletion was successful
-            if let index = self.drivers.firstIndex(where: { $0.aadhaarNumber == driver.aadhaarNumber }) {
-                self.recentlyDeleted = self.drivers.remove(at: index)
-                print("Driver removed from local array")
+            if let index = self.users.firstIndex(where: { $0.id == user.id }) {
+                self.recentlyDeleted = self.users.remove(at: index)
+                print("User removed from local array")
             }
         }
     }
     
     func undoDelete() {
-        guard let driver = recentlyDeleted else { return }
+        guard let user = recentlyDeleted else { return }
         
         isLoading = true
         
-        // Add back to Firestore using Aadhaar as document ID
-        saveDriverToFirestore(driver: driver, documentId: driver.aadhaarNumber) { [weak self] success in
+        saveUserToFirestore(user: user, documentId: user.id) { [weak self] success in
             guard let self = self else { return }
             self.isLoading = false
             
             if success {
-                self.drivers.append(driver)
+                self.users.append(user)
                 self.recentlyDeleted = nil
             }
         }
     }
     
-    func add(driver: Driver) {
-        // Validate the Aadhaar number is not empty
-        if driver.aadhaarNumber.isEmpty {
-            self.errorMessage = "Cannot add driver: Aadhaar number is empty"
-            return
-        }
+    func add(user: User, aadharImage: UIImage?, licenseImage: UIImage?, completion: @escaping (Bool) -> Void) {
+        // Generate password
+        let password = generatePassword(from: user.name, aadhar: user.aadharNumber ?? "")
         
-        // Check if driver with this Aadhaar already exists
-        if drivers.contains(where: { $0.aadhaarNumber == driver.aadhaarNumber }) {
-            self.errorMessage = "Driver with Aadhaar number \(driver.aadhaarNumber) already exists"
-            return
-        }
-        
-        isLoading = true
-        
-        // Create a new driver with the Aadhaar as document ID
-        var driverWithDocId = driver
-        driverWithDocId.documentId = driver.aadhaarNumber
-        
-        // Save to Firestore using Aadhaar as document ID
-        saveDriverToFirestore(driver: driverWithDocId, documentId: driver.aadhaarNumber) { [weak self] success in
-            guard let self = self else { return }
+        // Create user in Firebase Auth
+        createUserAuth(email: user.email, password: password) { [weak self] uid, error in
+            guard let self = self else {
+                completion(false)
+                return
+            }
             
-            if success {
-                // Immediately add to local array to update UI
-                DispatchQueue.main.async {
-                    self.drivers.append(driverWithDocId)
-                    print("Added new driver to local array: \(driver.firstName) \(driver.lastName)")
-                    self.isLoading = false
+            if let error = error {
+                self.errorMessage = "Error creating user: \(error.localizedDescription)"
+                print(self.errorMessage!)
+                completion(false)
+                return
+            }
+            
+            guard let uid = uid else {
+                self.errorMessage = "Failed to get UID after user creation"
+                completion(false)
+                return
+            }
+            
+            // Update user with the UID
+            var newUser = user
+            newUser.id = uid
+            
+            // Upload documents if they exist
+            let dispatchGroup = DispatchGroup()
+            var aadharUrl: String?
+            var licenseUrl: String?
+            
+            if let aadharImage = aadharImage {
+                dispatchGroup.enter()
+                self.uploadDocument(image: aadharImage, userId: uid, type: "aadhar") { url in
+                    aadharUrl = url
+                    dispatchGroup.leave()
                 }
-            } else {
-                self.isLoading = false
+            }
+            
+            if let licenseImage = licenseImage, user.role == "driver" {
+                dispatchGroup.enter()
+                self.uploadDocument(image: licenseImage, userId: uid, type: "license") { url in
+                    licenseUrl = url
+                    dispatchGroup.leave()
+                }
+            }
+            
+            dispatchGroup.notify(queue: .main) {
+                // Update user with document URLs
+                newUser.aadharDocUrl = aadharUrl
+                newUser.licenseDocUrl = licenseUrl
+                
+                // Save to Firestore
+                self.saveUserToFirestore(user: newUser, documentId: uid) { success in
+                    if success {
+                        DispatchQueue.main.async {
+                            self.users.append(newUser)
+                            print("Added new user to local array: \(newUser.name)")
+                        }
+                    }
+                    completion(success)
+                }
             }
         }
     }
     
-    // MARK: - Edit Functionality
-    
-    func update(driver: Driver) {
-        // Use the Aadhaar number directly as the documentId
-        let aadhaarNumber = driver.aadhaarNumber
+     func uploadDocument(image: UIImage, userId: String, type: String, completion: @escaping (String?) -> Void) {
+        guard let imageData = image.jpegData(compressionQuality: 0.7) else {
+            completion(nil)
+            return
+        }
         
-        // Validate the Aadhaar number is not empty
-        if aadhaarNumber.isEmpty {
-            self.errorMessage = "Cannot update driver: Aadhaar number is empty"
+        let storageRef = Storage.storage().reference()
+        let documentRef = storageRef.child("documents/\(userId)/\(type).jpg")
+        
+        let metadata = StorageMetadata()
+        metadata.contentType = "image/jpeg"
+        
+        documentRef.putData(imageData, metadata: metadata) { _, error in
+            if let error = error {
+                print("Error uploading \(type): \(error.localizedDescription)")
+                completion(nil)
+                return
+            }
+            
+            documentRef.downloadURL { url, error in
+                if let error = error {
+                    print("Error getting download URL: \(error.localizedDescription)")
+                    completion(nil)
+                    return
+                }
+                
+                completion(url?.absoluteString)
+            }
+        }
+    }
+    
+    func update(user: User) {
+        let documentId = user.id
+        
+        if documentId.isEmpty {
+            self.errorMessage = "Cannot update user: Document ID is empty"
             return
         }
         
         isLoading = true
-        print("Updating driver with Aadhaar number as document ID: \(aadhaarNumber)")
+        print("Updating user with document ID: \(documentId)")
         
-        // Create updated driver with Aadhaar as documentId
-        var updatedDriver = driver
-        updatedDriver.documentId = aadhaarNumber
-        
-        // Update in Firestore using Aadhaar number as document ID
-        saveDriverToFirestore(driver: updatedDriver, documentId: aadhaarNumber) { [weak self] success in
+        saveUserToFirestore(user: user, documentId: documentId) { [weak self] success in
             guard let self = self else { return }
             
             if success {
-                // Update in local array immediately
                 DispatchQueue.main.async {
-                    if let index = self.drivers.firstIndex(where: { $0.aadhaarNumber == aadhaarNumber }) {
-                        self.drivers[index] = updatedDriver
-                        print("Updated driver in local array at index \(index)")
+                    if let index = self.users.firstIndex(where: { $0.id == documentId }) {
+                        self.users[index] = user
+                        print("Updated user in local array at index \(index)")
                     } else {
-                        // If driver doesn't exist locally, add it
-                        self.drivers.append(updatedDriver)
-                        print("Added updated driver to local array")
+                        self.users.append(user)
+                        print("Added updated user to local array")
                     }
                     self.isLoading = false
                 }
@@ -287,82 +390,55 @@ class DriverManagerViewModel: ObservableObject {
         }
     }
     
-    // Refresh function to manually fetch drivers
-    func refreshDrivers() {
-        fetchDrivers()
+    func refreshUsers() {
+        fetchUsers()
     }
-}
-
-// MARK: - Placeholder View
-struct DriverPlaceholderView: View {
-    var onCreate: () -> Void
-
-    var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "person.crop.circle.badge.exclam")
-                .font(.system(size: 50, weight: .bold))
-                .foregroundColor(.gray.opacity(0.6))
-                .padding(.bottom, 10)
-
-            Text("No Personnel Added")
-                .font(.title2)
-                .fontWeight(.semibold)
-                .foregroundColor(.primary)
-
-            Text("Tap the button below to start adding drivers or maintenance personnel.")
-                .font(.subheadline)
-                .foregroundColor(.gray)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-
-            Button(action: onCreate) {
-                Text("Add Staff")
-                    .fontWeight(.semibold)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.white.opacity(0.9))
-                    .foregroundColor(.black)
-                    .clipShape(Capsule())
-                    .shadow(color: .black.opacity(0.1), radius: 5, x: 0, y: 5)
-            }
-            .padding(.top, 10)
-            .padding(.horizontal, 40)
+    
+    private func generatePassword(from name: String, aadhar: String) -> String {
+        let firstName = name.split(separator: " ").first?.lowercased() ?? ""
+        var firstNamePart = String(firstName.prefix(4))
+        while firstNamePart.count < 4 {
+            firstNamePart += firstName
         }
-        .padding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .background(
-                    RoundedRectangle(cornerRadius: 30, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.2), lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 10)
-                .padding()
-        )
+        firstNamePart = String(firstNamePart.prefix(4))
+        let aadharDigits = aadhar.replacingOccurrences(of: "-", with: "").prefix(4)
+        return firstNamePart + aadharDigits
+    }
+    
+    private func createUserAuth(email: String, password: String, completion: @escaping (String?, Error?) -> Void) {
+        Auth.auth().createUser(withEmail: email, password: password) { authResult, error in
+            if let error = error {
+                completion(nil, error)
+            } else if let user = authResult?.user {
+                completion(user.uid, nil)
+            } else {
+                completion(nil, NSError(domain: "AuthError", code: 0, userInfo: [NSLocalizedDescriptionKey: "Unknown error"]))
+            }
+        }
     }
 }
 
 // MARK: - Main View
-struct DriverManagerView: View {
-    @StateObject private var viewModel = DriverManagerViewModel()
-    @State private var showingAddDriver = false
-    @State private var editingDriver: Driver? = nil
+struct UserManagerView: View {
+    @StateObject private var viewModel = UserManagerViewModel()
+    @State private var showingAddUser = false
+    @State private var editingUser: User?
     @State private var showingDeleteConfirmation = false
-    @State private var driverToDelete: Driver?
+    @State private var userToDelete: User?
     @State private var showingContextMenu = false
-    @State private var selectedDriver: Driver?
     @State private var showingError = false
+    @State private var showingFilters = false
+    @State private var showingUserDetail = false
 
     var body: some View {
         NavigationStack {
             ZStack {
                 if viewModel.isLoading {
                     loadingView
-                } else if viewModel.filteredDrivers.isEmpty {
+                } else if viewModel.filteredUsers.isEmpty {
                     emptyStateView
                 } else {
-                    driversListView
+                    usersListView
                 }
             }
             .background(Color(.systemGroupedBackground))
@@ -371,23 +447,117 @@ struct DriverManagerView: View {
                 if !viewModel.isLoading {
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button {
-                            showingAddDriver = true
+                            showingAddUser = true
                         } label: {
                             Image(systemName: "plus.circle.fill")
                                 .font(.title3)
                         }
                     }
+                    
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button {
+                            showingFilters = true
+                        } label: {
+                            Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                                .font(.title3)
+                                .overlay(alignment: .topTrailing) {
+                                    if !viewModel.activeFilters.isEmpty {
+                                        Circle()
+                                            .fill(Color.red)
+                                            .frame(width: 8, height: 8)
+                                            .offset(x: 2, y: -2)
+                                    }
+                                }
+                        }
+                    }
                 }
             }
-            .sheet(isPresented: $showingAddDriver) {
-                DriverFormView(viewModel: viewModel, editingDriver: nil)
+            .searchable(text: $viewModel.searchText, placement: .navigationBarDrawer(displayMode: .always))
+            .sheet(isPresented: $showingAddUser) {
+                UserFormView(viewModel: viewModel, editingUser: nil)
             }
-            .sheet(item: $editingDriver) { driver in
-                DriverFormView(viewModel: viewModel, editingDriver: driver)
+            .sheet(item: $editingUser) { user in
+                UserFormView(viewModel: viewModel, editingUser: user)
+            }
+            .sheet(item: $viewModel.selectedUser) { user in
+                UserDetailView(user: user)
+            }
+            .confirmationDialog("Filter Options", isPresented: $showingFilters) {
+                Button("All Roles") {
+                    viewModel.roleFilter = nil
+                    viewModel.updateActiveFilters()
+                }
+                Button("Drivers Only") {
+                    viewModel.roleFilter = .driver
+                    viewModel.updateActiveFilters()
+                }
+                Button("Maintenance Only") {
+                    viewModel.roleFilter = .maintenance
+                    viewModel.updateActiveFilters()
+                }
+                
+                Divider()
+                
+                Button("All Availability") {
+                    viewModel.availabilityFilter = nil
+                    viewModel.updateActiveFilters()
+                }
+                Button("Available Only") {
+                    viewModel.availabilityFilter = true
+                    viewModel.updateActiveFilters()
+                }
+                Button("Not Available Only") {
+                    viewModel.availabilityFilter = false
+                    viewModel.updateActiveFilters()
+                }
+                
+                Divider()
+                
+                Button("Reset All Filters") {
+                    viewModel.roleFilter = nil
+                    viewModel.availabilityFilter = nil
+                    viewModel.updateActiveFilters()
+                }
+                
+                Button("Cancel", role: .cancel) {}
+            }
+            .overlay(alignment: .bottom) {
+                if !viewModel.activeFilters.isEmpty {
+                    HStack {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(viewModel.activeFilters, id: \.self) { filter in
+                                    Text(filter)
+                                        .font(.caption)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                        .background(Color.blue.opacity(0.2))
+                                        .clipShape(Capsule())
+                                }
+                            }
+                            .padding(.horizontal)
+                        }
+                        
+                        Button {
+                            viewModel.roleFilter = nil
+                            viewModel.availabilityFilter = nil
+                            viewModel.updateActiveFilters()
+                        } label: {
+                            Text("Clear")
+                                .font(.caption)
+                                .foregroundColor(.blue)
+                        }
+                        .padding(.trailing)
+                    }
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial)
+                    .transition(.move(edge: .bottom))
+                    .animation(.easeInOut, value: viewModel.activeFilters)
+                }
             }
             .overlay(alignment: .bottom) {
                 if let _ = viewModel.recentlyDeleted {
-                    UndoToast1 {
+                    UndoToast {
                         viewModel.undoDelete()
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -403,15 +573,15 @@ struct DriverManagerView: View {
             }
             .alert(isPresented: $showingDeleteConfirmation) {
                 Alert(
-                    title: Text("Delete Driver?"),
-                    message: Text("Are you sure you want to delete this driver? This action cannot be undone."),
+                    title: Text("Delete User?"),
+                    message: Text("Are you sure you want to delete this user? This action cannot be undone."),
                     primaryButton: .destructive(Text("Delete")) {
-                        if let driverToDelete = driverToDelete {
+                        if let userToDelete = userToDelete {
                             withAnimation {
-                                viewModel.delete(driver: driverToDelete)
+                                viewModel.delete(user: userToDelete)
                             }
                         }
-                        driverToDelete = nil
+                        userToDelete = nil
                     },
                     secondaryButton: .cancel()
                 )
@@ -420,7 +590,7 @@ struct DriverManagerView: View {
                 if FirebaseApp.app() == nil {
                     FirebaseApp.configure()
                 }
-                viewModel.fetchDrivers()
+                viewModel.fetchUsers()
             }
             .onChange(of: viewModel.errorMessage) { errorMessage in
                 if errorMessage != nil {
@@ -441,120 +611,131 @@ struct DriverManagerView: View {
                 .font(.system(size: 50))
                 .foregroundColor(.gray.opacity(0.6))
 
-            Text("No Drivers Found")
+            Text(viewModel.searchText.isEmpty ? "No Staff Found" : "No Results Found")
                 .font(.title2)
                 .fontWeight(.semibold)
                 .foregroundColor(.primary)
 
-            Text("Tap the button below to add a new driver.")
+            Text(viewModel.searchText.isEmpty ?
+                "Tap the button below to add a new staff member." :
+                "No staff members match your search criteria.")
                 .font(.subheadline)
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
 
-            Button(action: {
-                showingAddDriver = true
-            }) {
-                Text("Add Driver")
-                    .fontWeight(.semibold)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .clipShape(Capsule())
+            if viewModel.searchText.isEmpty {
+                Button(action: {
+                    showingAddUser = true
+                }) {
+                    Text("Add Staff")
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.blue)
+                        .foregroundColor(.white)
+                        .clipShape(Capsule())
+                }
+                .padding(.top, 10)
+                .padding(.horizontal, 40)
             }
-            .padding(.top, 10)
-            .padding(.horizontal, 40)
         }
         .padding()
     }
-    
-    struct DriverRow: View {
-        let driver: Driver
-        @Binding var selectedDriver: Driver?
-        @Binding var showingContextMenu: Bool
-        @Binding var editingDriver: Driver?
-        @Binding var driverToDelete: Driver?
-        @Binding var showingDeleteConfirmation: Bool
 
-        var body: some View {
-            DriverCard(driver: driver)
-                .onTapGesture {
-                    selectedDriver = driver
-                }
-                .onLongPressGesture {
-                    selectedDriver = driver
-                    showingContextMenu = true
-                }
-                .listRowSeparator(.hidden)
-                .listRowBackground(Color.clear)
-                .confirmationDialog(
-                    "Driver Options",
-                    isPresented: $showingContextMenu,
-                    presenting: selectedDriver
-                ) { driver in
-                    Button("Edit") {
-                        editingDriver = driver
-                    }
-
-                    Button("Delete", role: .destructive) {
-                        driverToDelete = driver
-                        showingDeleteConfirmation = true
-                    }
-
-                    Button("Cancel", role: .cancel) {}
-                } message: { driver in
-                    Text("\(driver.firstName) - \(driver.role.rawValue)")
-                }
-        }
-    }
-
-    private var driversListView: some View {
+    private var usersListView: some View {
         List {
-            ForEach(viewModel.filteredDrivers) { driver in
-                DriverRow(
-                    driver: driver,
-                    selectedDriver: $selectedDriver,
-                    showingContextMenu: $showingContextMenu,
-                    editingDriver: $editingDriver,
-                    driverToDelete: $driverToDelete,
-                    showingDeleteConfirmation: $showingDeleteConfirmation
-                )
+            ForEach(viewModel.filteredUsers) { user in
+                UserCard(user: user)
+                    .swipeActions(edge: .trailing) {
+                        Button {
+                            viewModel.toggleAvailability(for: user.id)
+                        } label: {
+                            Label(
+                                user.isAvailable == true ? "Set Unavailable" : "Set Available",
+                                systemImage: user.isAvailable == true ? "person.fill.xmark" : "person.fill.checkmark"
+                            )
+                        }
+                        .tint(user.isAvailable == true ? .red : .green)
+                    }
+                    .swipeActions(edge: .leading) {
+                        Button {
+                            editingUser = user
+                        } label: {
+                            Label("Edit", systemImage: "pencil")
+                        }
+                        .tint(.blue)
+                    }
+                    .contextMenu {
+                        Button {
+                            editingUser = user
+                        } label: {
+                            Label("Edit", systemImage: "pencil")
+                        }
+                        
+                        Button(role: .destructive) {
+                            userToDelete = user
+                            showingDeleteConfirmation = true
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
+                    .onTapGesture {
+                        viewModel.selectedUser = user
+                    }
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
             }
-            .listRowSeparator(.hidden)
-            .listRowBackground(Color.clear)
         }
         .listStyle(.plain)
         .refreshable {
-            viewModel.fetchDrivers()
+            viewModel.fetchUsers()
         }
     }
 }
 
-
-struct DriverCard: View {
-    var driver: Driver
+struct UserCard: View {
+    var user: User
     var onDelete: (() -> Void)? = nil
-
-    @State private var licenseStatus: String = ""
 
     var body: some View {
         ZStack(alignment: .trailing) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Image(systemName: "person.fill")
-                        .foregroundColor(.blue)
+                        .foregroundColor(user.isApproved == false ? .orange : (user.isAvailable == true ? .green : .red))
                         .font(.system(size: 26))
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(driver.firstName)
-                            .font(.title3.bold())
-                        Text("Role: \(driver.role.rawValue)")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        Text("License Status: \(licenseStatus)")
-                            .font(.subheadline)
-                            .foregroundColor(licenseStatus == "Expired" ? .red : .green)
+                        HStack {
+                            Text(user.name)
+                                .font(.title3.bold())
+                            
+                            if user.isApproved == false {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundColor(.orange)
+                                    .font(.caption)
+                            }
+                        }
+                        
+                        Text(user.role.capitalized)
+                            .font(.subheadline.bold())
+                        if let licenseNumber = user.drivingLicenseNumber, !licenseNumber.isEmpty {
+                            Text("License: \(licenseNumber)")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        HStack {
+                            Text(user.isAvailable == true ? "Available" : "Not Available")
+                                .font(.subheadline)
+                                .foregroundColor(user.isAvailable == true ? .green : .red)
+                            
+                            if user.isApproved == false {
+                                Text("Pending Approval")
+                                    .font(.subheadline)
+                                    .foregroundColor(.orange)
+                            }
+                        }
                     }
 
                     Spacer()
@@ -565,120 +746,223 @@ struct DriverCard: View {
                 .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
             }
         }
-        .onAppear {
-            updateLicenseStatus()
-        }
-        .onChange(of: driver.licenseValidUpto) { _ in
-            updateLicenseStatus()
+    }
+}
+
+// MARK: - User Detail View
+struct UserDetailView: View {
+    let user: User
+    
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Basic Info Section
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Basic Information")
+                            .font(.headline)
+                            .padding(.bottom, 4)
+                        
+                        DetailRow(label: "Name", value: user.name)
+                        DetailRow(label: "Email", value: user.email)
+                        DetailRow(label: "Phone", value: user.phone)
+                        DetailRow(label: "Role", value: user.role.capitalized)
+                        DetailRow(label: "Gender", value: user.gender?.capitalized ?? "Not specified")
+                        DetailRow(label: "Age", value: user.age?.description ?? "Not specified")
+                        DetailRow(label: "Disability", value: user.disability ?? "None")
+                        DetailRow(label: "Status", value: user.isApproved == false ? "Pending Approval" : "Approved")
+                        DetailRow(label: "Availability", value: user.isAvailable == true ? "Available" : "Not Available")
+                    }
+                    .padding()
+                    .background(Color(.systemBackground))
+                    .cornerRadius(10)
+                    .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
+                    
+                    // Aadhar Section
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Aadhar Details")
+                            .font(.headline)
+                            .padding(.bottom, 4)
+                        
+                        DetailRow(label: "Aadhar Number", value: user.aadharNumber ?? "Not provided")
+                        
+                        if let aadharUrl = user.aadharDocUrl {
+                            DocumentPreview(title: "Aadhar Proof", imageUrl: aadharUrl)
+                        } else {
+                            Text("No Aadhar proof uploaded")
+                                .foregroundColor(.gray)
+                        }
+                    }
+                    .padding()
+                    .background(Color(.systemBackground))
+                    .cornerRadius(10)
+                    .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
+                    
+                    // License Section (for drivers)
+                    if user.role == "driver" {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("License Details")
+                                .font(.headline)
+                                .padding(.bottom, 4)
+                            
+                            DetailRow(label: "License Number", value: user.drivingLicenseNumber ?? "Not provided")
+                            
+                            if let licenseUrl = user.licenseDocUrl {
+                                DocumentPreview(title: "License Proof", imageUrl: licenseUrl)
+                            } else {
+                                Text("No License proof uploaded")
+                                    .foregroundColor(.gray)
+                            }
+                        }
+                        .padding()
+                        .background(Color(.systemBackground))
+                        .cornerRadius(10)
+                        .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
+                    }
+                }
+                .padding()
+            }
+            .navigationTitle(user.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .background(Color(.systemGroupedBackground))
         }
     }
+}
 
-    private func updateLicenseStatus() {
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd"
-        dateFormatter.timeZone = TimeZone.current
+struct DetailRow: View {
+    let label: String
+    let value: String
+    
+    var body: some View {
+        HStack {
+            Text(label)
+                .foregroundColor(.gray)
+            Spacer()
+            Text(value)
+                .multilineTextAlignment(.trailing)
+        }
+    }
+}
 
-        let licenseDateString = driver.licenseValidUpto ?? ""
+struct DocumentPreview: View {
+    let title: String
+    let imageUrl: String
+    
+    @State private var image: UIImage? = nil
+    @State private var showingFullScreen = false
+    
+    var body: some View {
+        VStack(alignment: .leading) {
+            Text(title)
+                .font(.subheadline)
+                .foregroundColor(.gray)
+            
+            if let image = image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxHeight: 200)
+                    .cornerRadius(8)
+                    .onTapGesture {
+                        showingFullScreen = true
+                    }
+                    .sheet(isPresented: $showingFullScreen) {
+                        FullScreenImageView(image: image)
+                    }
+            } else {
+                ProgressView()
+                    .frame(height: 100)
+            }
+        }
+        .onAppear {
+            loadImageFromUrl()
+        }
+    }
+    
+    private func loadImageFromUrl() {
+        guard let url = URL(string: imageUrl) else { return }
+        
+        URLSession.shared.dataTask(with: url) { data, _, error in
+            if let data = data, let loadedImage = UIImage(data: data) {
+                DispatchQueue.main.async {
+                    self.image = loadedImage
+                }
+            }
+        }.resume()
+    }
+}
 
-        if let validUptoDate = dateFormatter.date(from: licenseDateString) {
-            let currentDate = Calendar.current.startOfDay(for: Date())
-            let strippedValidUptoDate = Calendar.current.startOfDay(for: validUptoDate)
-
-            licenseStatus = strippedValidUptoDate >= currentDate ? "Active" : "Expired"
-        } else {
-            licenseStatus = "Unknown"
+struct FullScreenImageView: View {
+    let image: UIImage
+    
+    var body: some View {
+        ZStack {
+            Color.black
+                .ignoresSafeArea()
+            
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFit()
+                .padding()
         }
     }
 }
 
 // MARK: - Form View
-struct DriverFormView: View {
+struct UserFormView: View {
     @Environment(\.dismiss) var dismiss
-    @ObservedObject var viewModel: DriverManagerViewModel
-
-    @State private var firstName = ""
-    @State private var lastName = ""
-    @State private var aadhaarNumber = ""
-    @State private var age = ""
-    @State private var contactNumber = ""
-    @State private var gender: Gender = .male
-    @State private var email = ""
-    @State private var licenseNumber = ""
-    @State private var licenseValidUpto = Date()
-    @State private var role: Role = .driver
-    @State private var isFocused = false
-    @State private var showAlert = false
+    @ObservedObject var viewModel: UserManagerViewModel
+    @State private var showingImagePicker = false
+    @State private var showingCamera = false
+    @State private var currentDocumentType: DocumentType = .aadhar
     
-    @State private var isAgeValid = true // Start as true to avoid initial red border
+    enum DocumentType {
+        case aadhar, license
+    }
 
-    var editingDriver: Driver?
+    @State private var name = ""
+    @State private var email = ""
+    @State private var phone = ""
+    @State private var role: Role = .driver
+    @State private var gender: Gender = .male
+    @State private var age = ""
+    @State private var disability = ""
+    @State private var aadharNumber = ""
+    @State private var drivingLicenseNumber = ""
+    @State private var isAvailable = true
+    @State private var showAlert = false
+    @State private var isAgeValid = true
+    @FocusState private var focusedField: Field?
+    @State private var aadharPhotoItem: PhotosPickerItem?
+    @State private var licensePhotoItem: PhotosPickerItem?
+    @State private var aadharImage: UIImage?
+    @State private var licenseImage: UIImage?
+    @State private var isLoading = false
+
+    enum Field {
+        case age
+    }
+
+    var editingUser: User?
 
     var body: some View {
-        
         NavigationStack {
             Form {
                 Section(header: Text("Personnel Details")) {
-                    TextField("First Name", text: $firstName)
+                    TextField("Full Name", text: $name)
                         .textInputAutocapitalization(.words)
-                    TextField("Last Name", text: $lastName)
-                        .textInputAutocapitalization(.words)
-                    TextField("Aadhaar Number", text: $aadhaarNumber)
+                    TextField("Email", text: $email)
+                        .keyboardType(.emailAddress)
+                        .textContentType(.emailAddress)
+                        .disabled(editingUser != nil)
+                    TextField("Phone Number", text: $phone)
                         .keyboardType(.numberPad)
-                        .onChange(of: aadhaarNumber) { newValue in
-                            let digits = newValue.filter { $0.isNumber }
-                            if digits.count > 12 {
-                                aadhaarNumber = String(digits.prefix(12)).formatAadhaar()
-                            } else {
-                                aadhaarNumber = digits.formatAadhaar()
-                            }
-                        }
-                    TextField("Age", text: $age)
-                                .textFieldStyle(.plain)
-                                .keyboardType(.numberPad)
-                                
-                                
-                                .onChange(of: age) { newValue in
-                                    age = String(newValue.prefix(3).filter { $0.isNumber })
-                                    
-                                    if !isFocused {
-                                        if age.isEmpty {
-                                            isAgeValid = true
-                                        } else if let val = Int(age) {
-                                            if val > 120 {
-                                                age = "120"
-                                            }
-                                            if val < 18 {
-                                                isAgeValid = false
-                                                showAlert = true
-                                            } else {
-                                                isAgeValid = true
-                                                showAlert = false
-                                            }
-                                        } else {
-                                            isAgeValid = false
-                                            showAlert = true
-                                        }
-                                    } else {
-                                        isAgeValid = true // Neutral during typing
-                                        showAlert = false
-                                    }
-                                }
-                                .alert(isPresented: $showAlert) {
-                                    Alert(
-                                        title: Text("Age must be greater than 18"),
-                                        dismissButton: .cancel(Text("OK"))
-                                    )
-                                }
-
-
-                    TextField("Contact Number", text: $contactNumber)
-                        .keyboardType(.numberPad)
-                        .onChange(of: contactNumber) { newValue in
+                        .onChange(of: phone) { newValue in
                             let digits = newValue.filter { $0.isNumber }
                             if digits.count > 10 {
-                                contactNumber = String(digits.prefix(10))
+                                phone = String(digits.prefix(10))
                             } else {
-                                contactNumber = digits
+                                phone = digits
                             }
                         }
                     Picker("Role", selection: $role) {
@@ -687,57 +971,168 @@ struct DriverFormView: View {
                         }
                     }
                     .pickerStyle(.menu)
-                }
-
-                if role == .driver {
-                    Section(header: Text("Driver Details")) {
-                        Picker("Gender", selection: $gender) {
-                            ForEach(Gender.allCases) { gender in
-                                Text(gender.rawValue).tag(gender)
+                    TextField("Aadhaar Number", text: $aadharNumber)
+                        .keyboardType(.numberPad)
+                        .onChange(of: aadharNumber) { newValue in
+                            let digits = newValue.filter { $0.isNumber }
+                            if digits.count > 12 {
+                                aadharNumber = String(digits.prefix(12)).formatAadhaar()
+                            } else {
+                                aadharNumber = digits.formatAadhaar()
                             }
                         }
-                        .pickerStyle(.menu)
-                        TextField("Email", text: $email)
-                            .keyboardType(.emailAddress)
-                            .textContentType(.emailAddress)
-                        TextField("License Number", text: $licenseNumber)
+                    TextField("Age", text: $age)
+                        .keyboardType(.numberPad)
+                        .focused($focusedField, equals: .age)
+                        .onChange(of: age) { newValue in
+                            age = String(newValue.prefix(3).filter { $0.isNumber })
+                        }
+                        .onChange(of: focusedField) { field in
+                            // Only validate when losing focus
+                            if field != .age {
+                                validateAge()
+                            }
+                        }
+                    Picker("Gender", selection: $gender) {
+                        ForEach(Gender.allCases) { gender in
+                            Text(gender.rawValue).tag(gender)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+
+                Section(header: Text("Additional Details")) {
+                    if role == .driver {
+                        TextField("Driving License Number", text: $drivingLicenseNumber)
                             .autocapitalization(.allCharacters)
-                            .textFieldStyle(.plain)
                             .keyboardType(.asciiCapable)
                             .textInputAutocapitalization(.characters)
-                            .onChange(of: licenseNumber) { _ in
-                                let clean = licenseNumber
+                            .onChange(of: drivingLicenseNumber) { _ in
+                                let clean = drivingLicenseNumber
                                     .replacingOccurrences(of: "-", with: "")
                                     .filter { $0.isLetter || $0.isNumber }
                                     .uppercased()
                                 
                                 var result = ""
-                                let pattern = [2, 2, 4, 3, 4] // AA-DD-YYYY-NNN-DDDD
-                                var index = clean.startIndex
-                                
-                                for length in pattern {
-                                    guard index < clean.endIndex else { break }
-                                    let nextIndex = clean.index(index, offsetBy: length, limitedBy: clean.endIndex) ?? clean.endIndex
-                                    result += clean[index..<nextIndex]
-                                    if nextIndex != clean.endIndex {
+                                if clean.count >= 2 {
+                                    result += clean.prefix(2)
+                                    if clean.count > 2 {
                                         result += "-"
+                                        result += clean.dropFirst(2).prefix(13)
                                     }
-                                    index = nextIndex
+                                } else {
+                                    result = clean
                                 }
                                 
-                                licenseNumber = result
+                                drivingLicenseNumber = result
                             }
-
+                    }
+                    TextField("Disability (if any)", text: $disability)
+                    Toggle("Available", isOn: $isAvailable)
+                }
+                
+                Section(header: Text("Document Upload")) {
+                    // Aadhar Upload
+                    VStack(alignment: .leading) {
+                        Text("Aadhar Proof")
+                            .font(.subheadline)
+                            .foregroundColor(.gray)
                         
+                        HStack {
+                            Button {
+                                currentDocumentType = .aadhar
+                                showingImagePicker = true
+                            } label: {
+                                Label(
+                                    aadharImage != nil ? "Change Aadhar" : "Upload Aadhar",
+                                    systemImage: "photo"
+                                )
+                                .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
                             
-
-
-                        DatePicker("License Valid Upto", selection: $licenseValidUpto, displayedComponents: [.date])
-                            .datePickerStyle(.compact)
+                            Button {
+                                currentDocumentType = .aadhar
+                                requestCameraPermission()
+                            } label: {
+                                Label("Capture", systemImage: "camera")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                        
+                        if let aadharImage = aadharImage {
+                            Image(uiImage: aadharImage)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(height: 150)
+                                .cornerRadius(8)
+                        } else {
+                            Text("No Aadhar proof selected")
+                                .foregroundColor(.gray)
+                                .frame(height: 40)
+                        }
+                    }
+                    
+                    // License Upload (for drivers)
+                    if role == .driver {
+                        VStack(alignment: .leading) {
+                            Text("License Proof")
+                                .font(.subheadline)
+                                .foregroundColor(.gray)
+                            
+                            HStack {
+                                Button {
+                                    currentDocumentType = .license
+                                    showingImagePicker = true
+                                } label: {
+                                    Label(
+                                        licenseImage != nil ? "Change License" : "Upload License",
+                                        systemImage: "photo"
+                                    )
+                                    .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(.bordered)
+                                
+                                Button {
+                                    currentDocumentType = .license
+                                    requestCameraPermission()
+                                } label: {
+                                    Label("Capture", systemImage: "camera")
+                                        .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(.bordered)
+                            }
+                            
+                            if let licenseImage = licenseImage {
+                                Image(uiImage: licenseImage)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(height: 150)
+                                    .cornerRadius(8)
+                            } else {
+                                Text("No License proof selected")
+                                    .foregroundColor(.gray)
+                                    .frame(height: 40)
+                            }
+                        }
                     }
                 }
             }
-            .navigationTitle(editingDriver == nil ? "Add Personnel" : "Edit Personnel")
+            .sheet(isPresented: $showingImagePicker) {
+                PhotoPicker(selectedImage: currentDocumentType == .aadhar ? $aadharImage : $licenseImage)
+            }
+            .fullScreenCover(isPresented: $showingCamera) {
+                CameraView(selectedImage: currentDocumentType == .aadhar ? $aadharImage : $licenseImage)
+            }
+            .alert(isPresented: $showAlert) {
+                Alert(
+                    title: Text("Invalid Age"),
+                    message: Text("Age must be at least 18 years."),
+                    dismissButton: .default(Text("OK"))
+                )
+            }
+            .navigationTitle(editingUser == nil ? "Add Staff" : "Edit Staff")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -747,86 +1142,245 @@ struct DriverFormView: View {
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        let dateFormatter = DateFormatter()
-                        dateFormatter.dateFormat = "yyyy-MM-dd"
-                        let licenseValidUptoStr = role == .driver ? dateFormatter.string(from: licenseValidUpto) : nil
-                        let driver = Driver(
-                            id: editingDriver?.id ?? UUID(),
-                            firstName: firstName,
-                            lastName: lastName,
-                            aadhaarNumber: aadhaarNumber,
-                            age: age,
-                            contactNumber: contactNumber,
-                            role: role,
-                            gender: role == .driver ? gender : nil,
-                            email: role == .driver ? email : nil,
-                            licenseNumber: role == .driver ? licenseNumber : nil,
-                            licenseValidUpto: licenseValidUptoStr
-                        )
-                         
-                            if let val = Int(age), val >= 18 {
-                                isAgeValid = true
-                                showAlert = false
-                                // Proceed with saving logic
-                                print("Age is valid. Proceed to save.")
-                            } else {
-                                isAgeValid = false
-                                showAlert = true
+                    if isLoading {
+                        ProgressView()
+                    } else {
+                        Button("Save") {
+                            if validateAge() {
+                                saveUser()
                             }
-                        
-                        
-
-                        if editingDriver == nil {
-                            viewModel.add(driver: driver)
-                        } else {
-                            viewModel.update(driver: driver)
                         }
-                        dismiss()
+                        .disabled(!isFormValid)
                     }
-                    .alert(isPresented: $showAlert) {
-                        Alert(
-                            title: Text("Age must be greater than 18"),
-                            dismissButton: .default(Text("OK"))
-                        )
-                    }
-                    .disabled(!isFormValid)
                 }
             }
             .onAppear {
-                if let driver = editingDriver {
-                    firstName = driver.firstName
-                    lastName = driver.lastName
-                    aadhaarNumber = driver.aadhaarNumber.formatAadhaar()
-                    age = driver.age
-                    contactNumber = driver.contactNumber
-                    role = driver.role
-                    gender = driver.gender ?? .male
-                    email = driver.email ?? ""
-                    licenseNumber = driver.licenseNumber ?? ""
-                    let dateFormatter = DateFormatter()
-                    dateFormatter.dateFormat = "yyyy-MM-dd"
-                    if let date = driver.licenseValidUpto.flatMap({ dateFormatter.date(from: $0) }) {
-                        licenseValidUpto = date
+                if let user = editingUser {
+                    name = user.name
+                    email = user.email
+                    phone = user.phone
+                    role = Role(rawValue: user.role.capitalized) ?? .driver
+                    aadharNumber = user.aadharNumber?.formatAadhaar() ?? ""
+                    age = user.age.map { String($0) } ?? ""
+                    disability = user.disability ?? ""
+                    drivingLicenseNumber = user.drivingLicenseNumber ?? ""
+                    isAvailable = user.isAvailable ?? true
+                    gender = user.gender.flatMap { Gender(rawValue: $0) } ?? .male
+                    
+                    // Load existing document images if available
+                    if let aadharUrl = user.aadharDocUrl {
+                        loadImage(from: aadharUrl) { image in
+                            aadharImage = image
+                        }
+                    }
+                    
+                    if let licenseUrl = user.licenseDocUrl {
+                        loadImage(from: licenseUrl) { image in
+                            licenseImage = image
+                        }
                     }
                 }
             }
         }
     }
+    
+    private func requestCameraPermission() {
+        AVCaptureDevice.requestAccess(for: .video) { granted in
+            DispatchQueue.main.async {
+                if granted {
+                    showingCamera = true
+                } else {
+                    // Show alert that camera access is required
+                    showAlert = true
+                    viewModel.errorMessage = "Camera access is required to capture documents"
+                }
+            }
+        }
+    }
+    
+    private func loadImage(from urlString: String, completion: @escaping (UIImage?) -> Void) {
+        guard let url = URL(string: urlString) else {
+            completion(nil)
+            return
+        }
+        
+        URLSession.shared.dataTask(with: url) { data, _, error in
+            if let data = data, let image = UIImage(data: data) {
+                DispatchQueue.main.async {
+                    completion(image)
+                }
+            } else {
+                completion(nil)
+            }
+        }.resume()
+    }
+    
+    private func validateAge() -> Bool {
+        guard !age.isEmpty else {
+            isAgeValid = true
+            return true
+        }
+        
+        if let ageInt = Int(age), ageInt >= 18 {
+            isAgeValid = true
+            return true
+        } else {
+            isAgeValid = false
+            showAlert = true
+            return false
+        }
+    }
+    
+    private func saveUser() {
+        isLoading = true
+        
+        let user = User(
+            id: editingUser?.id ?? UUID().uuidString, // Temporary ID for new user
+            name: name,
+            email: email,
+            phone: phone,
+            role: role.rawValue.lowercased(),
+            gender: gender.rawValue,
+            age: Int(age),
+            disability: disability.isEmpty ? nil : disability,
+            aadharNumber: aadharNumber.replacingOccurrences(of: "-", with: ""),
+            drivingLicenseNumber: role == .driver ? drivingLicenseNumber : nil,
+            isAvailable: isAvailable
+        )
+        
+        if editingUser == nil {
+            viewModel.add(user: user, aadharImage: aadharImage, licenseImage: licenseImage) { success in
+                isLoading = false
+                if success {
+                    dismiss()
+                }
+            }
+        } else {
+            // For editing, we need to handle document updates differently
+            let dispatchGroup = DispatchGroup()
+            var aadharUrl: String?
+            var licenseUrl: String?
+            
+            if let aadharImage = aadharImage {
+                dispatchGroup.enter()
+                viewModel.uploadDocument(image: aadharImage, userId: user.id, type: "aadhar") { url in
+                    aadharUrl = url
+                    dispatchGroup.leave()
+                }
+            }
+            
+            if let licenseImage = licenseImage, user.role == "driver" {
+                dispatchGroup.enter()
+                viewModel.uploadDocument(image: licenseImage, userId: user.id, type: "license") { url in
+                    licenseUrl = url
+                    dispatchGroup.leave()
+                }
+            }
+            
+            dispatchGroup.notify(queue: .main) {
+                var updatedUser = user
+                updatedUser.aadharDocUrl = aadharUrl ?? editingUser?.aadharDocUrl
+                updatedUser.licenseDocUrl = licenseUrl ?? editingUser?.licenseDocUrl
+                
+                viewModel.update(user: updatedUser)
+                isLoading = false
+                dismiss()
+            }
+        }
+    }
 
     private var isFormValid: Bool {
-        let commonValid = !firstName.isEmpty &&
-                          !lastName.isEmpty &&
-                          aadhaarNumber.replacingOccurrences(of: "-", with: "").count == 12 &&
-                          !age.isEmpty &&
-                          contactNumber.count == 10
+        !name.isEmpty &&
+        !email.isEmpty &&
+        phone.count == 10 &&
+        aadharNumber.replacingOccurrences(of: "-", with: "").count == 12 &&
+        !age.isEmpty &&
+        (role != .driver || !drivingLicenseNumber.isEmpty) &&
+        isAgeValid &&
+        (editingUser != nil || aadharImage != nil) && // Require Aadhar for new users
+        (role != .driver || editingUser != nil || licenseImage != nil) // Require license for new drivers
+    }
+}
+
+// MARK: - Photo Picker
+struct PhotoPicker: UIViewControllerRepresentable {
+    @Binding var selectedImage: UIImage?
+    @Environment(\.presentationMode) private var presentationMode
+    
+    func makeUIViewController(context: Context) -> some UIViewController {
+        var config = PHPickerConfiguration()
+        config.filter = .images
+        config.selectionLimit = 1
         
-        if role == .driver {
-            return commonValid &&
-                   !email.isEmpty &&
-                   !licenseNumber.isEmpty
-        } else {
-            return commonValid
+        let picker = PHPickerViewController(configuration: config)
+        picker.delegate = context.coordinator
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: UIViewControllerType, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: PHPickerViewControllerDelegate {
+        let parent: PhotoPicker
+        
+        init(_ parent: PhotoPicker) {
+            self.parent = parent
+        }
+        
+        func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+            parent.presentationMode.wrappedValue.dismiss()
+            
+            guard let provider = results.first?.itemProvider else { return }
+            
+            if provider.canLoadObject(ofClass: UIImage.self) {
+                provider.loadObject(ofClass: UIImage.self) { image, _ in
+                    DispatchQueue.main.async {
+                        self.parent.selectedImage = image as? UIImage
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Camera View
+struct CameraView: UIViewControllerRepresentable {
+    @Binding var selectedImage: UIImage?
+    @Environment(\.presentationMode) private var presentationMode
+    
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.cameraCaptureMode = .photo
+        picker.delegate = context.coordinator
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
+        let parent: CameraView
+        
+        init(_ parent: CameraView) {
+            self.parent = parent
+        }
+        
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+            if let image = info[.originalImage] as? UIImage {
+                parent.selectedImage = image
+            }
+            parent.presentationMode.wrappedValue.dismiss()
+        }
+        
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            parent.presentationMode.wrappedValue.dismiss()
         }
     }
 }
@@ -834,13 +1388,9 @@ struct DriverFormView: View {
 // Extension to format Aadhaar number
 extension String {
     func formatAadhaar() -> String {
-        // Remove hyphens and filter only numeric digits, up to 12
         let digits = self.replacingOccurrences(of: "-", with: "").filter { $0.isNumber }.prefix(12)
-        
-        // Convert to string for formatting
         var formatted = String(digits)
         
-        // Insert hyphens based on length
         if formatted.count > 4 {
             formatted.insert("-", at: formatted.index(formatted.startIndex, offsetBy: 4))
         }
@@ -848,27 +1398,12 @@ extension String {
             formatted.insert("-", at: formatted.index(formatted.startIndex, offsetBy: 9))
         }
         
-        // Return formatted string or empty string for no digits
         return formatted
     }
 }
 
-// Extension to format License Number
-private func isValidLicenseNumber(_ license: String) -> Bool {
-    let pattern = "^[A-Z]{2}-[0-9]{2}-[0-9]{3}-[0-9]{4}-[0-9]{4}$"
-    let predicate = NSPredicate(format: "SELF MATCHES %@", pattern)
-    guard predicate.evaluate(with: license) else { return false }
-    
-    let parts = license.split(separator: "-")
-    if let year = Int(parts[2]), year < 1900 || year > 2025 {
-        return false
-    }
-    return true
-}
-
-
 // MARK: - Undo Toast
-struct UndoToast1: View {
+struct UndoToast: View {
     var undoAction: () -> Void
     @State private var isVisible = true
 
@@ -880,7 +1415,7 @@ struct UndoToast1: View {
                 Button("Undo", action: undoAction)
             }
             .padding()
-            .background(.thinMaterial)
+            .background(.ultraThinMaterial)
             .cornerRadius(12)
             .padding(.horizontal)
             .onAppear {
@@ -895,5 +1430,5 @@ struct UndoToast1: View {
 }
 
 #Preview {
-    DriverManagerView()
+    UserManagerView()
 }

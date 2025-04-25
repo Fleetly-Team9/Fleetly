@@ -197,7 +197,7 @@ class AuthViewModel: ObservableObject {
                                 var data = try Firestore.Encoder().encode(user)
                                 data["uid"] = nil
                                 
-                                self.db.collection("Drivers").document(uid)
+                                self.db.collection("users").document(uid)
                                     .setData(data) { err in
                                         DispatchQueue.main.async {
                                             self.isSigningUp = false
