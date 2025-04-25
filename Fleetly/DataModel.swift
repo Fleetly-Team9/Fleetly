@@ -1,7 +1,7 @@
 import Foundation
 
-struct User: Identifiable, Codable {
-    let id: String                     // Firestore doc ID / Auth UID
+struct User: Identifiable, Codable,Equatable {
+    var id: String                     // Firestore doc ID / Auth UID
     let name: String                   // firstName + " " + lastName
     let email: String
     let phone: String
@@ -11,10 +11,10 @@ struct User: Identifiable, Codable {
     let disability: String?
     let aadharNumber: String?
     let drivingLicenseNumber: String?
-    let aadharDocUrl: String?          // Storage download URL
-    let licenseDocUrl: String?
-    let isApproved: Bool?              // New field for manager approval
-    
+    var aadharDocUrl: String?          // Storage download URL
+    var licenseDocUrl: String?
+    var isApproved: Bool?              // New field for manager approval
+    var isAvailable: Bool?
     // Default initializer with isApproved set to false
     init(id: String,
          name: String,
@@ -28,7 +28,8 @@ struct User: Identifiable, Codable {
          drivingLicenseNumber: String? = nil,
          aadharDocUrl: String? = nil,
          licenseDocUrl: String? = nil,
-         isApproved: Bool? = false) {
+         isApproved: Bool? = false,
+         isAvailable: Bool? = true) {
         self.id = id
         self.name = name
         self.email = email
@@ -42,6 +43,7 @@ struct User: Identifiable, Codable {
         self.aadharDocUrl = aadharDocUrl
         self.licenseDocUrl = licenseDocUrl
         self.isApproved = isApproved
+        self.isAvailable = isAvailable
     }
 
     enum CodingKeys: String, CodingKey {
@@ -49,6 +51,6 @@ struct User: Identifiable, Codable {
         case name, email, phone, role, gender, age, disability
         case aadharNumber, drivingLicenseNumber
         case aadharDocUrl, licenseDocUrl
-        case isApproved                  // New coding key
+        case isApproved, isAvailable               // New coding key
     }
 }

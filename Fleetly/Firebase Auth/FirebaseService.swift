@@ -34,18 +34,7 @@ final class FirebaseService {
         }
     }
 
-    func saveUser(_ user: User, completion: @escaping (Error?) -> Void) {
-        do {
-            // Encoder will emit "uid" key for user.id
-            var data = try Firestore.Encoder().encode(user)
-            // Remove the "uid" field so it isn't stored redundantly
-            data["uid"] = nil
-            db.collection("users").document(user.id)
-              .setData(data, completion: completion)
-        } catch {
-            completion(error)
-        }
-    }
+
     func uploadPhoto(item: PhotosPickerItem?,
                          path: String,
                          completion: @escaping (Result<String, Error>) -> Void) {

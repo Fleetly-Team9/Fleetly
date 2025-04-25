@@ -13,7 +13,7 @@ struct MainTabView: View {
                     Text("Home")
                 }
 
-            DriverManagerView()
+            UserManagerView()
                 .tabItem {
                     Image(systemName: "person.2.fill")
                     Text("Personnel")

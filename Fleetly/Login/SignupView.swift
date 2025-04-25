@@ -260,17 +260,21 @@ struct SignupView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
             
-            Button("Got it")
-            {
+            Button(action: {
                 dismiss()
+            }) {
+                Text("Got it")
+                    .font(.system(.headline, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
             }
-            .font(.system(.headline, weight: .semibold))
-            .frame(maxWidth: .infinity)
-            .frame(height: 50)
-            .padding()
-            .background(.blue)
+            .padding(.horizontal, 24)
+            .tint(.blue)
             .foregroundColor(.white)
             .buttonBorderShape(.capsule)
+            .buttonStyle(.borderedProminent)
+
+
         }
         .padding()
     }
