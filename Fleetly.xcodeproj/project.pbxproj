@@ -299,7 +299,9 @@
 				CODE_SIGN_ENTITLEMENTS = Fleetly/Fleetly.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+
 				DEVELOPMENT_TEAM = F64K86LK5G;
+
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Fleetly/Info.plist;
@@ -335,7 +337,9 @@
 				CODE_SIGN_ENTITLEMENTS = Fleetly/Fleetly.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+
 				DEVELOPMENT_TEAM = F64K86LK5G;
+
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Fleetly/Info.plist;

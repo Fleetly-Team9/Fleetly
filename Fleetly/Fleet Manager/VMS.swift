@@ -210,7 +210,9 @@ class VehicleManagerViewModel: ObservableObject {
 
 // MARK: - Main View
 import SwiftUI
+import UIKit
 
+// MARK: - Main View
 struct VehicleManagementView: View {
     @StateObject private var viewModel = VehicleManagerViewModel()
     @State private var showingAddVehicle = false
@@ -236,6 +238,10 @@ struct VehicleManagementView: View {
                                     selectedVehicle = vehicle
                                 }
                                 .onLongPressGesture {
+                                    // Trigger haptic feedback
+                                    let generator = UINotificationFeedbackGenerator()
+                                    generator.notificationOccurred(.success) // Or .warning, .error
+                                    
                                     selectedVehicle = vehicle
                                     showingContextMenu = true
                                 }
@@ -283,11 +289,6 @@ struct VehicleManagementView: View {
             }
             .sheet(item: $editingVehicle) { vehicle in
                 VehicleFormView(viewModel: viewModel, editingVehicle: vehicle)
-            }
-            .sheet(isPresented: $showingAssignDriver) {
-                if let vehicle = editingVehicle {
-                    AssignDriverView(viewModel: viewModel, vehicle: vehicle)
-                }
             }
             .alert(isPresented: $showingDeleteConfirmation) {
                 Alert(
@@ -450,30 +451,6 @@ struct VehicleFormView: View {
     }
 }
 
-// MARK: - Assign Driver View
-struct AssignDriverView: View {
-    @Environment(\.dismiss) var dismiss
-    @ObservedObject var viewModel: VehicleManagerViewModel
-    var vehicle: Vehicle?
-
-    @State private var selectedDriverId: UUID?
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section(header: Text("Assign Driver")) {
-                    Picker("Select Driver", selection: $selectedDriverId) {
-                        Text("Unassign").tag(nil as UUID?) // Explicitly tag with nil
-                        ForEach(viewModel.drivers) { driver in
-                            Text(driver.name).tag(driver.id as UUID?) // Match the optional type
-                        }
-                    }
-                    .pickerStyle(.menu)
-                }
-            }
-        }
-    }
-}
 // MARK: - Undo Toast
 struct UndoToast: View {
     var undoAction: () -> Void
