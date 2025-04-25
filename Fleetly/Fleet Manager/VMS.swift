@@ -550,38 +550,39 @@ struct VehicleManagementView: View {
         .padding()
     }
 
+    // inside VehicleManagementView …
+
     private var vehiclesListView: some View {
         List {
             ForEach(viewModel.filteredVehicles) { vehicle in
                 VehicleCard(vehicle: vehicle)
-                    .swipeActions(edge: .trailing) {
-                        Button(role: .destructive) {
-                            vehicleToDelete = vehicle
-                            showingDeleteConfirmation = true
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                    }
+                    // MARK: - Leading swipe stays “Edit”
                     .swipeActions(edge: .leading) {
                         Button {
-                            editingVehicle = vehicle
+                            var updated = vehicle
+                            updated.status = .active
+                            viewModel.update(vehicle: updated)
                         } label: {
-                            Label("Edit", systemImage: "pencil")
+                            Label("Active", systemImage: "car.fill")
                         }
-                        .tint(.blue)
+                        .tint(.green)
+                    }
+                    // MARK: - Trailing swipe now “In Maintenance”
+                    .swipeActions(edge: .trailing) {
+                        Button {
+                            var updated = vehicle
+                            updated.status = .inMaintenance
+                            viewModel.update(vehicle: updated)
+                        } label: {
+                            Label("In Maintenance", systemImage: "wrench.fill")
+                        }
+                        .tint(.orange)
                     }
                     .contextMenu {
-                        Button {
-                            editingVehicle = vehicle
-                        } label: {
-                            Label("Edit", systemImage: "pencil")
-                        }
-                        
-                        Button(role: .destructive) {
+                        Button("Edit") { editingVehicle = vehicle }
+                        Button("Delete", role: .destructive) {
                             vehicleToDelete = vehicle
                             showingDeleteConfirmation = true
-                        } label: {
-                            Label("Delete", systemImage: "trash")
                         }
                     }
                     .onTapGesture {
@@ -596,6 +597,7 @@ struct VehicleManagementView: View {
             viewModel.fetchVehicles()
         }
     }
+
 }
 
 // MARK: - Vehicle Detail View
