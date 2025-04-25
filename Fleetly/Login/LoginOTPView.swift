@@ -1,8 +1,7 @@
 import SwiftUI
 
-struct OTPVerificationView: View {
+struct LoginOTPView: View {
     @ObservedObject var authVM: AuthViewModel
-    var onVerificationComplete: ((Bool) -> Void)? = nil
     @Environment(\.dismiss) var dismiss
     
     @State private var code = ""
@@ -27,7 +26,7 @@ struct OTPVerificationView: View {
                 Text("Enter Verification Code")
                     .font(.title2.bold())
                 
-                Text("We just sent a 6-digit code to your email address.")
+                Text("We just sent a 6-digit code to your email.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -120,57 +119,45 @@ struct OTPVerificationView: View {
     private func verify() {
         isVerifying = true
         error = nil
-        
-        // Use pendingEmail if pendingUser is nil
-        let emailToVerify = authVM.pendingUser?.email ?? authVM.pendingEmail ?? ""
-        
-        authVM.verifyOTP(email: emailToVerify, code: code) { success, err in
+        authVM.verifyLoginOTP(code: code) { success, err in
             DispatchQueue.main.async {
                 self.isVerifying = false
-                if success {
-                    self.onVerificationComplete?(true)
-                    self.dismiss()
-                } else {
-                    self.error = err ?? "Verification failed"
+                if !success {
+                    self.error = err
                 }
             }
         }
     }
+    
     private func resendCode() {
-        let emailToSend = authVM.pendingUser?.email ?? authVM.pendingEmail ?? ""
-        
-        guard !emailToSend.isEmpty else {
-            error = "No email address found"
-            return
-        }
-        
-        // Reset timer
-        countdown = 60
-        canResend = false
-        startCountdown()
-        
-        authVM.sendOTP(to: emailToSend) { error in
-            DispatchQueue.main.async {
-                if let error = error {
-                    self.error = error
-                    self.timer?.invalidate()
-                    self.canResend = true
+        if let email = authVM.pendingUser?.email {
+            countdown = 60
+            canResend = false
+            startCountdown()
+            
+            authVM.sendOTP(to: email) { error in
+                DispatchQueue.main.async {
+                    if let error = error {
+                        self.error = error
+                        self.timer?.invalidate()
+                        self.canResend = true
+                    }
                 }
             }
         }
     }
-      
-      private func startCountdown() {
-          timer?.invalidate() // Cancel any existing timer
-          canResend = false
-          
-          timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
-              if countdown > 1 {
-                  countdown -= 1
-              } else {
-                  canResend = true
-                  timer?.invalidate()
-              }
-          }
-      }
+    
+    private func startCountdown() {
+        timer?.invalidate()
+        canResend = false
+        
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+            if countdown > 1 {
+                countdown -= 1
+            } else {
+                canResend = true
+                timer?.invalidate()
+            }
+        }
+    }
 }

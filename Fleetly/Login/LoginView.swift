@@ -112,8 +112,11 @@ struct LoginView: View {
             ForgotPasswordView()
         }
         .sheet(isPresented: $authVM.isWaitingForOTP) {
-            OTPVerificationView(authVM: authVM)
+            LoginOTPView(authVM: authVM)
         }
+        .sheet(isPresented: $authVM.showWaitingApproval) {
+                    WaitingApprovalView()
+                }
     }
 
     // MARK: - Actions

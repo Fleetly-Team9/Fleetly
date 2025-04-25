@@ -7,7 +7,7 @@ class AuthViewModel: ObservableObject {
     @Published var user: User?
     @Published var isLoggedIn = false
     @Published var isSigningUp = false
-
+    @Published var showWaitingApproval = false
     // MFA / OTP state:
     @Published var isWaitingForOTP = false
     @Published var otpError: String?
@@ -20,36 +20,46 @@ class AuthViewModel: ObservableObject {
     /// Email/password login → fetch User → send OTP
     func login(email: String, password: String, completion: @escaping (String?) -> Void) {
         Auth.auth().signIn(withEmail: email, password: password) { [weak self] res, err in
-          guard let self = self else { return }
-          if let err = err {
-            completion(err.localizedDescription)
-            return
-          }
-          guard let uid = res?.user.uid else {
-            completion("No UID after login")
-            return
-          }
-          
-          self.service.fetchUser(id: uid) { result in
-            switch result {
-            case .success(let user):
-              self.pendingUser = user
-              self.sendOTP(to: user.email) { error in
-                DispatchQueue.main.async {
-                  if let error = error {
-                    completion(error)
-                  } else {
-                    self.isWaitingForOTP = true
-                    completion(nil)
-                  }
-                }
-              } 
-            case .failure(let e):
-              completion(e.localizedDescription)
+            guard let self = self else { return }
+            
+            if let err = err {
+                completion(err.localizedDescription)
+                return
             }
-          }
+            
+            guard let uid = res?.user.uid else {
+                completion("No UID after login")
+                return
+            }
+            
+            // Fetch user document
+            self.service.fetchUser(id: uid) { result in
+                switch result {
+                case .success(let user):
+                    // Check if user is approved
+                    if !(user.isApproved ?? false) {
+                        // Show waiting approval state
+                        self.pendingUser = user
+                        self.showWaitingApproval = true
+                        completion(nil)
+                    } else {
+                        // Normal login flow
+                        self.pendingUser = user
+                        self.sendOTP(to: user.email) { error in
+                            if let error = error {
+                                completion(error)
+                            } else {
+                                self.isWaitingForOTP = true
+                                completion(nil)
+                            }
+                        }
+                    }
+                case .failure(let error):
+                    completion(error.localizedDescription)
+                }
+            }
         }
-      }
+    }
 
       // MARK: - Send OTP via Supabase
        func sendOTP(to email: String, completion: @escaping (String?) -> Void) {
@@ -97,24 +107,7 @@ class AuthViewModel: ObservableObject {
           }
         }
       }
-    func verifyOTP(email: String, code: String, completion: @escaping (Bool, String?) -> Void) {
-        Task {
-            do {
-                let session = try await supabase.auth.verifyOTP(
-                    email: email,
-                    token: code,
-                    type: .email
-                )
-                DispatchQueue.main.async {
-                    completion(true, nil)
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    completion(false, error.localizedDescription)
-                }
-            }
-        }
-    }
+ 
 
     
 
@@ -215,4 +208,61 @@ class AuthViewModel: ObservableObject {
         }
         
        
+}
+extension AuthViewModel {
+    // For login flow
+    func verifyLoginOTP(code: String, completion: @escaping (Bool, String?) -> Void) {
+        guard let email = pendingUser?.email else {
+            completion(false, "No email found for verification")
+            return
+        }
+        
+        Task {
+            do {
+                _ = try await supabase.auth.verifyOTP(
+                    email: email,
+                    token: code,
+                    type: .email
+                )
+                
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    self.user = self.pendingUser
+                    self.isLoggedIn = true
+                    self.isWaitingForOTP = false
+                    completion(true, nil)
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    completion(false, error.localizedDescription)
+                }
+            }
+        }
+    }
+    
+    // For signup flow
+    func verifySignupOTP(code: String, completion: @escaping (Bool, String?) -> Void) {
+        guard let email = pendingEmail else {
+            completion(false, "No email found for verification")
+            return
+        }
+        
+        Task {
+            do {
+                let session = try await supabase.auth.verifyOTP(
+                    email: email,
+                    token: code,
+                    type: .email
+                )
+                
+                DispatchQueue.main.async {
+                    completion(true, nil)
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    completion(false, error.localizedDescription)
+                }
+            }
+        }
+    }
 }

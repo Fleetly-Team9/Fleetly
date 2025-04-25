@@ -32,7 +32,7 @@ struct SignupView: View {
             if showWaitingApproval {
                            waitingApprovalView
                        } else if showOTPVerification {
-                           OTPVerificationView(authVM: authVM, onVerificationComplete: { success in
+                           SignupOTPView(authVM: authVM, onVerificationComplete: { success in
                                if success {
                                    showOTPVerification = false
                                    showWaitingApproval = true
@@ -234,7 +234,7 @@ struct SignupView: View {
             }
         }
         .sheet(isPresented: $showOTPVerification) {
-            OTPVerificationView(authVM: authVM) { success in
+            SignupOTPView(authVM: authVM) { success in
                 if success {
                     showOTPVerification = false
                     showWaitingApproval = true
