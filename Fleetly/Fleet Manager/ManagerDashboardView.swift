@@ -47,7 +47,12 @@ struct DashboardHomeView: View {
                             color: .blue
                         )
                         StatCardGridView(icon: "location.fill", title: "Active Trips", value: "24", color: .green)
-                        StatCardGridView(icon: "wrench.fill", title: "Maintenance", value: "12", color: .orange)
+                        StatCardGridView(
+                            icon: "wrench.fill",
+                            title: "Maintenance",
+                            value: "\(dashboardVM.maintenanceVehicles)",
+                            color: .orange
+                        )
                         StatCardGridView(icon: "exclamationmark.triangle.fill", title: "Alerts", value: "5", color: .red)
                     }
                     .padding(.horizontal)
@@ -61,7 +66,7 @@ struct DashboardHomeView: View {
             .navigationTitle("Hello, Fleet Manager")
             .navigationBarTitleDisplayMode(.large)
             .onAppear {
-                dashboardVM.fetchTotalVehicles()
+                dashboardVM.fetchVehicleStats()
             }
         }
     }

@@ -10,33 +10,46 @@ import FirebaseFirestore
 
 class DashboardViewModel: ObservableObject {
     @Published var totalVehicles: Int = 0
+    @Published var maintenanceVehicles: Int = 0
     private let db = Firestore.firestore()
-    private var listener: ListenerRegistration?
+    private var totalListener: ListenerRegistration?
+    private var maintenanceListener: ListenerRegistration?
 
-    func fetchTotalVehicles() {
-        // Remove existing listener to avoid duplicates
-        listener?.remove()
+    func fetchVehicleStats() {
+        // Remove existing listeners to avoid duplicates
+        totalListener?.remove()
+        maintenanceListener?.remove()
 
-        // Add a real-time listener
-        listener = db.collection("vehicles").addSnapshotListener { (snapshot, error) in
+        // Real-time listener for total vehicles
+        totalListener = db.collection("vehicles").addSnapshotListener { (snapshot, error) in
             if let error = error {
                 print("Error fetching total vehicles: \(error.localizedDescription)")
                 return
             }
-            // Get the count of documents in the vehicles collection
-            if let count = snapshot?.documents.count {
-                DispatchQueue.main.async {
-                    self.totalVehicles = count
-                }
-            } else {
-                print("No vehicles found")
-                self.totalVehicles = 0
+            let totalCount = snapshot?.documents.count ?? 0
+            DispatchQueue.main.async {
+                self.totalVehicles = totalCount
             }
         }
+
+        // Real-time listener for vehicles in maintenance
+        maintenanceListener = db.collection("vehicles")
+            .whereField("status", isEqualTo: "In Maintenance")
+            .addSnapshotListener { (snapshot, error) in
+                if let error = error {
+                    print("Error fetching maintenance vehicles: \(error.localizedDescription)")
+                    return
+                }
+                let maintenanceCount = snapshot?.documents.count ?? 0
+                DispatchQueue.main.async {
+                    self.maintenanceVehicles = maintenanceCount
+                }
+            }
     }
 
     deinit {
-        // Clean up listener when ViewModel is deallocated
-        listener?.remove()
+        // Clean up listeners when ViewModel is deallocated
+        totalListener?.remove()
+        maintenanceListener?.remove()
     }
 }

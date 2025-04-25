@@ -210,7 +210,9 @@ class VehicleManagerViewModel: ObservableObject {
 
 // MARK: - Main View
 import SwiftUI
+import UIKit
 
+// MARK: - Main View
 struct VehicleManagementView: View {
     @StateObject private var viewModel = VehicleManagerViewModel()
     @State private var showingAddVehicle = false
@@ -236,6 +238,10 @@ struct VehicleManagementView: View {
                                     selectedVehicle = vehicle
                                 }
                                 .onLongPressGesture {
+                                    // Trigger haptic feedback
+                                    let generator = UINotificationFeedbackGenerator()
+                                    generator.notificationOccurred(.success) // Or .warning, .error
+                                    
                                     selectedVehicle = vehicle
                                     showingContextMenu = true
                                 }
