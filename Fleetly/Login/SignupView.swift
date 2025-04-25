@@ -20,37 +20,37 @@ struct SignupView: View {
     @State private var isAgeValid: Bool = true
     @State private var isLoading = false
     @State private var showOTPVerification = false
-       @State private var showWaitingApproval = false
-
+    @State private var showWaitingApproval = false
+    
     let genders = ["Male", "Female"]
-
+    
     var body: some View {
         ZStack {
             LinearGradient(colors: [.gray.opacity(0.1), .white], startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
-
+            
             if showWaitingApproval {
-                           waitingApprovalView
-                       } else if showOTPVerification {
-                           SignupOTPView(authVM: authVM, onVerificationComplete: { success in
-                               if success {
-                                   showOTPVerification = false
-                                   showWaitingApproval = true
-                               }
-                           })
-                       } else {
+                waitingApprovalView
+            } else if showOTPVerification {
+                SignupOTPView(authVM: authVM, onVerificationComplete: { success in
+                    if success {
+                        showOTPVerification = false
+                        showWaitingApproval = true
+                    }
+                })
+            } else {
                 ScrollView {
                     VStack(spacing: 24) {
                         VStack(spacing: 10) {
                             Image(systemName: "person.crop.circle.badge.plus")
                                 .font(.system(size: 48))
                                 .foregroundStyle(.blue)
-
+                            
                             Text("Driver Sign Up")
                                 .font(.system(.title2, design: .rounded, weight: .bold))
                         }
                         .padding(.top, 40)
-
+                        
                         VStack(spacing: 16) {
                             HStack {
                                 TextField("First Name", text: $firstName)
@@ -58,14 +58,14 @@ struct SignupView: View {
                                     .textInputAutocapitalization(.words)
                                     .padding()
                                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-
+                                
                                 TextField("Last Name", text: $lastName)
                                     .textFieldStyle(.plain)
                                     .textInputAutocapitalization(.words)
                                     .padding()
                                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
                             }
-
+                            
                             Menu {
                                 ForEach(genders, id: \.self) { option in
                                     Button(action: { gender = option }) {
@@ -84,14 +84,14 @@ struct SignupView: View {
                                 .frame(height: 50)
                                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
                             }
-
+                            
                             TextField("Contact Number", text: $phone)
                                 .textFieldStyle(.plain)
                                 .keyboardType(.numberPad)
                                 .padding()
                                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
                                 .onChange(of: phone) { phone = String(phone.prefix(10)).filter { $0.isNumber } }
-
+                            
                             TextField("Email", text: $email)
                                 .textFieldStyle(.plain)
                                 .keyboardType(.emailAddress)
@@ -99,12 +99,12 @@ struct SignupView: View {
                                 .autocorrectionDisabled()
                                 .padding()
                                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-
+                            
                             SecureField("Password", text: $password)
                                 .textFieldStyle(.plain)
                                 .padding()
                                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-
+                            
                             TextField("Age (must be 18 or above)", text: $age)
                                 .textFieldStyle(.plain)
                                 .keyboardType(.numberPad)
@@ -126,7 +126,7 @@ struct SignupView: View {
                                         isAgeValid = false
                                     }
                                 }
-
+                            
                             TextField("Aadhar Number (xxxx-xxxx-xxxx)", text: $aadhar)
                                 .textFieldStyle(.plain)
                                 .keyboardType(.numberPad)
@@ -139,7 +139,7 @@ struct SignupView: View {
                                     }.map { String($0) }.joined(separator: "-")
                                     aadhar = formatted.prefix(14).description
                                 }
-
+                            
                             TextField("License Number (AA-RR-YYYY-NNNNNNN)", text: $license)
                                 .textFieldStyle(.plain)
                                 .keyboardType(.asciiCapable)
@@ -151,20 +151,20 @@ struct SignupView: View {
                                     let letters = cleaned.filter { $0.isLetter }.uppercased()
                                     let digits = cleaned.filter { $0.isNumber }
                                     var formattedParts: [String] = []
-
+                                    
                                     if letters.count >= 1 { formattedParts.append(String(letters.prefix(2))) }
                                     if digits.count >= 1 { formattedParts.append(String(digits.prefix(2))) }
                                     if digits.count >= 3 { formattedParts.append(String(digits.dropFirst(2).prefix(4))) }
                                     if digits.count >= 7 { formattedParts.append(String(digits.dropFirst(6).prefix(3))) }
                                     if digits.count >= 10 { formattedParts.append(String(digits.dropFirst(9).prefix(4))) }
-
+                                    
                                     let formatted = formattedParts.joined(separator: "-")
                                     license = formatted.prefix(19).description
                                 }// In SignupView.swift
-                               
+                            
                         }
                         .padding(.horizontal, 24)
-
+                        
                         HStack(spacing: 16) {
                             PhotosPicker(
                                 selection: $aadharPhotoItem,
@@ -179,7 +179,7 @@ struct SignupView: View {
                                     .clipShape(RoundedRectangle(cornerRadius: 12))
                                     .foregroundColor(.blue)
                             }
-
+                            
                             PhotosPicker(
                                 selection: $licensePhotoItem,
                                 matching: .images,
@@ -195,14 +195,14 @@ struct SignupView: View {
                             }
                         }
                         .padding(.horizontal, 24)
-
+                        
                         if let error = error {
                             Text(error)
                                 .foregroundColor(.red)
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal)
                         }
-
+                        
                         if isLoading {
                             ProgressView()
                                 .progressViewStyle(CircularProgressViewStyle())
@@ -220,7 +220,7 @@ struct SignupView: View {
                             .padding(.horizontal, 24)
                             .disabled(!isFormValid)
                         }
-
+                        
                         Spacer()
                     }
                 }
@@ -243,39 +243,39 @@ struct SignupView: View {
         }
     }
     private var waitingApprovalView: some View {
-            VStack(spacing: 24) {
-                Image(systemName: "clock.badge.checkmark")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 100)
-                    .foregroundStyle(.blue)
-
-                Text("Waiting for Approval")
-                    .font(.title2.bold())
-                    .multilineTextAlignment(.center)
-
-                Text("Your registration is complete! We've sent your details to our manager for verification.")
-                    .font(.body)
-                    .foregroundColor(.gray)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-
-                Button("Got it")
-                {
-                    dismiss()
-                }
-                .font(.headline)
-                .frame(maxWidth: .infinity)
-                .frame(height: 50)
-                .padding()
-                .background(.blue)
-                .foregroundColor(.white)
-                .clipShape(Capsule())
+        VStack(spacing: 24) {
+            Image(systemName: "clock.badge.checkmark")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 100)
+                .foregroundStyle(.blue)
+            
+            Text("Waiting for Approval")
+                .font(.title2.bold())
+                .multilineTextAlignment(.center)
+            
+            Text("Your registration is complete! We've sent your details to our manager for verification.")
+                .font(.body)
+                .foregroundColor(.gray)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+            
+            Button("Got it")
+            {
+                dismiss()
             }
+            .font(.system(.headline, weight: .semibold))
+            .frame(maxWidth: .infinity)
+            .frame(height: 50)
             .padding()
+            .background(.blue)
+            .foregroundColor(.white)
+            .buttonBorderShape(.capsule)
         }
+        .padding()
+    }
     
-
+    
     private var isFormValid: Bool {
         !firstName.isEmpty &&
         !lastName.isEmpty &&
@@ -287,19 +287,19 @@ struct SignupView: View {
         !gender.isEmpty &&
         isAgeValid
     }
-
+    
     private func isValidLicenseNumber(_ license: String) -> Bool {
         let pattern = "^[A-Z]{2}-[0-9]{2}-[0-9]{3}-[0-9]{4}-[0-9]{4}$"
         let predicate = NSPredicate(format: "SELF MATCHES %@", pattern)
         guard predicate.evaluate(with: license) else { return false }
-
+        
         let parts = license.split(separator: "-")
         if let year = Int(parts[2]), year < 1900 || year > 2025 {
             return false
         }
         return true
     }
-
+    
     private func signup() {
         isLoading = true
         authVM.signupDriver(
@@ -321,7 +321,13 @@ struct SignupView: View {
                 if let err = err {
                     self.error = err
                 } else {
-                    showOTPVerification = true                }
+                    // Handle simulator bypass
+                    if authVM.isSimulator {
+                        showWaitingApproval = true
+                    } else {
+                        showOTPVerification = true
+                    }
+                }
             }
         }
     }

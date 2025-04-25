@@ -21,15 +21,17 @@ struct WaitingApprovalView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
             
-            Button("Got it") {
+            Button("Got it")
+            {
                 dismiss()
             }
-            .font(.headline)
+            .font(.system(.headline, weight: .semibold))
+            .frame(maxWidth: .infinity)
+            .frame(height: 50)
             .padding()
-            .frame(width: 120)
             .background(.blue)
             .foregroundColor(.white)
-            .clipShape(Capsule())
+            .buttonBorderShape(.capsule)
         }
         .padding()
     }

@@ -43,6 +43,14 @@ class AuthViewModel: ObservableObject {
                         self.showWaitingApproval = true
                         completion(nil)
                     } else {
+                        // SIMULATOR BYPASS
+                        if self.isSimulator {
+                            self.user = user
+                            self.isLoggedIn = true
+                            completion(nil)
+                            return
+                        }
+                        
                         // Normal login flow
                         self.pendingUser = user
                         self.sendOTP(to: user.email) { error in
@@ -108,110 +116,132 @@ class AuthViewModel: ObservableObject {
         }
       }
  
-
+     var isSimulator: Bool {
+            #if targetEnvironment(simulator)
+            return true
+            #else
+            return false
+            #endif
+        }
     
 
     /// Driver-only signup remains unchanged
     func signupDriver(
-            firstName: String,
-            lastName: String,
-            gender: String,
-            age: Int,
-            disability: String,
-            phone: String,
-            email: String,
-            password: String,
-            aadharNumber: String,
-            licenseNumber: String,
-            aadharPhotoItem: PhotosPickerItem?,
-            licensePhotoItem: PhotosPickerItem?,
+        firstName: String,
+        lastName: String,
+        gender: String,
+        age: Int,
+        disability: String,
+        phone: String,
+        email: String,
+        password: String,
+        aadharNumber: String,
+        licenseNumber: String,
+        aadharPhotoItem: PhotosPickerItem?,
+        licensePhotoItem: PhotosPickerItem?,
+        completion: @escaping (String?) -> Void
+    ) {
+        isSigningUp = true
+
+        Auth.auth().createUser(withEmail: email, password: password) { [weak self] res, err in
+            guard let self = self else { return }
             
-            completion: @escaping (String?) -> Void
-        ) {
-            isSigningUp = true
+            if let err = err {
+                self.isSigningUp = false
+                return completion(err.localizedDescription)
+            }
+            
+            guard let firebaseUser = res?.user else {
+                self.isSigningUp = false
+                return completion("Unexpected signup error")
+            }
 
-            Auth.auth().createUser(withEmail: email, password: password) { [weak self] res, err in
-                guard let self = self else { return }
-                if let err = err {
-                    self.isSigningUp = false
-                    return completion(err.localizedDescription)
-                }
-                
-                guard let firebaseUser = res?.user else {
-                    self.isSigningUp = false
-                    return completion("Unexpected signup error")
-                }
+            let uid = firebaseUser.uid
+            let fullName = "\(firstName) \(lastName)"
+            self.pendingEmail = email
 
-                let uid = firebaseUser.uid
-                let fullName = "\(firstName) \(lastName)"
-                self.pendingEmail = email
-                // Upload Aadhar photo
-                let aadharPath = "users/\(uid)/aadhar.jpg"
-                self.service.uploadPhoto(item: aadharPhotoItem, path: aadharPath) { result in
-                    switch result {
-                    case .failure(let err):
-                        self.isSigningUp = false
-                        return completion("Aadhar upload failed: \(err.localizedDescription)")
-                    case .success(let aadharURL):
-                        // Upload License photo
-                        let licPath = "users/\(uid)/license.jpg"
-                        self.service.uploadPhoto(item: licensePhotoItem, path: licPath) { licResult in
-                            switch licResult {
-                            case .failure(let err):
-                                self.isSigningUp = false
-                                return completion("License upload failed: \(err.localizedDescription)")
-                            case .success(let licenseURL):
-                                // Build User model with isApproved field
-                                let user = User(
-                                    id: uid,
-                                    name: fullName,
-                                    email: email,
-                                    phone: phone,
-                                    role: "driver",
-                                    gender: gender,
-                                    age: age,
-                                    disability: disability,
-                                    aadharNumber: aadharNumber,
-                                    drivingLicenseNumber: licenseNumber,
-                                    aadharDocUrl: aadharURL.isEmpty ? nil : aadharURL,
-                                    licenseDocUrl: licenseURL.isEmpty ? nil : licenseURL,
-                                    isApproved: false
-                                )
+            // Upload Aadhar photo
+            let aadharPath = "users/\(uid)/aadhar.jpg"
+            self.service.uploadPhoto(item: aadharPhotoItem, path: aadharPath) { result in
+                switch result {
+                case .failure(let err):
+                    self.isSigningUp = false
+                    return completion("Aadhar upload failed: \(err.localizedDescription)")
+                case .success(let aadharURL):
+                    // Upload License photo
+                    let licPath = "users/\(uid)/license.jpg"
+                    self.service.uploadPhoto(item: licensePhotoItem, path: licPath) { licResult in
+                        switch licResult {
+                        case .failure(let err):
+                            self.isSigningUp = false
+                            return completion("License upload failed: \(err.localizedDescription)")
+                        case .success(let licenseURL):
+                            // Build User model with isApproved field
+                            let user = User(
+                                id: uid,
+                                name: fullName,
+                                email: email,
+                                phone: phone,
+                                role: "driver",
+                                gender: gender,
+                                age: age,
+                                disability: disability,
+                                aadharNumber: aadharNumber,
+                                drivingLicenseNumber: licenseNumber,
+                                aadharDocUrl: aadharURL.isEmpty ? nil : aadharURL,
+                                licenseDocUrl: licenseURL.isEmpty ? nil : licenseURL,
+                                isApproved: false
+                            )
+                            
+                            do {
+                                var data = try Firestore.Encoder().encode(user)
+                                data["uid"] = nil
                                 
-                                do {
-                                    var data = try Firestore.Encoder().encode(user)
-                                    data["uid"] = nil
-                                    
-                                    self.db.collection("users").document(uid)
-                                        .setData(data) { err in
-                                            DispatchQueue.main.async {
-                                                self.isSigningUp = false
-                                                if let err = err {
-                                                    completion(err.localizedDescription)
+                                self.db.collection("Drivers").document(uid)
+                                    .setData(data) { err in
+                                        DispatchQueue.main.async {
+                                            self.isSigningUp = false
+                                            if let err = err {
+                                                completion(err.localizedDescription)
+                                            } else {
+                                                // Simulator bypass
+                                                if self.isSimulator {
+                                                    // Bypass OTP flow
+                                                    completion(nil)
                                                 } else {
-                                                    // Send OTP after successful signup
+                                                    // Normal OTP flow
                                                     self.sendOTP(to: email) { error in
                                                         completion(error)
                                                     }
                                                 }
                                             }
                                         }
-                                } catch {
-                                    self.isSigningUp = false
-                                    completion("Encoding user failed")
-                                }
+                                    }
+                            } catch {
+                                self.isSigningUp = false
+                                completion("Encoding user failed")
                             }
                         }
                     }
                 }
             }
         }
+    }
+    //got it button, try in phone, 
         
        
 }
 extension AuthViewModel {
     // For login flow
     func verifyLoginOTP(code: String, completion: @escaping (Bool, String?) -> Void) {
+        if isSimulator {
+                   // Auto-approve for simulator
+                   self.user = self.pendingUser
+                   self.isLoggedIn = true
+                   self.isWaitingForOTP = false
+                   completion(true, nil)
+                   return
+               }
         guard let email = pendingUser?.email else {
             completion(false, "No email found for verification")
             return
@@ -242,6 +272,11 @@ extension AuthViewModel {
     
     // For signup flow
     func verifySignupOTP(code: String, completion: @escaping (Bool, String?) -> Void) {
+        if isSimulator {
+                    // Auto-approve for simulator
+                    completion(true, nil)
+                    return
+                }
         guard let email = pendingEmail else {
             completion(false, "No email found for verification")
             return

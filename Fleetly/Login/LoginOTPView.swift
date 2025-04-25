@@ -101,9 +101,21 @@ struct LoginOTPView: View {
                 .padding(.bottom, 24)
             }
             .padding(.horizontal, 24)
+            if authVM.isSimulator {
+                         Text("Simulator detected - OTP bypassed")
+                             .foregroundColor(.green)
+                             .padding()
+                     }
         }
         .onAppear {
-            startCountdown()
+            if authVM.isSimulator {
+                           // Auto-dismiss after delay
+                           DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                               dismiss()
+                           }
+                       } else {
+                           startCountdown()
+                       }
         }
         .onDisappear {
             timer?.invalidate()
