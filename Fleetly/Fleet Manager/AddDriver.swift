@@ -1,4 +1,6 @@
 import SwiftUI
+import Firebase
+import FirebaseFirestore
 
 // MARK: - Model
 struct Driver: Identifiable, Equatable {
@@ -13,6 +15,7 @@ struct Driver: Identifiable, Equatable {
     var email: String? // Optional, only for Driver
     var licenseNumber: String? // Optional, only for Driver
     var licenseValidUpto: String? // Optional, only for Driver
+    var documentId: String? //For Firebase document ID
 }
 
 // Enum for Role
@@ -28,17 +31,25 @@ enum Gender: String, CaseIterable, Identifiable {
     case male = "Male"
     case female = "Female"
     
-    
     var id: String { self.rawValue }
 }
 
 // MARK: - ViewModel
+
 class DriverManagerViewModel: ObservableObject {
     @Published var drivers: [Driver] = []
     @Published var searchText: String = ""
     @Published var sortAscending: Bool = true
     @Published var recentlyDeleted: Driver?
-
+    @Published var isLoading: Bool = false
+    @Published var errorMessage: String?
+    
+    private var db = Firestore.firestore()
+    
+    init() {
+        fetchDrivers()
+    }
+    
     var filteredDrivers: [Driver] {
         let filtered = drivers.filter {
             searchText.isEmpty || "\($0.firstName) \($0.lastName)".lowercased().contains(searchText.lowercased())
@@ -47,28 +58,238 @@ class DriverManagerViewModel: ObservableObject {
             sortAscending ? $0.firstName < $1.firstName : $0.firstName > $1.firstName
         }
     }
+    
+    func fetchDrivers() {
+        isLoading = true
+        print("Fetching drivers from Firestore...")
 
+        db.collection("Drivers").getDocuments { [weak self] (querySnapshot, error) in
+            guard let self = self else { return }
+            defer { self.isLoading = false }
+
+            if let error = error {
+                self.errorMessage = "Error fetching drivers: \(error.localizedDescription)"
+                print(self.errorMessage!)
+                return
+            }
+
+            guard let documents = querySnapshot?.documents else {
+                print("No documents found.")
+                return
+            }
+
+            print("Number of drivers fetched: \(documents.count)")
+
+            var loadedDrivers: [Driver] = []
+
+            for document in documents {
+                let data = document.data()
+
+                guard
+                    let firstName = data["firstName"] as? String,
+                    let lastName = data["lastName"] as? String,
+                    let aadhaarNumber = data["aadhaarNumber"] as? String,
+                    let age = data["age"] as? String,
+                    let contactNumber = data["contactNumber"] as? String,
+                    let roleString = data["role"] as? String,
+                    let role = Role(rawValue: roleString)
+                else {
+                    print("Skipping document due to missing fields: \(document.documentID)")
+                    continue
+                }
+                
+                // Parse optional fields
+                let gender = (data["gender"] as? String).flatMap { Gender(rawValue: $0) }
+                let email = data["email"] as? String
+                let licenseNumber = data["licenseNumber"] as? String
+                let licenseValidUpto = data["licenseValidUpto"] as? String
+
+                let driver = Driver(
+                    id: UUID(),
+                    firstName: firstName,
+                    lastName: lastName,
+                    aadhaarNumber: aadhaarNumber,
+                    age: age,
+                    contactNumber: contactNumber,
+                    role: role,
+                    gender: gender,
+                    email: email,
+                    licenseNumber: licenseNumber,
+                    licenseValidUpto: licenseValidUpto,
+                    documentId: document.documentID
+                )
+
+                loadedDrivers.append(driver)
+                print("Loaded driver with Aadhaar: \(aadhaarNumber), documentId: \(document.documentID)")
+            }
+
+            DispatchQueue.main.async {
+                self.drivers = loadedDrivers
+                print("Drivers successfully loaded: \(self.drivers.count)")
+            }
+        }
+    }
+
+    private func saveDriverToFirestore(driver: Driver, documentId: String, completion: @escaping (Bool) -> Void) {
+        print("Saving driver with Aadhaar: \(driver.aadhaarNumber), documentId: \(documentId)")
+        
+        let driverData: [String: Any] = [
+            "id": driver.id.uuidString,
+            "firstName": driver.firstName,
+            "lastName": driver.lastName,
+            "aadhaarNumber": driver.aadhaarNumber,
+            "age": driver.age,
+            "contactNumber": driver.contactNumber,
+            "licenseNumber": driver.licenseNumber ?? "",
+            "licenseValidUpto": driver.licenseValidUpto ?? "",
+            "role": driver.role.rawValue,
+            "gender": driver.gender?.rawValue ?? "",
+            "email": driver.email ?? ""
+        ]
+
+        db.collection("Drivers").document(documentId).setData(driverData) { [weak self] error in
+            guard let self = self else {
+                completion(false)
+                return
+            }
+
+            if let error = error {
+                self.errorMessage = "Error saving driver: \(error.localizedDescription)"
+                print("Firebase error: \(error.localizedDescription)")
+                completion(false)
+                return
+            }
+            
+            print("Driver successfully saved to Firestore with ID: \(documentId)")
+            completion(true)
+        }
+    }
+    
     func delete(driver: Driver) {
-        if let index = drivers.firstIndex(of: driver) {
-            recentlyDeleted = drivers.remove(at: index)
+        // Use Aadhaar number as document ID
+        let documentId = driver.aadhaarNumber
+        
+        isLoading = true
+        
+        // Delete from Firestore
+        db.collection("Drivers").document(documentId).delete { [weak self] error in
+            guard let self = self else { return }
+            self.isLoading = false
+            
+            if let error = error {
+                self.errorMessage = "Error deleting driver: \(error.localizedDescription)"
+                print("Delete error: \(error.localizedDescription)")
+                return
+            }
+            
+            print("Driver successfully deleted from Firestore")
+            
+            // Remove from local array if Firebase deletion was successful
+            if let index = self.drivers.firstIndex(where: { $0.aadhaarNumber == driver.aadhaarNumber }) {
+                self.recentlyDeleted = self.drivers.remove(at: index)
+                print("Driver removed from local array")
+            }
         }
     }
-
+    
     func undoDelete() {
-        if let driver = recentlyDeleted {
-            drivers.append(driver)
-            recentlyDeleted = nil
+        guard let driver = recentlyDeleted else { return }
+        
+        isLoading = true
+        
+        // Add back to Firestore using Aadhaar as document ID
+        saveDriverToFirestore(driver: driver, documentId: driver.aadhaarNumber) { [weak self] success in
+            guard let self = self else { return }
+            self.isLoading = false
+            
+            if success {
+                self.drivers.append(driver)
+                self.recentlyDeleted = nil
+            }
         }
     }
-
+    
     func add(driver: Driver) {
-        drivers.append(driver)
-    }
-
-    func update(driver: Driver) {
-        if let index = drivers.firstIndex(where: { $0.id == driver.id }) {
-            drivers[index] = driver
+        // Validate the Aadhaar number is not empty
+        if driver.aadhaarNumber.isEmpty {
+            self.errorMessage = "Cannot add driver: Aadhaar number is empty"
+            return
         }
+        
+        // Check if driver with this Aadhaar already exists
+        if drivers.contains(where: { $0.aadhaarNumber == driver.aadhaarNumber }) {
+            self.errorMessage = "Driver with Aadhaar number \(driver.aadhaarNumber) already exists"
+            return
+        }
+        
+        isLoading = true
+        
+        // Create a new driver with the Aadhaar as document ID
+        var driverWithDocId = driver
+        driverWithDocId.documentId = driver.aadhaarNumber
+        
+        // Save to Firestore using Aadhaar as document ID
+        saveDriverToFirestore(driver: driverWithDocId, documentId: driver.aadhaarNumber) { [weak self] success in
+            guard let self = self else { return }
+            
+            if success {
+                // Immediately add to local array to update UI
+                DispatchQueue.main.async {
+                    self.drivers.append(driverWithDocId)
+                    print("Added new driver to local array: \(driver.firstName) \(driver.lastName)")
+                    self.isLoading = false
+                }
+            } else {
+                self.isLoading = false
+            }
+        }
+    }
+    
+    // MARK: - Edit Functionality
+    
+    func update(driver: Driver) {
+        // Use the Aadhaar number directly as the documentId
+        let aadhaarNumber = driver.aadhaarNumber
+        
+        // Validate the Aadhaar number is not empty
+        if aadhaarNumber.isEmpty {
+            self.errorMessage = "Cannot update driver: Aadhaar number is empty"
+            return
+        }
+        
+        isLoading = true
+        print("Updating driver with Aadhaar number as document ID: \(aadhaarNumber)")
+        
+        // Create updated driver with Aadhaar as documentId
+        var updatedDriver = driver
+        updatedDriver.documentId = aadhaarNumber
+        
+        // Update in Firestore using Aadhaar number as document ID
+        saveDriverToFirestore(driver: updatedDriver, documentId: aadhaarNumber) { [weak self] success in
+            guard let self = self else { return }
+            
+            if success {
+                // Update in local array immediately
+                DispatchQueue.main.async {
+                    if let index = self.drivers.firstIndex(where: { $0.aadhaarNumber == aadhaarNumber }) {
+                        self.drivers[index] = updatedDriver
+                        print("Updated driver in local array at index \(index)")
+                    } else {
+                        // If driver doesn't exist locally, add it
+                        self.drivers.append(updatedDriver)
+                        print("Added updated driver to local array")
+                    }
+                    self.isLoading = false
+                }
+            } else {
+                self.isLoading = false
+            }
+        }
+    }
+    
+    // Refresh function to manually fetch drivers
+    func refreshDrivers() {
+        fetchDrivers()
     }
 }
 
@@ -127,46 +348,27 @@ struct DriverManagerView: View {
     @StateObject private var viewModel = DriverManagerViewModel()
     @State private var showingAddDriver = false
     @State private var editingDriver: Driver? = nil
-    @State private var age = ""
-    @State private var isAgeValid = true
+    @State private var showingDeleteConfirmation = false
+    @State private var driverToDelete: Driver?
+    @State private var showingContextMenu = false
+    @State private var selectedDriver: Driver?
+    @State private var showingError = false
+
     var body: some View {
         NavigationStack {
             ZStack {
-                if viewModel.filteredDrivers.isEmpty {
-                    DriverPlaceholderView {
-                        showingAddDriver = true
-                    }
+                if viewModel.isLoading {
+                    loadingView
+                } else if viewModel.filteredDrivers.isEmpty {
+                    emptyStateView
                 } else {
-                    List {
-                        ForEach(viewModel.filteredDrivers) { driver in
-                            DriverCard(driver: driver) {
-                                withAnimation {
-                                    viewModel.delete(driver: driver)
-                                }
-                            }
-                            .onTapGesture {
-                                editingDriver = driver
-                            }
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) {
-                                    withAnimation {
-                                        viewModel.delete(driver: driver)
-                                    }
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
-                            }
-                        }
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
-                    }
-                    .listStyle(.plain)
+                    driversListView
                 }
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Staff Details")
             .toolbar {
-                if !viewModel.filteredDrivers.isEmpty {
+                if !viewModel.isLoading {
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button {
                             showingAddDriver = true
@@ -192,40 +394,152 @@ struct DriverManagerView: View {
                     .animation(.easeInOut, value: viewModel.recentlyDeleted)
                 }
             }
+            .alert("Error", isPresented: $showingError) {
+                Button("OK") {
+                    viewModel.errorMessage = nil
+                }
+            } message: {
+                Text(viewModel.errorMessage ?? "Unknown error")
+            }
+            .alert(isPresented: $showingDeleteConfirmation) {
+                Alert(
+                    title: Text("Delete Driver?"),
+                    message: Text("Are you sure you want to delete this driver? This action cannot be undone."),
+                    primaryButton: .destructive(Text("Delete")) {
+                        if let driverToDelete = driverToDelete {
+                            withAnimation {
+                                viewModel.delete(driver: driverToDelete)
+                            }
+                        }
+                        driverToDelete = nil
+                    },
+                    secondaryButton: .cancel()
+                )
+            }
+            .onAppear {
+                if FirebaseApp.app() == nil {
+                    FirebaseApp.configure()
+                }
+                viewModel.fetchDrivers()
+            }
+            .onChange(of: viewModel.errorMessage) { errorMessage in
+                if errorMessage != nil {
+                    showingError = true
+                }
+            }
+        }
+    }
+
+    private var loadingView: some View {
+        ProgressView("Loading staff details...")
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var emptyStateView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "person.fill.xmark")
+                .font(.system(size: 50))
+                .foregroundColor(.gray.opacity(0.6))
+
+            Text("No Drivers Found")
+                .font(.title2)
+                .fontWeight(.semibold)
+                .foregroundColor(.primary)
+
+            Text("Tap the button below to add a new driver.")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+
+            Button(action: {
+                showingAddDriver = true
+            }) {
+                Text("Add Driver")
+                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .clipShape(Capsule())
+            }
+            .padding(.top, 10)
+            .padding(.horizontal, 40)
+        }
+        .padding()
+    }
+    
+    struct DriverRow: View {
+        let driver: Driver
+        @Binding var selectedDriver: Driver?
+        @Binding var showingContextMenu: Bool
+        @Binding var editingDriver: Driver?
+        @Binding var driverToDelete: Driver?
+        @Binding var showingDeleteConfirmation: Bool
+
+        var body: some View {
+            DriverCard(driver: driver)
+                .onTapGesture {
+                    selectedDriver = driver
+                }
+                .onLongPressGesture {
+                    selectedDriver = driver
+                    showingContextMenu = true
+                }
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+                .confirmationDialog(
+                    "Driver Options",
+                    isPresented: $showingContextMenu,
+                    presenting: selectedDriver
+                ) { driver in
+                    Button("Edit") {
+                        editingDriver = driver
+                    }
+
+                    Button("Delete", role: .destructive) {
+                        driverToDelete = driver
+                        showingDeleteConfirmation = true
+                    }
+
+                    Button("Cancel", role: .cancel) {}
+                } message: { driver in
+                    Text("\(driver.firstName) - \(driver.role.rawValue)")
+                }
+        }
+    }
+
+    private var driversListView: some View {
+        List {
+            ForEach(viewModel.filteredDrivers) { driver in
+                DriverRow(
+                    driver: driver,
+                    selectedDriver: $selectedDriver,
+                    showingContextMenu: $showingContextMenu,
+                    editingDriver: $editingDriver,
+                    driverToDelete: $driverToDelete,
+                    showingDeleteConfirmation: $showingDeleteConfirmation
+                )
+            }
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
+        }
+        .listStyle(.plain)
+        .refreshable {
+            viewModel.fetchDrivers()
         }
     }
 }
 
-// MARK: - Card View
+
 struct DriverCard: View {
     var driver: Driver
-    var onDelete: () -> Void
+    var onDelete: (() -> Void)? = nil
 
-    @State private var offsetX: CGFloat = 0
-    @GestureState private var isDragging = false
     @State private var licenseStatus: String = ""
 
     var body: some View {
         ZStack(alignment: .trailing) {
-            // Background delete button (on the right)
-            HStack {
-                Spacer()
-                Button {
-                    withAnimation {
-                        onDelete()
-                    }
-                } label: {
-                    Image(systemName: "trash")
-                        .foregroundColor(.white)
-                        .padding()
-                        .background(Color.red)
-                        .clipShape(Circle())
-                }
-                .padding(.trailing)
-                .opacity(offsetX < -100 ? 1 : 0)
-            }
-
-            // Foreground card
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Image(systemName: "person.fill")
@@ -233,65 +547,46 @@ struct DriverCard: View {
                         .font(.system(size: 26))
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("\(driver.firstName) \(driver.lastName)")
+                        Text(driver.firstName)
                             .font(.title3.bold())
                         Text("Role: \(driver.role.rawValue)")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
-                        if driver.role == .driver, let licenseValidUpto = driver.licenseValidUpto {
-                            Text("License Status: \(licenseStatus)")
-                                .font(.subheadline)
-                                .foregroundColor(licenseStatus == "Expired" ? .red : .green)
-                        }
+                        Text("License Status: \(licenseStatus)")
+                            .font(.subheadline)
+                            .foregroundColor(licenseStatus == "Expired" ? .red : .green)
                     }
+
                     Spacer()
                 }
+                .padding()
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 20))
+                .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
             }
-            .padding()
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 20))
-            .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
-            .offset(x: offsetX)
-            .padding(.vertical, 4)
-            .onAppear {
-                updateLicenseStatus()
-            }
-            .gesture(
-                DragGesture()
-                    .updating($isDragging) { value, state, _ in
-                        state = true
-                    }
-                    .onChanged { value in
-                        offsetX = min(0, value.translation.width)
-                    }
-                    .onEnded { value in
-                        if value.translation.width < -100 {
-                            withAnimation {
-                                onDelete()
-                            }
-                        } else {
-                            withAnimation {
-                                offsetX = 0
-                            }
-                        }
-                    }
-            )
         }
-        .animation(.spring(), value: offsetX)
+        .onAppear {
+            updateLicenseStatus()
+        }
+        .onChange(of: driver.licenseValidUpto) { _ in
+            updateLicenseStatus()
+        }
     }
 
     private func updateLicenseStatus() {
-        if driver.role == .driver, let validUpto = driver.licenseValidUpto {
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "yyyy-MM-dd"
-            if let validUptoDate = dateFormatter.date(from: validUpto),
-               let currentDate = dateFormatter.date(from: dateFormatter.string(from: Date())) {
-                licenseStatus = validUptoDate >= currentDate ? "Active" : "Expired"
-            } else {
-                licenseStatus = "Unknown"
-            }
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        dateFormatter.timeZone = TimeZone.current
+
+        let licenseDateString = driver.licenseValidUpto ?? ""
+
+        if let validUptoDate = dateFormatter.date(from: licenseDateString) {
+            let currentDate = Calendar.current.startOfDay(for: Date())
+            let strippedValidUptoDate = Calendar.current.startOfDay(for: validUptoDate)
+
+            licenseStatus = strippedValidUptoDate >= currentDate ? "Active" : "Expired"
         } else {
-            licenseStatus = "N/A"
+            licenseStatus = "Unknown"
         }
     }
 }
