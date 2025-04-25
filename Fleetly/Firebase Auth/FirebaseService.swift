@@ -1,11 +1,13 @@
 import Foundation
+import _PhotosUI_SwiftUI
 import Firebase
 import FirebaseFirestore
+import FirebaseStorage
 
 final class FirebaseService {
     static let shared = FirebaseService()
     let db = Firestore.firestore()
-
+    private let storage = Storage.storage().reference()
     private init() { /* FirebaseApp.configure() is called in App init */ }
 
     func fetchUser(id: String, completion: @escaping (Result<User, Error>) -> Void) {
@@ -44,4 +46,40 @@ final class FirebaseService {
             completion(error)
         }
     }
+    func uploadPhoto(item: PhotosPickerItem?,
+                         path: String,
+                         completion: @escaping (Result<String, Error>) -> Void) {
+            guard let item = item else {
+                completion(.success(""))  // no photo chosen
+                return
+            }
+            // Load Data from picker
+            item.loadTransferable(type: Data.self) { result in
+                switch result {
+                case .failure(let err):
+                    completion(.failure(err))
+                case .success(let data):
+                    guard let data = data else {
+                        completion(.failure(NSError(domain:"", code:-1, userInfo:[NSLocalizedDescriptionKey:"No image data"])))
+                        return
+                    }
+                    let ref = self.storage.child(path)
+                    let metadata = StorageMetadata()
+                    metadata.contentType = "image/jpeg"
+                    ref.putData(data, metadata: metadata) { _, error in
+                        if let error = error {
+                            completion(.failure(error))
+                            return
+                        }
+                        ref.downloadURL { url, error in
+                            if let url = url {
+                                completion(.success(url.absoluteString))
+                            } else {
+                                completion(.failure(error!))
+                            }
+                        }
+                    }
+                }
+            }
+        }
 }

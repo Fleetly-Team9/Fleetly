@@ -2,6 +2,8 @@ import SwiftUI
 
 struct LoginView: View {
     @ObservedObject var authVM: AuthViewModel
+
+    // MARK: - State
     @State private var email = ""
     @State private var password = ""
     @State private var error: String?
@@ -11,6 +13,7 @@ struct LoginView: View {
 
     var body: some View {
         ZStack {
+            // Background Gradient
             LinearGradient(
                 colors: [.gray.opacity(0.1), .white],
                 startPoint: .top,
@@ -30,21 +33,23 @@ struct LoginView: View {
                 }
                 .padding(.top, 60)
 
-                // Form
+                // MARK: - Login Form
                 VStack(spacing: 16) {
+                    // Email Field
                     TextField("Email", text: $email)
+                        .autocapitalization(.none)
+                        .keyboardType(.emailAddress)
                         .textFieldStyle(.plain)
                         .padding()
                         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-                        .keyboardType(.emailAddress)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
 
+                    // Password Field
                     SecureField("Password", text: $password)
                         .textFieldStyle(.plain)
                         .padding()
                         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
 
+                    // Forgot Password Link
                     Button("Forgot Password?") {
                         showForgotPassword = true
                     }
@@ -52,6 +57,7 @@ struct LoginView: View {
                     .foregroundStyle(.blue)
                     .frame(maxWidth: .infinity, alignment: .trailing)
 
+                    // Error Message
                     if let error = error {
                         Text(error)
                             .font(.system(.subheadline, design: .rounded))
@@ -61,7 +67,7 @@ struct LoginView: View {
                 }
                 .padding(.horizontal, 24)
 
-                // Sign In Button
+                // MARK: - Sign In Button
                 Button(action: login) {
                     if isLoading {
                         ProgressView()
@@ -83,7 +89,7 @@ struct LoginView: View {
 
                 Spacer()
 
-                // Always offer Driver Sign Up
+                // MARK: - Driver Sign Up Link
                 HStack {
                     Text("New Driver?")
                         .font(.system(.subheadline, design: .rounded))
@@ -98,23 +104,40 @@ struct LoginView: View {
                 .padding(.bottom, 24)
             }
         }
+        // MARK: - Sheets
         .sheet(isPresented: $showSignUp) {
             SignupView(authVM: authVM)
         }
         .sheet(isPresented: $showForgotPassword) {
             ForgotPasswordView()
         }
-        
+        .sheet(isPresented: $authVM.isWaitingForOTP) {
+            LoginOTPView(authVM: authVM)
+        }
+        .sheet(isPresented: $authVM.showWaitingApproval) {
+                    WaitingApprovalView()
+                }
     }
 
+    // MARK: - Actions
     private func login() {
         isLoading = true
+        error = nil
+
         authVM.login(email: email, password: password) { err in
             DispatchQueue.main.async {
-                self.error = err
-                self.isLoading = false
+                isLoading = false
+                if let err = err {
+                    error = err
+                }
+                // If no error, OTP sheet is presented automatically via isWaitingForOTP
             }
         }
     }
 }
 
+struct LoginView_Previews: PreviewProvider {
+    static var previews: some View {
+        LoginView(authVM: AuthViewModel())
+    }
+}
