@@ -117,6 +117,9 @@ struct LoginView: View {
         .sheet(isPresented: $authVM.showWaitingApproval) {
                     WaitingApprovalView()
                 }
+        .sheet(isPresented: $authVM.showRejectionSheet) {
+                    RejectionView(authVM: authVM)
+                }
     }
 
     // MARK: - Actions

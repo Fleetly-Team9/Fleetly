@@ -13,6 +13,7 @@ class AuthViewModel: ObservableObject {
     @Published var otpError: String?
     private var verificationID: String?
      var pendingUser: User?
+    @Published var showRejectionSheet = false
     @Published var pendingEmail: String?
     private let service = FirebaseService.shared
     private let db = Firestore.firestore()
@@ -63,10 +64,41 @@ class AuthViewModel: ObservableObject {
                         }
                     }
                 case .failure(let error):
-                    completion(error.localizedDescription)
+                    if let nsError = error as? NSError, nsError.code == 404 {
+                                            self.showRejectionSheet = true
+                                            completion(nil) // No error passed to completion
+                                        } else {
+                                            completion(error.localizedDescription)
+                                        }
                 }
             }
         }
+    }
+    func signOutAndDelete() {
+        guard let user = Auth.auth().currentUser else {
+            print("No user is currently signed in.")
+            return
+        }
+        
+        user.delete { error in
+            if let error = error {
+                print("Error deleting user: \(error.localizedDescription)")
+                return
+            }
+            
+            do {
+                try Auth.auth().signOut()
+                self.user = nil
+                self.isLoggedIn = false
+                self.pendingUser = nil
+                self.showRejectionSheet = false
+                self.showWaitingApproval = false
+                self.isWaitingForOTP = false
+            } catch {
+                print("Error signing out: \(error.localizedDescription)")
+            }
+        }
+        
     }
 
       // MARK: - Send OTP via Supabase
