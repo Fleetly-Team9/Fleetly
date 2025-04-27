@@ -41,7 +41,80 @@ class UserManagerViewModel: ObservableObject {
     init() {
         fetchUsers()
     }
-    
+    func approveUser(userId: String) {
+         guard let index = users.firstIndex(where: { $0.id == userId }) else { return }
+         
+         var user = users[index]
+         user.isApproved = true
+         
+         let userData: [String: Any] = [
+             "isApproved": true
+         ]
+         
+         db.collection("users").document(userId).updateData(userData) { [weak self] error in
+             if let error = error {
+                 self?.errorMessage = "Error approving user: \(error.localizedDescription)"
+                 print("Update error: \(error.localizedDescription)")
+                 return
+             }
+             
+             DispatchQueue.main.async {
+                 self?.users[index] = user
+                 print("User approved: \(user.name)")
+             }
+         }
+     }
+    func rejectUser(userId: String) {
+        let db = Firestore.firestore()
+        let storage = Storage.storage()
+        
+        // Step 1: Fetch user details to get document URLs
+        db.collection("users").document(userId).getDocument { snapshot, error in
+            if let error = error {
+                print("Error fetching user for deletion: \(error.localizedDescription)")
+                return
+            }
+            
+            guard let data = snapshot?.data() else {
+                print("No user data found.")
+                return
+            }
+            
+            // Get file URLs if they exist
+            if let aadharUrl = data["aadharDocUrl"] as? String {
+                self.deleteFileFromStorage(urlString: aadharUrl)
+            }
+            
+            if let licenseUrl = data["licenseDocUrl"] as? String {
+                self.deleteFileFromStorage(urlString: licenseUrl)
+            }
+            
+            // Step 2: Delete Firestore document
+            db.collection("users").document(userId).delete { error in
+                if let error = error {
+                    print("Error deleting Firestore document: \(error.localizedDescription)")
+                } else {
+                    print("User Firestore document deleted successfully.")
+                }
+            }
+            
+            
+        }
+    }
+
+    /// Helper function to delete a file from Firebase Storage
+    private func deleteFileFromStorage(urlString: String) {
+        let storage = Storage.storage()
+        let storageRef = storage.reference(forURL: urlString)
+        storageRef.delete { error in
+            if let error = error {
+                print("Error deleting file from storage: \(error.localizedDescription)")
+            } else {
+                print("File deleted from storage successfully.")
+            }
+        }
+    }
+
     var filteredUsers: [User] {
         let filtered = users.filter { user in
             // Search filter
@@ -441,6 +514,7 @@ struct UserManagerView: View {
                     usersListView
                 }
             }
+            .environmentObject(viewModel)
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Staff Details")
             .toolbar {
@@ -480,7 +554,7 @@ struct UserManagerView: View {
                 UserFormView(viewModel: viewModel, editingUser: user)
             }
             .sheet(item: $viewModel.selectedUser) { user in
-                UserDetailView(user: user)
+                UserDetailView(user: user, viewModel: viewModel)
             }
             .confirmationDialog("Filter Options", isPresented: $showingFilters) {
                 Button("All Roles") {
@@ -725,18 +799,18 @@ struct UserCard: View {
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
-                        HStack {
-                            Text(user.isAvailable == true ? "Available" : "Not Available")
-                                .font(.subheadline)
-                                .foregroundColor(user.isAvailable == true ? .green : .red)
-                            
-                            if user.isApproved == false {
-                                Text("Pending Approval")
-                                    .font(.subheadline)
-                                    .foregroundColor(.orange)
-                            }
-                        }
-                    }
+                        if user.isApproved == true {
+                                                    HStack {
+                                                        Text(user.isAvailable == true ? "Available" : "Not Available")
+                                                            .font(.subheadline)
+                                                            .foregroundColor(user.isAvailable == true ? .green : .red)
+                                                    }
+                                                } else {
+                                                    Text("Pending Approval")
+                                                        .font(.subheadline)
+                                                        .foregroundColor(.orange)
+                                                }
+                                            }
 
                     Spacer()
                 }
@@ -752,7 +826,10 @@ struct UserCard: View {
 // MARK: - User Detail View
 struct UserDetailView: View {
     let user: User
-    
+    @ObservedObject var viewModel: UserManagerViewModel
+    @Environment(\.dismiss) var dismiss
+    @State private var showRejectConfirmation = false
+    @State private var showApproveConfirmation = false
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -819,12 +896,60 @@ struct UserDetailView: View {
                         .cornerRadius(10)
                         .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
                     }
+                    if user.isApproved == false {
+                        VStack(spacing: 12) {
+                            Button(action: {
+                                showRejectConfirmation = true
+                            }) {
+                                Text("Reject Request")
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(Color.red)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(10)
+                            }
+                            .confirmationDialog(
+                                "Are you sure you want to reject this request?",
+                                isPresented: $showRejectConfirmation,
+                                titleVisibility: .visible
+                            ) {
+                                Button("Reject", role: .destructive) {
+                                    viewModel.rejectUser(userId: user.id)
+                                    dismiss()
+                                }
+                                Button("Cancel", role: .cancel) { }
+                            }
+                            
+                            Button(action: {
+                                showApproveConfirmation = true
+                            }) {
+                                Text("Approve Request")
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(Color.green)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(10)
+                            }
+                            .confirmationDialog(
+                                "Are you sure you want to approve this request?",
+                                isPresented: $showApproveConfirmation,
+                                titleVisibility: .visible
+                            ) {
+                                Button("Approve", role: .none) {
+                                    viewModel.approveUser(userId: user.id)
+                                    dismiss()
+                                }
+                                Button("Cancel", role: .cancel) { }
+                            }
+                        }
+                        .padding()
+                    }
                 }
                 .padding()
+                .background(Color(.systemGroupedBackground))
             }
             .navigationTitle(user.name)
             .navigationBarTitleDisplayMode(.inline)
-            .background(Color(.systemGroupedBackground))
         }
     }
 }
@@ -1183,6 +1308,7 @@ struct UserFormView: View {
             }
         }
     }
+    
     
     private func requestCameraPermission() {
         AVCaptureDevice.requestAccess(for: .video) { granted in
