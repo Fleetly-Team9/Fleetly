@@ -260,7 +260,19 @@ class AuthViewModel: ObservableObject {
         }
     }
     //got it button, try in phone, 
-        
+    func logout(){
+        do {
+            try Auth.auth().signOut()
+            self.user = nil
+            self.isLoggedIn = false
+            self.pendingUser = nil
+            self.showRejectionSheet = false
+            self.showWaitingApproval = false
+            self.isWaitingForOTP = false
+        } catch {
+            print("Error signing out: \(error.localizedDescription)")
+        }
+    }
        
 }
 extension AuthViewModel {
