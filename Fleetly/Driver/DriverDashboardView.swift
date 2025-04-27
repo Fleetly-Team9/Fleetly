@@ -1,5 +1,4 @@
 import SwiftUI
-
 struct DriverDashboardView: View {
     @ObservedObject var authVM: AuthViewModel
 
