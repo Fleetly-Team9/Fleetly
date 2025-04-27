@@ -279,7 +279,8 @@ struct TrackView: View {
 struct DashboardHomeView: View {
     @State private var showProfile = false
     @State private var selectedAction: ActionType?
-    
+    @StateObject private var dashboardVM = DashboardViewModel() // Add DashboardViewModel
+
     enum ActionType: Identifiable {
         case assign, maintain, reports, track
 
@@ -287,7 +288,6 @@ struct DashboardHomeView: View {
             hashValue
         }
     }
-
 
     var body: some View {
         NavigationView {
@@ -300,10 +300,30 @@ struct DashboardHomeView: View {
                     ]
 
                     LazyVGrid(columns: columns, spacing: 16) {
-                        StatCardGridView(icon: "car.fill", title: "Total Vehicles", value: "120", color: .blue)
-                        StatCardGridView(icon: "location.fill", title: "Active Trips", value: "24", color: .green)
-                        StatCardGridView(icon: "wrench.fill", title: "Maintenance", value: "12", color: .orange)
-                        StatCardGridView(icon: "exclamationmark.triangle.fill", title: "Alerts", value: "5", color: .red)
+                        StatCardGridView(
+                            icon: "car.fill",
+                            title: "Total Vehicles",
+                            value: "\(dashboardVM.totalVehicles)", // Dynamic value
+                            color: .blue
+                        )
+                        StatCardGridView(
+                            icon: "location.fill",
+                            title: "Active Trips",
+                            value: "24", // Still hardcoded, can be made dynamic later
+                            color: .green
+                        )
+                        StatCardGridView(
+                            icon: "wrench.fill",
+                            title: "Maintenance",
+                            value: "\(dashboardVM.maintenanceVehicles)", // Dynamic value
+                            color: .orange
+                        )
+                        StatCardGridView(
+                            icon: "exclamationmark.triangle.fill",
+                            title: "Alerts",
+                            value: "5", // Still hardcoded, can be made dynamic later
+                            color: .red
+                        )
                     }
                     .padding(.horizontal)
 
@@ -314,34 +334,32 @@ struct DashboardHomeView: View {
                             .padding(.horizontal)
 
                         HStack(spacing: 20) {
-                                        QuickActionButton(icon: "person.fill.badge.plus", title: "Assign")
-                                            .onTapGesture { selectedAction = .assign }
+                            QuickActionButton(icon: "person.fill.badge.plus", title: "Assign")
+                                .onTapGesture { selectedAction = .assign }
 
-                                        QuickActionButton(icon: "calendar.badge.clock", title: "Maintain")
-                                            .onTapGesture { selectedAction = .maintain }
+                            QuickActionButton(icon: "calendar.badge.clock", title: "Maintain")
+                                .onTapGesture { selectedAction = .maintain }
 
-                                        QuickActionButton(icon: "doc.text.magnifyingglass", title: "Reports")
-                                            .onTapGesture { selectedAction = .reports }
+                            QuickActionButton(icon: "doc.text.magnifyingglass", title: "Reports")
+                                .onTapGesture { selectedAction = .reports }
 
-                                        QuickActionButton(icon: "map.fill", title: "Track")
-                                            .onTapGesture { selectedAction = .track }
-                                    }
-                                }
-                                .sheet(item: $selectedAction) { action in
-                                    switch action {
-                                    case .assign:
-                                        AssignView()
-                                    case .maintain:
-                                        MaintenanceView()
-                                    case .reports:
-                                        ReportsView()
-                                    case .track:
-                                        TrackView()
-                                    }
-                                }
-
-                        .padding(.horizontal)
-                    
+                            QuickActionButton(icon: "map.fill", title: "Track")
+                                .onTapGesture { selectedAction = .track }
+                        }
+                    }
+                    .sheet(item: $selectedAction) { action in
+                        switch action {
+                        case .assign:
+                            AssignView()
+                        case .maintain:
+                            MaintenanceView()
+                        case .reports:
+                            ReportsView()
+                        case .track:
+                            TrackView()
+                        }
+                    }
+                    .padding(.horizontal)
                     .padding()
                     .background(Color.white)
                     .cornerRadius(30)
@@ -372,21 +390,6 @@ struct DashboardHomeView: View {
                                 AlertRowView(message: "Vehicle 23 speed exceeded", time: "5 mins ago")
                                 AlertRowView(message: "Vehicle 45 needs maintenance", time: "10 mins ago")
                                 AlertRowView(message: "Trip delay reported on Route 8", time: "30 mins ago")
-                                AlertRowView(message: "Vehicle 23 speed exceeded", time: "5 mins ago")
-                                AlertRowView(message: "Vehicle 45 needs maintenance", time: "10 mins ago")
-                                AlertRowView(message: "Trip delay reported on Route 8", time: "30 mins ago")
-                                AlertRowView(message: "Vehicle 23 speed exceeded", time: "5 mins ago")
-                                AlertRowView(message: "Vehicle 45 needs maintenance", time: "10 mins ago")
-                                AlertRowView(message: "Trip delay reported on Route 8", time: "30 mins ago")
-                                AlertRowView(message: "Vehicle 23 speed exceeded", time: "5 mins ago")
-                                AlertRowView(message: "Vehicle 45 needs maintenance", time: "10 mins ago")
-                                AlertRowView(message: "Trip delay reported on Route 8", time: "30 mins ago")
-                                AlertRowView(message: "Vehicle 23 speed exceeded", time: "5 mins ago")
-                                AlertRowView(message: "Vehicle 45 needs maintenance", time: "10 mins ago")
-                                AlertRowView(message: "Trip delay reported on Route 8", time: "30 mins ago")
-                                AlertRowView(message: "Vehicle 23 speed exceeded", time: "5 mins ago")
-                                AlertRowView(message: "Vehicle 45 needs maintenance", time: "10 mins ago")
-                                AlertRowView(message: "Trip delay reported on Route 8", time: "30 mins ago")
                             }
                         }
                         .padding()
@@ -414,8 +417,11 @@ struct DashboardHomeView: View {
                 }
             }
             .sheet(isPresented: $showProfile) {
-                                showProfileView()
-                            }
+                showProfileView()
+            }
+            .onAppear {
+                dashboardVM.fetchVehicleStats() // Start fetching vehicle stats
+            }
         }
     }
 }
