@@ -309,7 +309,7 @@ struct DashboardHomeView: View {
                         StatCardGridView(
                             icon: "location.fill",
                             title: "Active Trips",
-                            value: "24", // Still hardcoded, can be made dynamic later
+                            value: "0", // Still hardcoded, can be made dynamic later
                             color: .green
                         )
                         StatCardGridView(
@@ -321,7 +321,7 @@ struct DashboardHomeView: View {
                         StatCardGridView(
                             icon: "exclamationmark.triangle.fill",
                             title: "Alerts",
-                            value: "5", // Still hardcoded, can be made dynamic later
+                            value: "0", // Still hardcoded, can be made dynamic later
                             color: .red
                         )
                     }
@@ -427,176 +427,6 @@ struct DashboardHomeView: View {
 }
 
 
-import SwiftUI
-import PhotosUI
-
-struct showProfileView: View {
-    @State private var selectedItem: PhotosPickerItem?
-     // Initial image
-    @State private var imageData: Data? // To store image data for persistence
-    @Environment(\.dismiss) private var dismiss
-    @State private var profileImage: Image = Image("exampleImage")
-    // Fleet Profile Details with Persistence
-    @AppStorage("firstName") private var firstName = "Param"
-    @AppStorage("lastName") private var lastName = "Patel"
-    @AppStorage("dateOfBirth") private var dateOfBirth = Date()
-    @AppStorage("fleetId") private var fleetId = "FM12345"
-    @AppStorage("phoneNumber") private var phoneNumber = "+91-9876543210"
-    @AppStorage("emailId") private var emailId = "param.patel@example.com"
-    @AppStorage("driversLicense") private var driversLicense = ""
-    @AppStorage("allowNotifications") private var allowNotifications = false
-    @State private var isEditing = false
-    @StateObject var authVM = AuthViewModel()
-    
-    
-    // Date range for DatePicker
-    private let dateRange: ClosedRange<Date> = {
-        let calendar = Calendar.current
-        let minDate = calendar.date(byAdding: .year, value: -100, to: Date())!
-        let maxDate = Date()
-        return minDate...maxDate
-    }()
-    
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    PhotosPicker(selection: $selectedItem, matching: .images) {
-                        profileImage
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 100, height: 100)
-                            .clipShape(Circle())
-                            .overlay(Circle().stroke(Color.gray.opacity(0.4), lineWidth: 1))
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.vertical, 10)
-                    }
-                    .onChange(of: selectedItem) { newItem in
-                        Task {
-                            if let data = try? await newItem?.loadTransferable(type: Data.self),
-                               let uiImage = UIImage(data: data) {
-                                profileImage = Image(uiImage: uiImage)
-                                imageData = data // Store image data for saving
-                            }
-                        }
-                    }
-                }
-                .listRowBackground(Color.clear)
-                
-                Section(header: Text("Fleet Manager Details")) {
-                    FleetProfileRow(title: "First Name", value: $firstName, isEditable: isEditing)
-                    FleetProfileRow(title: "Last Name", value: $lastName, isEditable: isEditing)
-                    if isEditing {
-                        DatePicker("Date of Birth", selection: $dateOfBirth, in: dateRange, displayedComponents: [.date])
-                            .foregroundColor(.blue)
-                    } else {
-                        HStack {
-                            Text("Date of Birth")
-                                .foregroundColor(.gray)
-                            Spacer()
-                            Text(dateOfBirth, style: .date)
-                                .foregroundColor(.primary)
-                        }
-                    }
-                    FleetProfileRow(title: "Fleet ID", value: $fleetId, isEditable: isEditing)
-                    FleetProfileRow(title: "Phone Number", value: $phoneNumber, isEditable: isEditing)
-                    FleetProfileRow(title: "Email ID", value: $emailId, isEditable: isEditing)
-                }
-                
-                Section {
-                    NavigationLink(destination: TermsAndAgreementView()) {
-                        HStack {
-                            Text("Terms and Conditions")
-                            Spacer()}}}
-                
-                
-                Section {
-
-                    Toggle(isOn: $allowNotifications) {
-                        Text("Allow Notifications")
-                        Text("Enable to receive updates about fleet assignments and maintenance schedules.")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                    }
-                }
-                Section {
-                    Button(action: {
-                        authVM.logout()
-                        
-                    }) {
-                        Text("Logout")
-                            .foregroundColor(.red)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                    }
-                }
-            }
-            .navigationTitle("Fleet Profile")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Save") {
-                        if isEditing {
-                            loadDefaultValues()
-                        }
-                        isEditing = false
-                        dismiss()
-                    }
-                    .foregroundColor(.blue)
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(isEditing ? "Done" : "Edit") {
-                        if isEditing {
-                            saveChanges()
-                        }
-                        isEditing.toggle()
-                    }
-                    .foregroundColor(.blue)
-                }
-            }
-            .onAppear {
-                loadSavedImage()
-            }
-        }
-    }
-    
-    // Load saved image data
-    private func loadSavedImage() {
-            if let savedData = UserDefaults.standard.data(forKey: "profileImage"),
-               let uiImage = UIImage(data: savedData) {
-                profileImage = Image(uiImage: uiImage)
-                print("Image loaded from UserDefaults: \(savedData.count) bytes")
-            } else {
-                print("No saved image found or failed to load")
-            }
-        }
-    
-    // Load default values for reverting on Cancel
-    private func loadDefaultValues() {
-        firstName = UserDefaults.standard.string(forKey: "firstName") ?? "Param"
-        lastName = UserDefaults.standard.string(forKey: "lastName") ?? "Patel"
-        dateOfBirth = UserDefaults.standard.object(forKey: "dateOfBirth") as? Date ?? Date()
-        fleetId = UserDefaults.standard.string(forKey: "fleetId") ?? "FM12345"
-        phoneNumber = UserDefaults.standard.string(forKey: "phoneNumber") ?? "+91-9876543210"
-        emailId = UserDefaults.standard.string(forKey: "emailId") ?? "param.patel@example.com"
-        
-        allowNotifications = UserDefaults.standard.bool(forKey: "allowNotifications")
-    }
-    
-    // Save all changes including image
-    private func saveChanges() {
-        UserDefaults.standard.set(firstName, forKey: "firstName")
-        UserDefaults.standard.set(lastName, forKey: "lastName")
-        UserDefaults.standard.set(dateOfBirth, forKey: "dateOfBirth")
-        UserDefaults.standard.set(fleetId, forKey: "fleetId")
-        UserDefaults.standard.set(phoneNumber, forKey: "phoneNumber")
-        UserDefaults.standard.set(emailId, forKey: "emailId")
-        UserDefaults.standard.set(allowNotifications, forKey: "allowNotifications")
-        if let imageData = imageData {
-            UserDefaults.standard.set(imageData, forKey: "profileImage")
-        }
-    }
-}
-
 struct FleetProfileRow: View {
     var title: String
     @Binding var value: String
@@ -619,9 +449,7 @@ struct FleetProfileRow: View {
     }
 }
 
-#Preview {
-    showProfileView()
-}
+
 struct FleetProfileRowInt: View {
     var title: String
     @Binding var value: Int
@@ -644,49 +472,6 @@ struct FleetProfileRowInt: View {
         }
     }
 }
-
-
-
-
-struct TermsAndAgreementView: View {
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Terms and Agreement")
-                    .font(.title)
-                    .fontWeight(.bold)
-                
-                Text("""
-                    Please read these terms and conditions carefully before using our fleet management application.
-
-                    1. **Acceptance of Terms**
-                    By accessing or using this application, you agree to be bound by these Terms and Conditions.
-
-                    2. **Use of Application**
-                    This application is provided for managing fleet operations, including driver and vehicle information. You agree to use it only for lawful purposes.
-
-                    3. **User Responsibilities**
-                    You are responsible for maintaining the confidentiality of your account information and for all activities under your account.
-
-                    4. **Data Privacy**
-                    We collect and process personal data in accordance with our Privacy Policy. By using this application, you consent to such processing.
-
-                    5. **Termination**
-                    We reserve the right to terminate or suspend access to the application at any time without prior notice.
-
-                    For the full terms, please contact our support team or visit our website.
-                    """)
-                    .font(.body)
-                    .foregroundColor(.primary)
-            }
-            .padding()
-        }
-        .navigationTitle("")
-    }
-}
-
-
-
 
 struct QuickActionButton: View {
     let icon: String

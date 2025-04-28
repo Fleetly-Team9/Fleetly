@@ -259,7 +259,7 @@ class AuthViewModel: ObservableObject {
             }
         }
     }
-    //got it button, try in phone, 
+    //got it button, try in phone,
     func logout(){
         do {
             try Auth.auth().signOut()
