@@ -450,7 +450,7 @@ struct DriverHomePage: View {
                     .padding(.bottom)
                 }
                 .scrollIndicators(.hidden)
-                .navigationTitle("Hello, \(authVM.user?.name ?? "")")
+                .navigationTitle("Hello, \(authVM.user?.name ?? "Param Patel")")
                 .onReceive(timer) { _ in
                     currentTime = Date()
                     if isStopwatchRunning {
