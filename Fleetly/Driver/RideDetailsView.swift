@@ -2,7 +2,7 @@
 //  RideDetailsView.swift
 //  historyTab
 //
-//  Created by Sayal Singh on 24/04/25.
+//  Created by user@90 on 24/04/25.
 //
 
 import SwiftUI
