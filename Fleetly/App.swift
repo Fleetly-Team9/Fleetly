@@ -4,9 +4,11 @@ import Firebase
 @main
 struct FMSApp: App {
     @StateObject private var authVM = AuthViewModel()
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
-    init() { FirebaseApp.configure() }
-
+    init() { FirebaseApp.configure()
+        NotificationManager.shared.requestAuthorization()}
+    
     var body: some Scene {
         WindowGroup {
             NavigationView {

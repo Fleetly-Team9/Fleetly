@@ -14,6 +14,7 @@ struct MainView: View {
                     Label("Schedule", systemImage: "calendar")
                 }
         }
+        
     }
 }
 
@@ -31,6 +32,7 @@ struct DriverHomePage: View {
     @State private var isSwiping: Bool = false
     @State private var isDragCompleted: Bool = false
     @StateObject private var assignedTripsVM = AssignedTripsViewModel()
+    @State private var didStartListener = false
     
     
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -87,11 +89,14 @@ struct DriverHomePage: View {
             case .failure(let error):
                 print("Error fetching worked time: \(error)")
             }
+            
         }
         
-        // Fetch assigned trips
-        assignedTripsVM.fetchAssignedTrips(driverId: driverId)
+        
+        
+
     }
+    
     
     private func currentDateString() -> String {
         let formatter = DateFormatter()
@@ -301,6 +306,7 @@ struct DriverHomePage: View {
     }
     
     private var assignedTripSection: some View {
+        
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text("Assigned Trips")
@@ -522,7 +528,14 @@ struct DriverHomePage: View {
                     }
                 }
                 .onAppear {
-                    initializeData()
+                    initializeData()  // keep your attendance/time fetch
+
+                                    // ── NEW: start the Firestore listener exactly once ──
+                                    guard !didStartListener,
+                                          let driverId = authVM.user?.id
+                                    else { return }
+                                    assignedTripsVM.startListening(driverId: driverId)
+                                    didStartListener = true
                 }
             }
         }
