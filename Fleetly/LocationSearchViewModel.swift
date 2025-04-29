@@ -19,7 +19,7 @@ class LocationSearchViewModel: NSObject, ObservableObject {
     override init() {
         super.init()
         searchCompleter.delegate = self
-        searchCompleter.resultTypes = .pointOfInterest
+        searchCompleter.resultTypes = .address
     }
     
     func searchForLocations(_ query: String, isFrom: Bool) {
