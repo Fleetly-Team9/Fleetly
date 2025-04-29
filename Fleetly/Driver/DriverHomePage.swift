@@ -306,17 +306,21 @@ struct DriverHomePage: View {
                 Text("Assigned Trips")
                     .font(.title2.bold())
                     .foregroundStyle(Color.primary)
-                
+
                 if !assignedTripsVM.assignedTrips.isEmpty {
                     Text("\(assignedTripsVM.assignedTrips.count)")
-                        .font(.subheadline)
-                        .foregroundStyle(Color.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color(.systemGray6))
-                        .clipShape(Capsule())
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(
+                            Capsule()
+                                .fill(Color.accentColor)
+                        )
+                        .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
                 }
             }
+
             
             if assignedTripsVM.isLoading {
                 ProgressView()
@@ -324,7 +328,7 @@ struct DriverHomePage: View {
                     .frame(height: 200)
             } else if !assignedTripsVM.assignedTrips.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 16) {
+                    HStack(spacing: 12) {
                         ForEach(assignedTripsVM.assignedTrips) { trip in
                             VStack(spacing: 0) {
                                 // Map View
