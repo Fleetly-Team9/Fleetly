@@ -9,7 +9,7 @@ struct FMSApp: App {
 
     var body: some Scene {
         WindowGroup {
-            NavigationView {
+            //NavigationView {
                 if authVM.isLoggedIn, let user = authVM.user {
                     switch user.role {
                     case "manager":     MainTabView(authVM: authVM)
@@ -20,7 +20,7 @@ struct FMSApp: App {
                 } else {
                     LoginView(authVM: authVM)
                 }
-            }
+            //}
         }
     }
 }

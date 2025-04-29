@@ -77,7 +77,7 @@ class FirebaseManager {
     private init() {}
     
     private func attendanceCollection(for driverId: String) -> CollectionReference {
-        return db.collection("driver").document(driverId).collection("attendance")
+        return db.collection("users").document(driverId).collection("attendance")
     }
     
     private func inspectionCollection(for driverId: String) -> CollectionReference {
