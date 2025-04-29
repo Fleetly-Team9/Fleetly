@@ -53,145 +53,182 @@ struct SignupView: View {
                         
                         VStack(spacing: 16) {
                             HStack {
-                                TextField("First Name", text: $firstName)
-                                    .textFieldStyle(.plain)
-                                    .textInputAutocapitalization(.words)
-                                    .padding()
-                                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                                VStack(alignment: .leading) {
+                                    TextField("First Name", text: $firstName)
+                                        .textFieldStyle(.plain)
+                                        .textInputAutocapitalization(.words)
+                                        .padding()
+                                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
                                 
-                                TextField("Last Name", text: $lastName)
+                                }
+                                
+                                VStack(alignment: .leading) {
+                                    TextField("Last Name", text: $lastName)
+                                        .textFieldStyle(.plain)
+                                        .textInputAutocapitalization(.words)
+                                        .padding()
+                                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                                  
+                                }
+                            }
+                            
+                            VStack(alignment: .leading) {
+                                Menu {
+                                    ForEach(genders, id: \.self) { option in
+                                        Button(action: { gender = option }) {
+                                            Text(option)
+                                        }
+                                    }
+                                } label: {
+                                    HStack {
+                                        Text(gender.isEmpty ? "Select a gender" : gender)
+                                            .foregroundColor(gender.isEmpty ? .gray : .primary)
+                                        Spacer()
+                                        Image(systemName: "chevron.down")
+                                            .foregroundColor(.gray)
+                                    }
+                                    .padding()
+                                    .frame(height: 50)
+                                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                                }
+                              
+                            }
+                            
+                            VStack(alignment: .leading) {
+                                TextField("Contact Number", text: $phone)
                                     .textFieldStyle(.plain)
-                                    .textInputAutocapitalization(.words)
+                                    .keyboardType(.numberPad)
                                     .padding()
                                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                                    .onChange(of: phone) { phone = String(phone.prefix(10)).filter { $0.isNumber } }
+                               
                             }
                             
-                            Menu {
-                                ForEach(genders, id: \.self) { option in
-                                    Button(action: { gender = option }) {
-                                        Text(option)
-                                    }
-                                }
-                            } label: {
-                                HStack {
-                                    Text(gender.isEmpty ? "Select a gender" : gender)
-                                        .foregroundColor(gender.isEmpty ? .gray : .primary)
-                                    Spacer()
-                                    Image(systemName: "chevron.down")
-                                        .foregroundColor(.gray)
-                                }
-                                .padding()
-                                .frame(height: 50)
-                                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                            VStack(alignment: .leading) {
+                                TextField("Email", text: $email)
+                                    .textFieldStyle(.plain)
+                                    .keyboardType(.emailAddress)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                    .padding()
+                                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                             
                             }
                             
-                            TextField("Contact Number", text: $phone)
-                                .textFieldStyle(.plain)
-                                .keyboardType(.numberPad)
-                                .padding()
-                                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-                                .onChange(of: phone) { phone = String(phone.prefix(10)).filter { $0.isNumber } }
+                            VStack(alignment: .leading) {
+                                SecureField("Password", text: $password)
+                                    .textFieldStyle(.plain)
+                                    .padding()
+                                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                               
+                            }
                             
-                            TextField("Email", text: $email)
-                                .textFieldStyle(.plain)
-                                .keyboardType(.emailAddress)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
-                                .padding()
-                                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-                            
-                            SecureField("Password", text: $password)
-                                .textFieldStyle(.plain)
-                                .padding()
-                                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-                            
-                            TextField("Age (must be 18 or above)", text: $age)
-                                .textFieldStyle(.plain)
-                                .keyboardType(.numberPad)
-                                .padding()
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(.ultraThinMaterial)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .stroke(isAgeValid ? Color.clear : Color.red, lineWidth: 1.5)
-                                        )
-                                )
-                                .onChange(of: age) {
-                                    age = String(age.prefix(3).filter { $0.isNumber })
-                                    if let val = Int(age) {
-                                        if val > 120 { age = "120" }
-                                        isAgeValid = val >= 18
-                                    } else {
-                                        isAgeValid = false
+                            VStack(alignment: .leading) {
+                                TextField("Age (must be 18 or above)", text: $age)
+                                    .textFieldStyle(.plain)
+                                    .keyboardType(.numberPad)
+                                    .padding()
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(.ultraThinMaterial)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .stroke(isAgeValid ? Color.clear : Color.red, lineWidth: 1.5)
+                                            )
+                                    )
+                                    .onChange(of: age) {
+                                        age = String(age.prefix(3).filter { $0.isNumber })
+                                        if let val = Int(age) {
+                                            if val > 120 { age = "120" }
+                                            isAgeValid = val >= 18
+                                        } else {
+                                            isAgeValid = false
+                                        }
                                     }
-                                }
+                            }
                             
-                            TextField("Aadhar Number (xxxx-xxxx-xxxx)", text: $aadhar)
-                                .textFieldStyle(.plain)
-                                .keyboardType(.numberPad)
-                                .padding()
-                                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-                                .onChange(of: aadhar) {
-                                    let digits = aadhar.filter { $0.isNumber }
-                                    let formatted = stride(from: 0, to: digits.count, by: 4).map {
-                                        Array(digits)[$0..<min($0+4, digits.count)]
-                                    }.map { String($0) }.joined(separator: "-")
-                                    aadhar = formatted.prefix(14).description
-                                }
+                            VStack(alignment: .leading) {
+                                TextField("Aadhar Number (xxxx-xxxx-xxxx)", text: $aadhar)
+                                    .textFieldStyle(.plain)
+                                    .keyboardType(.numberPad)
+                                    .padding()
+                                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                                    .onChange(of: aadhar) {
+                                        let digits = aadhar.filter { $0.isNumber }
+                                        let formatted = stride(from: 0, to: digits.count, by: 4).map {
+                                            Array(digits)[$0..<min($0+4, digits.count)]
+                                        }.map { String($0) }.joined(separator: "-")
+                                        aadhar = formatted.prefix(14).description
+                                    }
+                               
+                            }
                             
-                            TextField("License Number (AA-RR-YYYY-NNNNNNN)", text: $license)
-                                .textFieldStyle(.plain)
-                                .keyboardType(.asciiCapable)
-                                .textInputAutocapitalization(.characters)
-                                .padding()
-                                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-                                .onChange(of: license) {
-                                    var cleaned = license.replacingOccurrences(of: "[^A-Za-z0-9-]", with: "", options: .regularExpression)
-                                    let letters = cleaned.filter { $0.isLetter }.uppercased()
-                                    let digits = cleaned.filter { $0.isNumber }
-                                    var formattedParts: [String] = []
-                                    
-                                    if letters.count >= 1 { formattedParts.append(String(letters.prefix(2))) }
-                                    if digits.count >= 1 { formattedParts.append(String(digits.prefix(2))) }
-                                    if digits.count >= 3 { formattedParts.append(String(digits.dropFirst(2).prefix(4))) }
-                                    if digits.count >= 7 { formattedParts.append(String(digits.dropFirst(6).prefix(3))) }
-                                    if digits.count >= 10 { formattedParts.append(String(digits.dropFirst(9).prefix(4))) }
-                                    
-                                    let formatted = formattedParts.joined(separator: "-")
-                                    license = formatted.prefix(19).description
-                                }// In SignupView.swift
-                            
+                            VStack(alignment: .leading) {
+                                TextField("License Number (AA-RR-YYYY-NNNNNNN)", text: $license)
+                                    .textFieldStyle(.plain)
+                                    .keyboardType(.asciiCapable)
+                                    .textInputAutocapitalization(.characters)
+                                    .padding()
+                                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                                    .onChange(of: license) {
+                                        var cleaned = license.replacingOccurrences(of: "[^A-Za-z0-9-]", with: "", options: .regularExpression)
+                                        let letters = cleaned.filter { $0.isLetter }.uppercased()
+                                        let digits = cleaned.filter { $0.isNumber }
+                                        var formattedParts: [String] = []
+                                        
+                                        if letters.count >= 1 { formattedParts.append(String(letters.prefix(2))) }
+                                        if digits.count >= 1 { formattedParts.append(String(digits.prefix(2))) }
+                                        if digits.count >= 3 { formattedParts.append(String(digits.dropFirst(2).prefix(4))) }
+                                        if digits.count >= 7 { formattedParts.append(String(digits.dropFirst(6).prefix(3))) }
+                                        if digits.count >= 10 { formattedParts.append(String(digits.dropFirst(9).prefix(4))) }
+                                        
+                                        let formatted = formattedParts.joined(separator: "-")
+                                        license = formatted.prefix(19).description
+                                    }
+                              
+                            }
                         }
                         .padding(.horizontal, 24)
                         
-                        HStack(spacing: 16) {
-                            PhotosPicker(
-                                selection: $aadharPhotoItem,
-                                matching: .images,
-                                photoLibrary: .shared()
-                            ) {
-                                Label(aadharPhotoItem != nil ? "Aadhar Uploaded" : "Aadhar Proof", systemImage: "doc.text.fill")
-                                    .font(.body)
-                                    .padding(12)
-                                    .frame(maxWidth: .infinity)
-                                    .background(.ultraThinMaterial)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                                    .foregroundColor(.blue)
-                            }
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("Required Documents")
+                                .font(.headline)
+                                .foregroundStyle(.primary)
                             
-                            PhotosPicker(
-                                selection: $licensePhotoItem,
-                                matching: .images,
-                                photoLibrary: .shared()
-                            ) {
-                                Label(licensePhotoItem != nil ? "License Uploaded" : "License Proof", systemImage: "doc.badge.plus")
-                                    .font(.body)
-                                    .padding(12)
-                                    .frame(maxWidth: .infinity)
-                                    .background(.ultraThinMaterial)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                                    .foregroundColor(.blue)
+                            HStack(spacing: 16) {
+                                VStack(alignment: .leading) {
+                                    PhotosPicker(
+                                        selection: $aadharPhotoItem,
+                                        matching: .images,
+                                        photoLibrary: .shared()
+                                    ) {
+                                        Label(aadharPhotoItem != nil ? "Aadhar Uploaded" : "Aadhar Proof", systemImage: "doc.text.fill")
+                                            .font(.body)
+                                            .padding(12)
+                                            .frame(maxWidth: .infinity)
+                                            .background(.ultraThinMaterial)
+                                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                                            .foregroundColor(aadharPhotoItem != nil ? .green : .blue)
+                                    }
+                                   
+                                }
+                                
+                                VStack(alignment: .leading) {
+                                    PhotosPicker(
+                                        selection: $licensePhotoItem,
+                                        matching: .images,
+                                        photoLibrary: .shared()
+                                    ) {
+                                        Label(licensePhotoItem != nil ? "License Uploaded" : "License Proof", systemImage: "doc.badge.plus")
+                                            .font(.body)
+                                            .padding(12)
+                                            .frame(maxWidth: .infinity)
+                                            .background(.ultraThinMaterial)
+                                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                                            .foregroundColor(licensePhotoItem != nil ? .green : .blue)
+                                    }
+                                    
+                                }
                             }
                         }
                         .padding(.horizontal, 24)
@@ -289,7 +326,9 @@ struct SignupView: View {
         !aadhar.isEmpty &&
         !license.isEmpty &&
         !gender.isEmpty &&
-        isAgeValid
+        isAgeValid &&
+        aadharPhotoItem != nil &&
+        licensePhotoItem != nil
     }
     
     private func isValidLicenseNumber(_ license: String) -> Bool {
@@ -305,6 +344,11 @@ struct SignupView: View {
     }
     
     private func signup() {
+        guard isFormValid else {
+            error = "Please fill in all required fields and upload all documents"
+            return
+        }
+
         isLoading = true
         authVM.signupDriver(
             firstName: firstName,
@@ -325,7 +369,6 @@ struct SignupView: View {
                 if let err = err {
                     self.error = err
                 } else {
-                    // Handle simulator bypass
                     if authVM.isSimulator {
                         showWaitingApproval = true
                     } else {
