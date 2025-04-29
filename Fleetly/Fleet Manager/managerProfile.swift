@@ -2,6 +2,7 @@ import SwiftUI
 import PhotosUI
 import FirebaseAuth
 import FirebaseFirestore
+import FirebaseStorage
 
 struct showProfileView: View {
     @State private var profileImage: Image = Image("exampleImage")
@@ -15,40 +16,84 @@ struct showProfileView: View {
     @State private var passwordResetMessage: String?
     
     private let db = Firestore.firestore()
+    private let storage = Storage.storage().reference()
     
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    PhotosPicker(selection: $selectedItem, matching: .images) {
-                        profileImage
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 100, height: 100)
-                            .clipShape(Circle())
-                            .overlay(Circle().stroke(Color.gray.opacity(0.4), lineWidth: 1))
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.vertical, 10)
-                    }
-                    .disabled(true) // Disable photo selection
-                    .onChange(of: selectedItem) { newItem in
-                        Task {
-                            if let data = try? await newItem?.loadTransferable(type: Data.self),
-                               let uiImage = UIImage(data: data) {
-                                profileImage = Image(uiImage: uiImage)
-                                imageData = data
+                    VStack(spacing: 15) {
+                        // Profile Image or Placeholder
+                        ZStack {
+                            if imageData == nil {
+                                Circle()
+                                    .fill(Color.gray.opacity(0.2))
+                                    .frame(width: 100, height: 100)
+                                    .overlay(
+                                        Image(systemName: "person.circle.fill")
+                                            .resizable()
+                                            .scaledToFit()
+                                            .frame(width: 60, height: 60)
+                                            .foregroundColor(.gray)
+                                    )
+                            } else {
+                                profileImage
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 100, height: 100)
+                                    .clipShape(Circle())
+                            }
+                            
+                            // Camera Icon Overlay for Editing
+                            PhotosPicker(selection: $selectedItem, matching: .images) {
+                                Image(systemName: "camera.fill")
+                                    .foregroundColor(.white)
+                                    .frame(width: 30, height: 30)
+                                    .background(Circle().fill(Color.blue))
+                                    .offset(x: 35, y: 35)
                             }
                         }
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 10)
+                        .onChange(of: selectedItem) { newItem in
+                            Task {
+                                if let data = try? await newItem?.loadTransferable(type: Data.self),
+                                   let uiImage = UIImage(data: data) {
+                                    profileImage = Image(uiImage: uiImage)
+                                    imageData = data
+                                    uploadProfileImage(data: data)
+                                }
+                            }
+                        }
+                        
+                        // Delete Button (if image exists)
+                        if imageData != nil {
+                            Button(action: {
+                                deleteProfileImage()
+                            }) {
+                                Text("Remove Photo")
+                                    .font(.subheadline)
+                                    .foregroundColor(.red)
+                                    .padding(.vertical, 8)
+                                    .padding(.horizontal, 16)
+                                    .background(
+                                        Capsule()
+                                            .fill(Color.red.opacity(0.1))
+                                    )
+                            }
+                            .frame(maxWidth: .infinity, alignment: .center)
+                        }
                     }
+                    .padding(.vertical, 10)
                 }
                 .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets()) // Remove default padding
                 
                 Section(header: Text("Fleet Manager Details")) {
                     if isLoading {
                         ProgressView()
                             .frame(maxWidth: .infinity, alignment: .center)
                     } else {
-                        // Split name into first and last names
                         let fullName = userData["name"] as? String ?? ""
                         let nameComponents = fullName.split(separator: " ").map { String($0) }
                         let firstName = nameComponents.first ?? ""
@@ -74,7 +119,6 @@ struct showProfileView: View {
                 Section {
                     Button(action: {
                         authVM.logout()
-                        // Navigate to LoginView with the same authVM instance
                         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
                            let window = windowScene.windows.first {
                             let loginView = LoginView(authVM: authVM)
@@ -85,13 +129,9 @@ struct showProfileView: View {
                     }) {
                         Text("Sign Out")
                             .foregroundColor(.red)
-                            .fontWeight(.semibold)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .background(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(Color.red.opacity(0.1))
-                            )
+                            .frame(maxWidth: .infinity, alignment: .center)
                     }
+
                     .frame(maxWidth: .infinity)
                 }
             }
@@ -107,7 +147,7 @@ struct showProfileView: View {
             }
             .onAppear {
                 fetchUserData()
-                loadSavedImage()
+                loadProfileImage()
             }
             .alert(isPresented: $showPasswordResetAlert) {
                 Alert(
@@ -136,10 +176,82 @@ struct showProfileView: View {
         }
     }
     
-    private func loadSavedImage() {
+    private func uploadProfileImage(data: Data) {
+        guard let userId = Auth.auth().currentUser?.uid else { return }
+        let imageRef = storage.child("profileImages/\(userId).jpg")
+        
+        imageRef.putData(data, metadata: nil) { (metadata, error) in
+            if let error = error {
+                print("Error uploading image: \(error.localizedDescription)")
+                return
+            }
+            
+            imageRef.downloadURL { (url, error) in
+                if let error = error {
+                    print("Error getting download URL: \(error.localizedDescription)")
+                    return
+                }
+                
+                if let downloadURL = url?.absoluteString {
+                    db.collection("users").document(userId).updateData([
+                        "profileImageURL": downloadURL
+                    ])
+                }
+            }
+        }
+        
+        UserDefaults.standard.set(data, forKey: "profileImage")
+    }
+    
+    private func loadProfileImage() {
+        guard let userId = Auth.auth().currentUser?.uid else { return }
+        
         if let savedData = UserDefaults.standard.data(forKey: "profileImage"),
            let uiImage = UIImage(data: savedData) {
             profileImage = Image(uiImage: uiImage)
+            imageData = savedData
+            return
+        }
+        
+        db.collection("users").document(userId).getDocument { (document, error) in
+            if let document = document, document.exists,
+               let data = document.data(),
+               let imageURL = data["profileImageURL"] as? String,
+               let url = URL(string: imageURL) {
+                URLSession.shared.dataTask(with: url) { (data, response, error) in
+                    if let data = data, let uiImage = UIImage(data: data) {
+                        DispatchQueue.main.async {
+                            self.profileImage = Image(uiImage: uiImage)
+                            self.imageData = data
+                            UserDefaults.standard.set(data, forKey: "profileImage")
+                        }
+                    }
+                }.resume()
+            }
+        }
+    }
+    
+    private func deleteProfileImage() {
+        guard let userId = Auth.auth().currentUser?.uid else { return }
+        let imageRef = storage.child("profileImages/\(userId).jpg")
+        
+        imageRef.delete { error in
+            if let error = error {
+                print("Error deleting image: \(error.localizedDescription)")
+                return
+            }
+            
+            db.collection("users").document(userId).updateData([
+                "profileImageURL": FieldValue.delete()
+            ])
+            
+            UserDefaults.standard.removeObject(forKey: "profileImage")
+            
+            DispatchQueue.main.async {
+                self.profileImage = Image("exampleImage")
+                self.imageData = nil
+                self.selectedItem = nil
+            }
         }
     }
     
