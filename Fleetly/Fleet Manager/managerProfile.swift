@@ -129,13 +129,9 @@ struct showProfileView: View {
                     }) {
                         Text("Sign Out")
                             .foregroundColor(.red)
-                            .fontWeight(.semibold)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .background(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(Color.red.opacity(0.1))
-                            )
+                            .frame(maxWidth: .infinity, alignment: .center)
                     }
+
                     .frame(maxWidth: .infinity)
                 }
             }
