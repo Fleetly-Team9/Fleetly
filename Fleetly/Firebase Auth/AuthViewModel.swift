@@ -8,6 +8,7 @@ class AuthViewModel: ObservableObject {
     @Published var isLoggedIn = false
     @Published var isSigningUp = false
     @Published var showWaitingApproval = false
+    @Published var isLoading = true  // Add loading state
     // MFA / OTP state:
     @Published var isWaitingForOTP = false
     @Published var otpError: String?
@@ -18,6 +19,49 @@ class AuthViewModel: ObservableObject {
     private var pendingPassword: String?
     private let service = FirebaseService.shared
     private let db = Firestore.firestore()
+
+    init() {
+        // Enable persistence
+        do {
+            try Auth.auth().useUserAccessGroup(nil)
+        } catch {
+            print("Error enabling persistence: \(error.localizedDescription)")
+        }
+        
+        // Check for existing session
+        if let currentUser = Auth.auth().currentUser {
+            self.service.fetchUser(id: currentUser.uid) { [weak self] result in
+                guard let self = self else { return }
+                switch result {
+                case .success(let user):
+                    if user.isApproved ?? false {
+                        DispatchQueue.main.async {
+                            self.user = user
+                            self.isLoggedIn = true
+                            self.isLoading = false  // Set loading to false after session check
+                        }
+                    } else {
+                        // If user is not approved, sign them out
+                        try? Auth.auth().signOut()
+                        DispatchQueue.main.async {
+                            self.isLoading = false  // Set loading to false after session check
+                        }
+                    }
+                case .failure:
+                    // If we can't fetch user data, sign them out
+                    try? Auth.auth().signOut()
+                    DispatchQueue.main.async {
+                        self.isLoading = false  // Set loading to false after session check
+                    }
+                }
+            }
+        } else {
+            // No current user, set loading to false immediately
+            DispatchQueue.main.async {
+                self.isLoading = false
+            }
+        }
+    }
 
     /// Email/password login → fetch User → send OTP
     func login(email: String, password: String, completion: @escaping (String?) -> Void) {
