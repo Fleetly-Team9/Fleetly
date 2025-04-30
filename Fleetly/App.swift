@@ -16,7 +16,7 @@ struct FMSApp: App {
                     switch user.role {
                     case "manager":     MainTabView(authVM: authVM)
                     case "driver":      MainView(authVM: authVM)
-                    case "maintenance": MaintenanceDashboardView(authVM: authVM)
+                    case "maintenance": ContentView()
                     default:            Text("Unknown role").foregroundColor(.red)
                     }
                 } else {
