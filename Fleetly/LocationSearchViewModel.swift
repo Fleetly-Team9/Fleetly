@@ -1,9 +1,4 @@
-//
-//  LocationSearchViewModel.swift
-//  Fleetly
-//
-//  Created by User@Param on 26/04/25.
-//
+
 import SwiftUI
 import MapKit
 
@@ -19,7 +14,10 @@ class LocationSearchViewModel: NSObject, ObservableObject {
     override init() {
         super.init()
         searchCompleter.delegate = self
-        searchCompleter.resultTypes = .address
+        searchCompleter.resultTypes = .pointOfInterest
+        let indiaCenter = CLLocationCoordinate2D(latitude: 20.5937, longitude: 78.9629)
+            let indiaSpan   = MKCoordinateSpan(latitudeDelta: 30, longitudeDelta: 30)
+            searchCompleter.region = MKCoordinateRegion(center: indiaCenter, span: indiaSpan)
     }
     
     func searchForLocations(_ query: String, isFrom: Bool) {
