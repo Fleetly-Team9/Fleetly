@@ -38,8 +38,7 @@ struct MainTabView: View {
 
 struct MaintenanceView: View {
     var body: some View {
-        Text("Maintenance View")
-            .font(.title)
+        AssignTaskView()
     }
 }
 
