@@ -102,31 +102,49 @@ struct PreInspectionView: View {
                     }
                     
                     Section {
-                        VStack {
+                        VStack(alignment: .leading, spacing: 8) {
                             Toggle(isOn: $tyrePressureCheck) {
-                                Text("Tyre Pressure")
+                                Text("Tyre Pressure").font(.headline)
                             }
                             .toggleStyle(CheckboxToggleStyle())
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Remarks:")
+                                    .font(.subheadline)
+                                    .foregroundColor(.gray)
+                                
+                                TextField("Examples: All tyres at 35 PSI, Front-left slightly low, No visible damage",
+                                         text: $tyrePressureRemarks,
+                                         axis: .vertical)
+                                .lineLimit(2...4)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .font(.caption)
+                            }
                         }
-                        TextField(
-                            "Enter remarks",
-                            text: $tyrePressureRemarks
-                        )
-                        .padding()
+                        .padding(.vertical, 8)
                     }
-                    
+
                     Section {
-                        VStack {
+                        VStack(alignment: .leading, spacing: 8) {
                             Toggle(isOn: $brakesCheck) {
-                                Text("Brakes")
+                                Text("Brakes").font(.headline)
                             }
                             .toggleStyle(CheckboxToggleStyle())
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Remarks:")
+                                    .font(.subheadline)
+                                    .foregroundColor(.gray)
+                                
+                                TextField("Examples: Brake pads 50% worn, Fluid level normal, No unusual noises",
+                                         text: $brakeRemarks,
+                                         axis: .vertical)
+                                .lineLimit(2...4)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .font(.caption)
+                            }
                         }
-                        TextField(
-                            "Enter remarks",
-                            text: $brakeRemarks
-                        )
-                        .padding()
+                        .padding(.vertical, 8)
                     }
                     
                     Section {
