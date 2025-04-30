@@ -14,6 +14,8 @@ struct Vehicle: Identifiable, Codable, Equatable {
     var vehicleType: VehicleType
     var status: VehicleStatus
     var assignedDriverId: UUID? // Nullable to indicate unassigned or assigned driver
+    var passengerCapacity: Int? // For car, van, and bus
+    var cargoCapacity: Double? // For truck in kg
 }
 
 enum VehicleType: String, CaseIterable, Identifiable, Codable {
@@ -23,6 +25,14 @@ enum VehicleType: String, CaseIterable, Identifiable, Codable {
     case bus = "Bus"
 
     var id: String { self.rawValue }
+    
+    var requiresPassengerCapacity: Bool {
+        return self == .car || self == .van || self == .bus
+    }
+    
+    var requiresCargoCapacity: Bool {
+        return self == .truck
+    }
 }
 
 enum VehicleStatus: String, CaseIterable, Identifiable, Codable {
@@ -128,9 +138,11 @@ class VehicleManagerViewModel: ObservableObject {
                     continue
                 }
                 
-                // Parse optional field
+                // Parse optional fields
                 let assignedDriverIdString = data["assignedDriverId"] as? String
                 let assignedDriverId = assignedDriverIdString != nil ? UUID(uuidString: assignedDriverIdString!) : nil
+                let passengerCapacity = data["passengerCapacity"] as? Int
+                let cargoCapacity = data["cargoCapacity"] as? Double
 
                 let vehicle = Vehicle(
                     id: id,
@@ -141,7 +153,9 @@ class VehicleManagerViewModel: ObservableObject {
                     licensePlate: licensePlate,
                     vehicleType: vehicleType,
                     status: status,
-                    assignedDriverId: assignedDriverId
+                    assignedDriverId: assignedDriverId,
+                    passengerCapacity: passengerCapacity,
+                    cargoCapacity: cargoCapacity
                 )
 
                 loadedVehicles.append(vehicle)
@@ -167,7 +181,9 @@ class VehicleManagerViewModel: ObservableObject {
             "licensePlate": vehicle.licensePlate,
             "vehicleType": vehicle.vehicleType.rawValue,
             "status": vehicle.status.rawValue,
-            "assignedDriverId": vehicle.assignedDriverId?.uuidString ?? NSNull()
+            "assignedDriverId": vehicle.assignedDriverId?.uuidString ?? NSNull(),
+            "passengerCapacity": vehicle.passengerCapacity ?? NSNull(),
+            "cargoCapacity": vehicle.cargoCapacity ?? NSNull()
         ]
 
         db.collection("vehicles").document(vehicle.id.uuidString).setData(vehicleData) { [weak self] error in
@@ -556,7 +572,7 @@ struct VehicleManagementView: View {
         List {
             ForEach(viewModel.filteredVehicles) { vehicle in
                 VehicleCard(vehicle: vehicle)
-                    // MARK: - Leading swipe stays “Edit”
+                    // MARK: - Leading swipe stays "Edit"
                     .swipeActions(edge: .leading) {
                         Button {
                             var updated = vehicle
@@ -567,7 +583,7 @@ struct VehicleManagementView: View {
                         }
                         .tint(.green)
                     }
-                    // MARK: - Trailing swipe now “In Maintenance”
+                    // MARK: - Trailing swipe now "In Maintenance"
                     .swipeActions(edge: .trailing) {
                         Button {
                             var updated = vehicle
@@ -620,6 +636,14 @@ struct VehicleDetailView: View {
                         DetailRowV(label: "Type", value: vehicle.vehicleType.rawValue)
                         DetailRowV(label: "Status", value: vehicle.status.rawValue)
                             .foregroundColor(vehicle.status == .deactivated ? .red : vehicle.status == .inMaintenance ? .orange : .green)
+                        
+                        if vehicle.vehicleType.requiresPassengerCapacity, let capacity = vehicle.passengerCapacity {
+                            DetailRowV(label: "Passenger Capacity", value: "\(capacity) passengers")
+                        }
+                        
+                        if vehicle.vehicleType.requiresCargoCapacity, let capacity = vehicle.cargoCapacity {
+                            DetailRowV(label: "Cargo Capacity", value: "\(Int(capacity)) kg")
+                        }
                     }
                     .padding()
                     .background(Color(.systemBackground))
@@ -724,6 +748,8 @@ struct VehicleFormView: View {
     @State private var status: VehicleStatus = .active
     @State private var showAlert = false
     @State private var isLoading = false
+    @State private var passengerCapacity: Int = 4
+    @State private var cargoCapacity: Double = 1000.0
 
     var editingVehicle: Vehicle?
 
@@ -753,6 +779,23 @@ struct VehicleFormView: View {
                         }
                     }
                     .pickerStyle(.menu)
+                }
+                
+                if vehicleType.requiresPassengerCapacity {
+                    Section(header: Text("Passenger Capacity")) {
+                        Stepper("Passengers: \(passengerCapacity)", value: $passengerCapacity, in: 1...50)
+                    }
+                }
+                
+                if vehicleType.requiresCargoCapacity {
+                    Section(header: Text("Cargo Capacity")) {
+                        HStack {
+                            TextField("Weight", value: $cargoCapacity, format: .number)
+                                .keyboardType(.decimalPad)
+                            Text("kg")
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
             }
             .alert(isPresented: $showAlert) {
@@ -794,6 +837,8 @@ struct VehicleFormView: View {
                     licensePlate = vehicle.licensePlate
                     vehicleType = vehicle.vehicleType
                     status = vehicle.status
+                    passengerCapacity = vehicle.passengerCapacity ?? 4
+                    cargoCapacity = vehicle.cargoCapacity ?? 1000.0
                 }
             }
         }
@@ -804,7 +849,9 @@ struct VehicleFormView: View {
         !model.isEmpty &&
         !year.isEmpty &&
         !vin.isEmpty &&
-        !licensePlate.isEmpty
+        !licensePlate.isEmpty &&
+        (vehicleType.requiresPassengerCapacity ? passengerCapacity > 0 : true) &&
+        (vehicleType.requiresCargoCapacity ? cargoCapacity > 0 : true)
     }
     
     private func saveVehicle() {
@@ -819,7 +866,9 @@ struct VehicleFormView: View {
             licensePlate: licensePlate,
             vehicleType: vehicleType,
             status: status,
-            assignedDriverId: editingVehicle?.assignedDriverId
+            assignedDriverId: editingVehicle?.assignedDriverId,
+            passengerCapacity: vehicleType.requiresPassengerCapacity ? passengerCapacity : nil,
+            cargoCapacity: vehicleType.requiresCargoCapacity ? cargoCapacity : nil
         )
         
         if editingVehicle == nil {
