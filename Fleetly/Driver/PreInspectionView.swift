@@ -3,6 +3,7 @@ import SwiftUI
 import PhotosUI
 
 struct PreInspectionView: View {
+    @Environment(\.presentationMode) var presentationMode
     @State private var tyrePressureRemarks: String = ""
     @State private var brakeRemarks: String = ""
     @State private var oilCheck = false
@@ -256,6 +257,18 @@ struct PreInspectionView: View {
                 .disabled(selectedImages.count != 4)
             }
             .navigationTitle(Text("Pre Inspection"))
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        presentationMode.wrappedValue.dismiss()
+                    }) {
+                        HStack {
+                            Image(systemName: "chevron.left")
+                            Text("Back")
+                        }
+                    }
+                }
+            }
         }
     }
 }
