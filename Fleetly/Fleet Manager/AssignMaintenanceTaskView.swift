@@ -9,13 +9,14 @@ struct AssignTaskView: View {
     @State private var completionTime = Date()
     @State private var priority: String = "Medium"
     @State private var selectedPersonnel: String = ""
+    @State private var showVehicleSheet = false
+    @State private var showPersonnelSheet = false
     
     let vehicleNumbers = ["KA12AH8879", "KA13BH9901", "KA14CJ1123"]
     let genericIssues = ["Engine Overheating", "Brake Failure", "Tire Puncture", "Oil Leak", "Other"]
     let priorities = ["High", "Medium", "Low"]
     let personnel = ["John Doe", "Jane Smith", "Mike Johnson"]
     
-    // Define the minimum date and time (current date and time)
     private var minimumDate: Date {
         return Date()
     }
@@ -29,13 +30,14 @@ struct AssignTaskView: View {
                 VStack(spacing: 10) {
                     Form {
                         Section(header: Text("TASK DETAILS").font(.caption).foregroundColor(.gray)) {
-                            Picker("Vehicle", selection: $selectedVehicle) {
-                                Text("Select Vehicle").tag("")
-                                ForEach(vehicleNumbers, id: \.self) { vehicle in
-                                    Text(vehicle).tag(vehicle)
+                            HStack {
+                                Text("Vehicle")
+                                Spacer()
+                                Button(action: { showVehicleSheet = true }) {
+                                    Text(selectedVehicle.isEmpty ? "Select Vehicle" : selectedVehicle)
+                                        .foregroundColor(selectedVehicle.isEmpty ? .gray : .blue)
                                 }
                             }
-                            .pickerStyle(.menu)
                             
                             Picker("Issue", selection: $selectedIssue) {
                                 ForEach(genericIssues, id: \.self) { issue in
@@ -54,11 +56,9 @@ struct AssignTaskView: View {
                                     .textFieldStyle(.roundedBorder)
                             }
                             
-                            // Date Picker with restriction to present/future dates
                             DatePicker("Expected Completion Date", selection: $completionDate, in: minimumDate..., displayedComponents: [.date])
                                 .datePickerStyle(.compact)
                             
-                            // Time Picker with restriction to present/future times
                             DatePicker("Expected Completion Time", selection: $completionTime, in: minimumDate..., displayedComponents: [.hourAndMinute])
                                 .datePickerStyle(.compact)
                             
@@ -69,13 +69,14 @@ struct AssignTaskView: View {
                             }
                             .pickerStyle(.menu)
                             
-                            Picker("Maintenance Personnel", selection: $selectedPersonnel) {
-                                Text("Select Personnel").tag("")
-                                ForEach(personnel, id: \.self) { person in
-                                    Text(person).tag(person)
+                            HStack {
+                                Text("Maintenance Personnel")
+                                Spacer()
+                                Button(action: { showPersonnelSheet = true }) {
+                                    Text(selectedPersonnel.isEmpty ? "Select Personnel" : selectedPersonnel)
+                                        .foregroundColor(selectedPersonnel.isEmpty ? .gray : .blue)
                                 }
                             }
-                            .pickerStyle(.menu)
                         }
                     }
                     .frame(maxHeight: .infinity)
@@ -102,6 +103,102 @@ struct AssignTaskView: View {
             }
             .navigationTitle("Assign Task")
             .navigationBarTitleDisplayMode(.large)
+            .sheet(isPresented: $showVehicleSheet) {
+                VehicleListView(selectedVehicle: $selectedVehicle)
+                    .presentationDetents([.medium, .large])
+                    .cornerRadius(30)
+            }
+            .sheet(isPresented: $showPersonnelSheet) {
+                PersonnelListView(selectedPersonnel: $selectedPersonnel)
+                    .presentationDetents([.medium, .large])
+                    .cornerRadius(30)
+            }
+        }
+    }
+}
+
+struct VehicleListView: View {
+    @Binding var selectedVehicle: String
+    @Environment(\.dismiss) var dismiss
+    
+    let vehicles = [
+        ("Tata 407", "AP12XY9087"),
+        ("Mahindra Supro Maxitruck", "MH01GH2312"),
+        ("Mahindra Bolero Maxx", "MP14TR5432")
+    ]
+    
+    var body: some View {
+        NavigationView {
+            List {
+                Section(header: Text("Select Vehicle").font(.title2).bold()) {
+                    ForEach(vehicles, id: \.1) { vehicle in
+                        Button(action: {
+                            selectedVehicle = vehicle.1
+                            dismiss()
+                        }) {
+                            HStack {
+                                Image(systemName: "car.fill")
+                                    .foregroundColor(.blue)
+                                    .frame(width: 24, height: 24)
+                                VStack(alignment: .leading) {
+                                    Text(vehicle.0)
+                                        .font(.headline)
+                                    Text(vehicle.1)
+                                        .font(.subheadline)
+                                        .foregroundColor(.gray)
+                                }
+                                Spacer()
+                            }
+                            .padding(.vertical, 8)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+            }
+            .listStyle(InsetGroupedListStyle())
+        }
+    }
+}
+
+struct PersonnelListView: View {
+    @Binding var selectedPersonnel: String
+    @Environment(\.dismiss) var dismiss
+    
+    let personnel = [
+        ("John Doe", "ID: 96033893868"),
+        ("Jane Smith", "ID: 7908523797"),
+        ("Mike Johnson", "ID: 8609131313")
+    ]
+    
+    var body: some View {
+        NavigationView {
+            List {
+                Section(header: Text("Select Maintenance Personnel").font(.title2).bold()) {
+                    ForEach(personnel, id: \.1) { person in
+                        Button(action: {
+                            selectedPersonnel = person.0
+                            dismiss()
+                        }) {
+                            HStack {
+                                Image(systemName: "person.fill")
+                                    .foregroundColor(.green) // Changed to green
+                                    .frame(width: 24, height: 24)
+                                VStack(alignment: .leading) {
+                                    Text(person.0)
+                                        .font(.headline)
+                                    Text(person.1)
+                                        .font(.subheadline)
+                                        .foregroundColor(.gray)
+                                }
+                                Spacer()
+                            }
+                            .padding(.vertical, 8)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+            }
+            .listStyle(InsetGroupedListStyle())
         }
     }
 }
