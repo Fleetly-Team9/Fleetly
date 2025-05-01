@@ -15,6 +15,10 @@ struct MainView: View {
                 .tabItem {
                     Label("Schedule", systemImage: "calendar")
                 }
+            TicketsView()
+                .tabItem {
+                    Label("Tickets", systemImage: "ticket")
+                }
         }
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
