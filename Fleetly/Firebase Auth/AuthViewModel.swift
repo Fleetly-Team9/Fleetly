@@ -8,6 +8,7 @@ class AuthViewModel: ObservableObject {
     @Published var isLoggedIn = false
     @Published var isSigningUp = false
     @Published var showWaitingApproval = false
+    @Published var isLoading = true  // Add loading state
     // MFA / OTP state:
     @Published var isWaitingForOTP = false
     @Published var otpError: String?
@@ -15,11 +16,56 @@ class AuthViewModel: ObservableObject {
      var pendingUser: User?
     @Published var showRejectionSheet = false
     @Published var pendingEmail: String?
+    private var pendingPassword: String?
     private let service = FirebaseService.shared
     private let db = Firestore.firestore()
 
+    init() {
+        // Enable persistence
+        do {
+            try Auth.auth().useUserAccessGroup(nil)
+        } catch {
+            print("Error enabling persistence: \(error.localizedDescription)")
+        }
+        
+        // Check for existing session
+        if let currentUser = Auth.auth().currentUser {
+            self.service.fetchUser(id: currentUser.uid) { [weak self] result in
+                guard let self = self else { return }
+                switch result {
+                case .success(let user):
+                    if user.isApproved ?? false {
+                        DispatchQueue.main.async {
+                            self.user = user
+                            self.isLoggedIn = true
+                            self.isLoading = false  // Set loading to false after session check
+                        }
+                    } else {
+                        // If user is not approved, sign them out
+                        try? Auth.auth().signOut()
+                        DispatchQueue.main.async {
+                            self.isLoading = false  // Set loading to false after session check
+                        }
+                    }
+                case .failure:
+                    // If we can't fetch user data, sign them out
+                    try? Auth.auth().signOut()
+                    DispatchQueue.main.async {
+                        self.isLoading = false  // Set loading to false after session check
+                    }
+                }
+            }
+        } else {
+            // No current user, set loading to false immediately
+            DispatchQueue.main.async {
+                self.isLoading = false
+            }
+        }
+    }
+
     /// Email/password login → fetch User → send OTP
     func login(email: String, password: String, completion: @escaping (String?) -> Void) {
+        // First, check if the credentials are valid without signing in
         Auth.auth().signIn(withEmail: email, password: password) { [weak self] res, err in
             guard let self = self else { return }
             
@@ -32,6 +78,16 @@ class AuthViewModel: ObservableObject {
                 completion("No UID after login")
                 return
             }
+            
+            // Sign out immediately since we don't want to be logged in yet
+            do {
+                try Auth.auth().signOut()
+            } catch {
+                print("Error signing out: \(error.localizedDescription)")
+            }
+            
+            // Store password temporarily for OTP verification
+            self.pendingPassword = password
             
             // Fetch user document
             self.service.fetchUser(id: uid) { result in
@@ -46,6 +102,8 @@ class AuthViewModel: ObservableObject {
                     } else {
                         // SIMULATOR BYPASS
                         if self.isSimulator {
+                            // For simulator, sign in and set user
+                            Auth.auth().signIn(withEmail: email, password: password) { _, _ in }
                             self.user = user
                             self.isLoggedIn = true
                             completion(nil)
@@ -65,11 +123,11 @@ class AuthViewModel: ObservableObject {
                     }
                 case .failure(let error):
                     if let nsError = error as? NSError, nsError.code == 404 {
-                                            self.showRejectionSheet = true
-                                            completion(nil) // No error passed to completion
-                                        } else {
-                                            completion(error.localizedDescription)
-                                        }
+                        self.showRejectionSheet = true
+                        completion(nil) // No error passed to completion
+                    } else {
+                        completion(error.localizedDescription)
+                    }
                 }
             }
         }
@@ -279,15 +337,17 @@ extension AuthViewModel {
     // For login flow
     func verifyLoginOTP(code: String, completion: @escaping (Bool, String?) -> Void) {
         if isSimulator {
-                   // Auto-approve for simulator
-                   self.user = self.pendingUser
-                   self.isLoggedIn = true
-                   self.isWaitingForOTP = false
-                   completion(true, nil)
-                   return
-               }
-        guard let email = pendingUser?.email else {
-            completion(false, "No email found for verification")
+            // Auto-approve for simulator
+            self.user = self.pendingUser
+            self.isLoggedIn = true
+            self.isWaitingForOTP = false
+            completion(true, nil)
+            return
+        }
+        
+        guard let email = pendingUser?.email,
+              let password = pendingPassword else {
+            completion(false, "No email or password found for verification")
             return
         }
         
@@ -299,12 +359,24 @@ extension AuthViewModel {
                     type: .email
                 )
                 
-                DispatchQueue.main.async { [weak self] in
+                // After OTP verification, sign in to Firebase
+                Auth.auth().signIn(withEmail: email, password: password) { [weak self] res, err in
                     guard let self = self else { return }
-                    self.user = self.pendingUser
-                    self.isLoggedIn = true
-                    self.isWaitingForOTP = false
-                    completion(true, nil)
+                    
+                    if let err = err {
+                        DispatchQueue.main.async {
+                            completion(false, err.localizedDescription)
+                        }
+                        return
+                    }
+                    
+                    DispatchQueue.main.async {
+                        self.user = self.pendingUser
+                        self.isLoggedIn = true
+                        self.isWaitingForOTP = false
+                        self.pendingPassword = nil // Clear the stored password
+                        completion(true, nil)
+                    }
                 }
             } catch {
                 DispatchQueue.main.async {

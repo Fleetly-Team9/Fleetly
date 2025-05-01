@@ -3,6 +3,8 @@ import MapKit
 
 struct MainView: View {
     @ObservedObject var authVM: AuthViewModel
+    @State private var showProfile = false
+    
     var body: some View {
         TabView {
             DriverHomePage(authVM: authVM)
@@ -13,6 +15,21 @@ struct MainView: View {
                 .tabItem {
                     Label("Schedule", systemImage: "calendar")
                 }
+        }
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: {
+                    showProfile = true
+                }) {
+                    Image(systemName: "person.circle.fill")
+                        .resizable()
+                        .frame(width: 28, height: 28)
+                        .foregroundColor(.blue)
+                }
+            }
+        }
+        .sheet(isPresented: $showProfile) {
+            DriverProfileView(authVM: authVM)
         }
     }
 }
@@ -30,12 +47,13 @@ struct DriverHomePage: View {
     @State private var swipeOffset: CGFloat = 0
     @State private var isSwiping: Bool = false
     @State private var isDragCompleted: Bool = false
-    
+    @StateObject private var assignedTripsVM = AssignedTripsViewModel()
+    @State private var didStartListener = false
     
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     let hours = (0...12).map { $0 == 0 ? "0hr" : "\($0)hr\($0 == 1 ? "" : "s")" }
     
-    let dropoffLocation = "Kolkata" // Define the drop-off location here
+    let dropoffLocation = "Kolkata"
     let vehicleNumber: String = "KA6A1204"
     
     @State private var region = MKCoordinateRegion(
@@ -43,7 +61,6 @@ struct DriverHomePage: View {
         span: MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03)
     )
     
-
     static let darkGray = Color(red: 68/255, green: 6/255, blue: 52/255)
     static let lightGray = Color(red: 240/255, green: 242/255, blue: 245/255)
     static let highlightYellow = Color(red: 235/255, green: 64/255, blue: 52/255)
@@ -208,7 +225,6 @@ struct DriverHomePage: View {
                                 .frame(width: 684, height: 12)
                                 .padding(.horizontal, 10)
                             
-                            // Moved progressWidth computation here
                             let progressWidth: CGFloat = {
                                 let maxTime: TimeInterval = 12 * 3600
                                 let progress = min(elapsedTime / maxTime, 1.0)
@@ -277,7 +293,7 @@ struct DriverHomePage: View {
                                 }
                             case .failure(let error):
                                 print("Error recording clock event: \(error)")
-                                isClockedIn.toggle() // Revert the toggle on failure
+                                isClockedIn.toggle()
                             }
                         }
                     }) {
@@ -296,140 +312,211 @@ struct DriverHomePage: View {
         .offset(y: -25)
     }
     
-    private var assignedTripSection: some View {
-        VStack {
-            VStack {
-                Text("Assigned Trip")
-                    .font(.system(size: 24, weight: .semibold, design: .default))
-                    .foregroundStyle(Color.primary)
-                    .frame(width: 200, height: 50, alignment: .leading)
-                    .padding(.trailing, 150)
-                Spacer()
-            }
-            .padding(.bottom, 10)
+    private var tripsHeader: some View {
+        HStack {
+            Text("Assigned Trips")
+                .font(.title2.bold())
+                .foregroundStyle(Color.primary)
             
-            VStack {
-                ZStack {
-                    Map(coordinateRegion: $region)
-                        .frame(width: 363, height: 380)
-                        .cornerRadius(10)
-                    
-                    Rectangle()
-                        .fill(colorScheme == .dark ? Color(UIColor.systemGray4) : Color.white)
-                        .frame(width: 363, height: 210)
-                        .cornerRadius(10)
-                        .shadow(color: colorScheme == .dark ? Color.black.opacity(0.3) : Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(colorScheme == .dark ? Color.gray.opacity(0.3) : Color.clear, lineWidth: 1)
-                        )
-                        .padding(.top, 170)
-                    
-                    VStack {
-                        Text("Vehicle Number: \(vehicleNumber)")
-                            .font(.system(size: 20, weight: .semibold, design: .default))
-                            .foregroundStyle(Color.primary)
-                            .padding(.trailing, 80)
-                            .padding(.leading, 5)
-                        Text("Model Name: Swift DZire")
-                            .foregroundStyle(Color.primary)
-                            .padding(.trailing, 140)
-                            .padding(.leading, 5)
-                        Text("Drop Location: \(dropoffLocation)")
-                            .foregroundStyle(Color.primary)
-                            .padding(.trailing, 150)
-                        Text("Departure:\(currentTime, formatter: timeFormatter)")
-                            .foregroundStyle(Color.primary)
-                            .padding(.trailing, 170)
-                            .padding(.leading, 5)
-                        Text("ETA: 10:00 AM")
-                            .foregroundStyle(Color.primary)
-                            .padding(.trailing, 210)
-                            .padding(.leading, 5)
-                    }
-                    .padding(.top, 110)
-                    VStack {
-                        VStack {
-                            ZStack(alignment: .leading) {
-                                NavigationLink(
-                                    destination: PreInspectionView(authVM: authVM, dropoffLocation: dropoffLocation,vehicleNumber : vehicleNumber),
-                                    isActive: $isNavigating,
-                                    label: {
-                                        LinearGradient(
-                                            colors: swipeOffset == 0 ? [Color(.systemGray5), Color(.systemGray5)] : [
-                                                Self.gradientStart,
-                                                swipeOffset >= maxX - 10 || isDragCompleted ? Self.gradientEnd : Self.gradientStart
-                                            ],
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                        .frame(width: 343, height: 55)
-                                        .clipShape(Capsule())
-                                        .shadow(color: colorScheme == .dark ? Color.black.opacity(0.3) : Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 27.5)
-                                                .stroke(colorScheme == .dark ? Color.gray.opacity(0.3) : Color.clear, lineWidth: 1)
-                                        )
-                                    }
-                                )
-                                .buttonStyle(PlainButtonStyle())
-                                
-                                HStack(spacing: 0) {
-                                    ZStack {
-                                        Circle()
-                                            .fill(Color(.systemBlue))
-                                            .frame(width: 53, height: 53)
-                                        Image(systemName: "car.side.fill")
-                                            .scaleEffect(x: -1, y: 1)
-                                            .foregroundStyle(Color(.systemBackground))
-                                    }
-                                    .offset(x: swipeOffset)
-                                    .gesture(
-                                        isDragCompleted ? nil : DragGesture()
-                                            .onChanged { value in
-                                                isSwiping = true
-                                                let capsuleWidth = 343.0
-                                                let circleWidth = 53.0
-                                                let minX = 0.0
-                                                let maxX = capsuleWidth - circleWidth
-                                                let newOffset = max(value.translation.width, 0)
-                                                swipeOffset = min(newOffset, maxX)
-                                                print("swipeOffset: \(swipeOffset)")
-                                            }
-                                            .onEnded { _ in
-                                                isSwiping = false
-                                                let capsuleWidth = 343.0
-                                                let circleWidth = 53.0
-                                                let maxX = capsuleWidth - circleWidth
-                                                if swipeOffset >= maxX - 10 {
-                                                    currentWorkOrderIndex += 1
-                                                    print("Get Ready action triggered! Current Work Order Index: \(currentWorkOrderIndex)")
-                                                    swipeOffset = maxX
-                                                    isDragCompleted = true
-                                                    isNavigating = true
-                                                } else {
-                                                    swipeOffset = 0
-                                                }
-                                            }
-                                    )
-                                    Spacer()
-                                    Text("Slide to get Ready")
-                                        .font(.system(size: 18, weight: .semibold, design: .default))
-                                        .foregroundColor(swipeOffset > 0 || isDragCompleted ? .white : Color(.systemBlue))
-                                        .padding(.trailing, 120)
-                                }
-                                .frame(width: 343, height: 55)
-                            }
-                            .padding(.top, 140)
+            if !assignedTripsVM.assignedTrips.isEmpty {
+                Text("\(assignedTripsVM.assignedTrips.count)")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule()
+                            .fill(Color.accentColor)
+                    )
+                    .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+            }
+        }
+    }
+    
+    private func tripCardView(for trip: Trip) -> some View {
+        VStack(spacing: 0) {
+            Map(coordinateRegion: $region)
+                .frame(width: 300, height: 200)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "mappin.circle.fill")
+                            .foregroundStyle(Color.blue)
+                        VStack(alignment: .leading) {
+                            Text("From")
+                                .font(.subheadline)
+                                .foregroundStyle(Color.secondary)
+                            Text(trip.startLocation)
+                                .font(.headline)
                         }
                     }
-                    .padding(.top, 160)
+                    
+                    HStack(spacing: 12) {
+                        Image(systemName: "mappin.circle.fill")
+                            .foregroundStyle(Color.green)
+                        VStack(alignment: .leading) {
+                            Text("To")
+                                .font(.subheadline)
+                                .foregroundStyle(Color.secondary)
+                            Text(trip.endLocation)
+                                .font(.headline)
+                        }
+                    }
                 }
-                Spacer()
+                
+                Divider()
+                
+                HStack(spacing: 24) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Time")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.secondary)
+                        Text(trip.time)
+                            .font(.headline)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Vehicle Type")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.secondary)
+                        Text(trip.vehicleType)
+                            .font(.headline)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(trip.vehicleType == "Passenger Vehicle" ? "Passengers" : "Load")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.secondary)
+                        Text(trip.vehicleType == "Passenger Vehicle" ?
+                             "\(trip.passengers ?? 0)" :
+                             "\(Int(trip.loadWeight ?? 0)) kg")
+                            .font(.headline)
+                    }
+                }
+                
+                ZStack(alignment: .leading) {
+                    NavigationLink(
+                        destination: PreInspectionView(authVM: authVM, dropoffLocation: trip.endLocation, vehicleNumber: trip.vehicleId, tripID: trip.id, vehicleID: trip.vehicleId),
+                        isActive: $isNavigating,
+                        label: {
+                            LinearGradient(
+                                colors: swipeOffset == 0 ? [Color(.systemGray5), Color(.systemGray5)] : [
+                                    Self.gradientStart,
+                                    swipeOffset >= maxX - 10 || isDragCompleted ? Self.gradientEnd : Self.gradientStart
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                            .frame(height: 55)
+                            .clipShape(Capsule())
+                        }
+                    )
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    HStack(spacing: 0) {
+                        ZStack {
+                            Circle()
+                                .fill(Color(.systemBlue))
+                                .frame(width: 53, height: 53)
+                            Image(systemName: "car.side.fill")
+                                .scaleEffect(x: -1, y: 1)
+                                .foregroundStyle(Color(.systemBackground))
+                        }
+                        .offset(x: swipeOffset)
+                        .gesture(
+                            isDragCompleted ? nil : DragGesture()
+                                .onChanged { value in
+                                    isSwiping = true
+                                    let newOffset = max(value.translation.width, 0)
+                                    swipeOffset = min(newOffset, maxX)
+                                }
+                                .onEnded { _ in
+                                    isSwiping = false
+                                    if swipeOffset >= maxX - 10 {
+                                        currentWorkOrderIndex += 1
+                                        swipeOffset = maxX
+                                        isDragCompleted = true
+                                        isNavigating = true
+                                    } else {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                            swipeOffset = 0
+                                        }
+                                    }
+                                }
+                        )
+                        
+                        Spacer()
+                        
+                        Text("Slide to get Ready")
+                            .font(.headline)
+                            .foregroundColor(swipeOffset > 0 || isDragCompleted ? .white : Color(.systemBlue))
+                            .padding(.trailing, 16)
+                    }
+                    .padding(.horizontal, 8)
+                }
+                .frame(maxWidth: .infinity)
+                .background(
+                    Capsule()
+                        .fill(Color(.systemGray6))
+                        .overlay(
+                            Capsule()
+                                .stroke(Color(.systemGray4), lineWidth: 1)
+                        )
+                )
+                .padding(.horizontal, 8)
             }
-            .offset(y: -20)
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(colorScheme == .dark ? Color(UIColor.systemGray4) : Color.white)
+                    .shadow(color: colorScheme == .dark ? Color.black.opacity(0.3) : Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
+            )
         }
-        .offset(y: -40)
+        .frame(width: 300)
+    }
+    
+    private var tripsListView: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                ForEach(assignedTripsVM.assignedTrips) { trip in
+                    tripCardView(for: trip)
+                }
+            }
+            .padding(.horizontal)
+        }
+    }
+    
+    private var emptyOrLoadingStateView: some View {
+        Group {
+            if assignedTripsVM.isLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 200)
+            } else if !assignedTripsVM.assignedTrips.isEmpty {
+                tripsListView
+            } else {
+                VStack(spacing: 12) {
+                    Image(systemName: "car.circle")
+                        .font(.system(size: 48))
+                        .foregroundStyle(Color.secondary)
+                    Text("No trips assigned")
+                        .font(.headline)
+                        .foregroundStyle(Color.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 200)
+            }
+        }
+    }
+    
+    private var assignedTripSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            tripsHeader
+            emptyOrLoadingStateView
+        }
+        .padding(.horizontal)
     }
     
     var body: some View {
@@ -459,6 +546,11 @@ struct DriverHomePage: View {
                 }
                 .onAppear {
                     initializeData()
+                    guard !didStartListener,
+                          let driverId = authVM.user?.id
+                    else { return }
+                    assignedTripsVM.startListening(driverId: driverId)
+                    didStartListener = true
                 }
             }
         }
@@ -477,4 +569,3 @@ struct ContentView_Previews: PreviewProvider {
         }
     }
 }
-

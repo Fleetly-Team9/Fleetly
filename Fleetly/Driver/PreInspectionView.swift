@@ -3,6 +3,7 @@ import SwiftUI
 import PhotosUI
 
 struct PreInspectionView: View {
+    @Environment(\.presentationMode) var presentationMode
     @State private var tyrePressureRemarks: String = ""
     @State private var brakeRemarks: String = ""
     @State private var oilCheck = false
@@ -19,6 +20,8 @@ struct PreInspectionView: View {
     @ObservedObject var authVM: AuthViewModel
     let dropoffLocation: String
     let vehicleNumber: String
+    let tripID: String // New parameter
+    let vehicleID: String // New parameter
     
     private let overallCheckOptions = ["Ticket raised", "Verified"]
     
@@ -102,31 +105,49 @@ struct PreInspectionView: View {
                     }
                     
                     Section {
-                        VStack {
+                        VStack(alignment: .leading, spacing: 8) {
                             Toggle(isOn: $tyrePressureCheck) {
-                                Text("Tyre Pressure")
+                                Text("Tyre Pressure").font(.headline)
                             }
                             .toggleStyle(CheckboxToggleStyle())
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Remarks:")
+                                    .font(.subheadline)
+                                    .foregroundColor(.gray)
+                                
+                                TextField("Examples: All tyres at 35 PSI, Front-left slightly low, No visible damage",
+                                         text: $tyrePressureRemarks,
+                                         axis: .vertical)
+                                .lineLimit(2...4)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .font(.caption)
+                            }
                         }
-                        TextField(
-                            "Enter remarks",
-                            text: $tyrePressureRemarks
-                        )
-                        .padding()
+                        .padding(.vertical, 8)
                     }
-                    
+
                     Section {
-                        VStack {
+                        VStack(alignment: .leading, spacing: 8) {
                             Toggle(isOn: $brakesCheck) {
-                                Text("Brakes")
+                                Text("Brakes").font(.headline)
                             }
                             .toggleStyle(CheckboxToggleStyle())
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Remarks:")
+                                    .font(.subheadline)
+                                    .foregroundColor(.gray)
+                                
+                                TextField("Examples: Brake pads 50% worn, Fluid level normal, No unusual noises",
+                                         text: $brakeRemarks,
+                                         axis: .vertical)
+                                .lineLimit(2...4)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .font(.caption)
+                            }
                         }
-                        TextField(
-                            "Enter remarks",
-                            text: $brakeRemarks
-                        )
-                        .padding()
+                        .padding(.vertical, 8)
                     }
                     
                     Section {
@@ -201,72 +222,75 @@ struct PreInspectionView: View {
                     let date = currentDateForFirestore
                     
                     FirebaseManager.shared.recordInspection(
-                        driverId: driverId,
-                        tyrePressureRemarks: tyrePressureRemarks,
-                        brakeRemarks: brakeRemarks,
-                        oilCheck: oilCheck,
-                        hornCheck: hornCheck,
-                        clutchCheck: clutchCheck,
-                        airbagsCheck: airbagsCheck,
-                        physicalDamageCheck: physicalDamageCheck,
-                        tyrePressureCheck: tyrePressureCheck,
-                        brakesCheck: brakesCheck,
-                        indicatorsCheck: indicatorsCheck,
-                        overallCheckStatus: overallCheckStatus,
-                        images: selectedImages,
-                        vehicleNumber: vehicleNumber,
-                        date: date
-                    ) { result in
-                        switch result {
-                        case .success:
-                            print("Inspection recorded successfully")
-                        case .failure(let error):
-                            print("Error recording inspection: \(error)")
+                                            driverId: driverId,
+                                            tyrePressureRemarks: tyrePressureRemarks,
+                                            brakeRemarks: brakeRemarks,
+                                            oilCheck: oilCheck,
+                                            hornCheck: hornCheck,
+                                            clutchCheck: clutchCheck,
+                                            airbagsCheck: airbagsCheck,
+                                            physicalDamageCheck: physicalDamageCheck,
+                                            tyrePressureCheck: tyrePressureCheck,
+                                            brakesCheck: brakesCheck,
+                                            indicatorsCheck: indicatorsCheck,
+                                            overallCheckStatus: overallCheckStatus,
+                                            images: selectedImages,
+                                            vehicleNumber: vehicleNumber,
+                                            date: date,
+                                            tripId: tripID, // Pass the tripID
+                                            vehicleID: vehicleID, // Pass the vehicleID
+                                            completion: { result in
+                                                switch result {
+                                                case .success:
+                                                    print("Inspection recorded successfully")
+                                                case .failure(let error):
+                                                    print("Error recording inspection: \(error)")
+                                                }
+                                            }
+                                        )
+                                    }) {
+                                        Text("Ready for trip")
+                                            .font(.system(size: 18, weight: .semibold, design: .default))
+                                            .foregroundStyle(Color.white)
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 10)
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .tint(.blue)
+                                    .padding(.horizontal)
+                                    .padding(.top, 10)
+                                    .disabled(selectedImages.count != 4)
+                                }
+                                .navigationTitle(Text("Pre Inspection"))
+                                .toolbar {
+                                    ToolbarItem(placement: .navigationBarLeading) {
+                                        Button(action: {
+                                            presentationMode.wrappedValue.dismiss()
+                                        }) {
+                                            HStack {
+                                                Image(systemName: "chevron.left")
+                                                Text("Back")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
-                }) {
-                    Text("Ready for trip")
-                        .font(.system(size: 18, weight: .semibold, design: .default))
-                        .foregroundStyle(Color.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.blue)
-                .padding(.horizontal)
-                .padding(.top, 10)
-                .disabled(selectedImages.count != 4)
-            }
-            .navigationTitle(Text("Pre Inspection"))
-        }
-    }
-}
 
-struct CheckboxToggleStyle: ToggleStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        HStack {
-            configuration.label
-            Spacer()
-            Image(systemName: configuration.isOn ? "checkmark.circle.fill" : "circle")
-                .resizable()
-                .frame(width: 20, height: 20)
-                .foregroundColor(configuration.isOn ? .green : .gray)
-                .onTapGesture {
-                    configuration.isOn.toggle()
-                }
-        }
-    }
-}
+                    struct CheckboxToggleStyle: ToggleStyle {
+                        func makeBody(configuration: Configuration) -> some View {
+                            HStack {
+                                configuration.label
+                                Spacer()
+                                Image(systemName: configuration.isOn ? "checkmark.circle.fill" : "circle")
+                                    .resizable()
+                                    .frame(width: 20, height: 20)
+                                    .foregroundColor(configuration.isOn ? .green : .gray)
+                                    .onTapGesture {
+                                        configuration.isOn.toggle()
+                                    }
+                            }
+                        }
+                    }
 
-struct ContentView2_Previews: PreviewProvider {
-    static var previews: some View {
-        Group {
-            PreInspectionView(authVM: AuthViewModel(), dropoffLocation: "Mysore", vehicleNumber: "KA1234")
-                .previewDisplayName("Light Mode")
-            
-            PreInspectionView(authVM: AuthViewModel(), dropoffLocation: "Mysore", vehicleNumber: "KA1234")
-                .preferredColorScheme(.dark)
-                .previewDisplayName("Dark Mode")
-        }
-    }
-}
