@@ -3,23 +3,30 @@ import PhotosUI
 import AVFoundation
 
 struct AddTicketView: View {
-    @State private var vehicleNumber: String = ""
-    @State private var issueType: IssueType = .tripIssue
-    @State private var description: String = ""
+    @State private var selectedIssueCategory: IssueCategory = .tripIssue
+    @State private var selectedTrip: Trip?
+    @State private var selectedVehicle: Vehicle?
+    @State private var issueType: IssueType = .mechanical
     @State private var priority: Priority = .low
+    @State private var description: String = ""
     @State private var selectedPhotos: [PhotosPickerItem] = []
     @State private var photoImages: [UIImage] = []
     @State private var showAlert: Bool = false
     @State private var alertMessage: String = ""
+    @State private var showingCamera = false
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var ticketManager: TicketManager
     
-    let vehicles = ["KA01AB4321", "KA01AB4322", "KA01AB4323"]
+    enum IssueCategory: String, CaseIterable, Identifiable {
+        case tripIssue = "Trip Issue"
+        case vehicleIssue = "Vehicle Issue"
+        var id: String { rawValue }
+    }
     
     enum IssueType: String, CaseIterable, Identifiable {
-        case tripIssue = "Trip Issue"
-        case vehicleProblem = "Vehicle Problem"
-        case payment = "Payment"
+        case mechanical = "Mechanical"
+        case electrical = "Electrical"
+        case bodyDamage = "Body Damage"
         case other = "Other"
         var id: String { rawValue }
     }
@@ -29,42 +36,195 @@ struct AddTicketView: View {
         case medium = "Medium"
         case high = "High"
         var id: String { rawValue }
+        
+        var color: Color {
+            switch self {
+            case .low: return .green
+            case .medium: return .orange
+            case .high: return .red
+            }
+        }
+        
+        var icon: String {
+            switch self {
+            case .low: return "arrow.down.circle"
+            case .medium: return "minus.circle"
+            case .high: return "exclamationmark.circle"
+            }
+        }
     }
     
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    VehicleNumberSection(
-                        vehicleNumber: $vehicleNumber,
-                        vehicles: vehicles
-                    )
-                    IssueTypeSection(issueType: $issueType)
-                    DescriptionSection(description: $description)
-                    AttachmentsSection(selectedPhotos: $selectedPhotos, photoImages: $photoImages)
-                    PrioritySection(priority: $priority)
-                    
-                    HStack(spacing: 12) {
-                        Button(action: {
-                            validateAndSubmit()
-                        }) {
-                            Text("Submit")
-                                .font(.headline)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 50)
-                                .padding()
-                                .background(Color.orange)
-                                .foregroundStyle(.white)
-                                .clipShape(RoundedRectangle(cornerRadius: 25))
+            Form {
+                // Issue Category Selection with Segmented Control
+                Section(header: Text("Issue Category")) {
+                    Picker("", selection: $selectedIssueCategory) {
+                        ForEach(IssueCategory.allCases) { category in
+                            Text(category.rawValue).tag(category)
                         }
-                        .disabled(vehicleNumber.isEmpty || description.isEmpty)
                     }
-                    .padding(.horizontal)
-                    .padding(.top, 20)
+                    .pickerStyle(.segmented)
+                    .padding(.vertical, 4)
                 }
-                .padding()
+                
+                // Trip/Vehicle Selection
+                Section(header: Text(selectedIssueCategory == .tripIssue ? "Trip Details" : "Vehicle Details")) {
+                    if selectedIssueCategory == .tripIssue {
+                        TripSelectionView(selectedTrip: $selectedTrip)
+                    } else {
+                        VehicleSelectionView(selectedVehicle: $selectedVehicle)
+                    }
+                }
+                
+                // Issue Classification
+                Section(header: Text("Issue Classification")) {
+                    HStack {
+                        Text("Issue Type")
+                        Spacer()
+                        Menu {
+                            ForEach(IssueType.allCases) { type in
+                                Button {
+                                    issueType = type
+                                } label: {
+                                    Text(type.rawValue)
+                                }
+                            }
+                        } label: {
+                            HStack {
+                                Text(issueType.rawValue)
+                                    .foregroundStyle(.blue)
+                                Image(systemName: "chevron.down")
+                                    .font(.caption)
+                                    .foregroundStyle(.blue)
+                            }
+                        }
+                    }
+                    
+                    HStack {
+                        Text("Priority")
+                        Spacer()
+                        Menu {
+                            ForEach(Priority.allCases) { priorityOption in
+                                Button {
+                                    priority = priorityOption
+                                } label: {
+                                    Label {
+                                        Text(priorityOption.rawValue)
+                                    } icon: {
+                                        Image(systemName: priorityOption.icon)
+                                    }
+                                }
+                            }
+                        } label: {
+                            HStack {
+                                Label {
+                                    Text(priority.rawValue)
+                                } icon: {
+                                    Image(systemName: priority.icon)
+                                }
+                                .foregroundStyle(priority.color)
+                            }
+                        }
+                    }
+                }
+                
+                // Description Input
+                Section(header: Text("Description")) {
+                    ZStack(alignment: .topLeading) {
+                        if description.isEmpty {
+                            Text("Describe the issue in detail...")
+                                .foregroundStyle(.gray)
+                                .padding(.top, 8)
+                        }
+                        TextEditor(text: $description)
+                            .frame(minHeight: 100)
+                            .background(Color.clear)
+                    }
+                    .textInputAutocapitalization(.sentences)
+                }
+                
+                // Photo Attachments
+                Section(header: Text("Photos")) {
+                    VStack(alignment: .leading) {
+                        if !photoImages.isEmpty {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 12) {
+                                    ForEach(photoImages.indices, id: \.self) { index in
+                                        ZStack(alignment: .topTrailing) {
+                                            Image(uiImage: photoImages[index])
+                                                .resizable()
+                                                .scaledToFill()
+                                                .frame(width: 100, height: 100)
+                                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                            
+                                            Button(action: {
+                                                photoImages.remove(at: index)
+                                                selectedPhotos.remove(at: index)
+                                            }) {
+                                                Image(systemName: "xmark.circle.fill")
+                                                    .foregroundStyle(.white)
+                                                    .background(Color.black.opacity(0.6))
+                                                    .clipShape(Circle())
+                                            }
+                                            .offset(x: 6, y: -6)
+                                        }
+                                    }
+                                }
+                                .padding(.vertical, 8)
+                            }
+                        }
+                        
+                        HStack {
+                            PhotosPicker(
+                                selection: $selectedPhotos,
+                                maxSelectionCount: 5,
+                                matching: .images
+                            ) {
+                                Label("Photo", systemImage: "photo.on.rectangle")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(.blue)
+                            .controlSize(.large)
+                            
+                            Button {
+                                showingCamera = true
+                            } label: {
+                                Label("Camera", systemImage: "camera")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(.blue)
+                            .controlSize(.large)
+                        }
+                        
+                        Text("Add up to 5 photos")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                
+                // Submit Button Section
+                Section {
+                    Button(action: {
+                        validateAndSubmit()
+                    }) {
+                        Text("Submit Ticket")
+                            .font(.system(.headline, weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 50)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .buttonBorderShape(.capsule)
+                    .tint(isFormValid ? .blue : .gray)
+                    .padding(.horizontal, 24)
+                    .disabled(!isFormValid)
+                    .listRowInsets(EdgeInsets())                  // zero padding on the row
+                        .listRowBackground(Color.clear)  
+                }
             }
-            .navigationTitle("Raise a Ticket")
+            .navigationTitle("New Ticket")
             .navigationBarTitleDisplayMode(.inline)
             .alert("Submission Error", isPresented: $showAlert) {
                 Button("OK", role: .cancel) {}
@@ -73,18 +233,13 @@ struct AddTicketView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(action: {
+                    Button("Cancel") {
                         dismiss()
-                    }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 22, weight: .bold))
-                            .foregroundColor(.gray)
                     }
                 }
             }
             .onChange(of: selectedPhotos) { _, newPhotos in
                 Task {
-                    photoImages.removeAll()
                     for photo in newPhotos {
                         if let data = try? await photo.loadTransferable(type: Data.self),
                            let image = UIImage(data: data) {
@@ -93,20 +248,47 @@ struct AddTicketView: View {
                     }
                 }
             }
-            .background(Color(.systemBackground))
+            .sheet(isPresented: $showingCamera) {
+                CameraVieww { image in
+                    if let image = image {
+                        photoImages.append(image)
+                    }
+                }
+            }
+        }
+    }
+    
+    private var isFormValid: Bool {
+        if selectedIssueCategory == .tripIssue {
+            return selectedTrip != nil && !description.isEmpty
+        } else {
+            return selectedVehicle != nil && !description.isEmpty
         }
     }
     
     private func validateAndSubmit() {
-        guard !vehicleNumber.isEmpty else {
-            alertMessage = "Vehicle Number is required."
+        guard !description.isEmpty else {
+            alertMessage = "Please add a description of the issue."
             showAlert = true
             return
         }
-        guard !description.isEmpty else {
-            alertMessage = "Description is required."
-            showAlert = true
-            return
+        
+        let vehicleNumber: String
+        if selectedIssueCategory == .tripIssue {
+            guard let trip = selectedTrip else {
+                alertMessage = "Please select a trip."
+                showAlert = true
+                return
+            }
+            // In a real app, we would fetch the vehicle details using trip.vehicleId
+            vehicleNumber = "KA01AB1234" // Mock vehicle number
+        } else {
+            guard let vehicle = selectedVehicle else {
+                alertMessage = "Please select a vehicle."
+                showAlert = true
+                return
+            }
+            vehicleNumber = vehicle.licensePlate
         }
         
         ticketManager.addTicket(
@@ -116,342 +298,248 @@ struct AddTicketView: View {
             priority: priority.rawValue
         )
         
-        print("Ticket submitted: Vehicle: \(vehicleNumber), Issue: \(issueType.rawValue), Description: \(description), Priority: \(priority.rawValue), Photos: \(photoImages.count)")
-        
         dismiss()
     }
 }
 
-// MARK: - Subviews
-
-struct VehicleNumberSection: View {
-    @Binding var vehicleNumber: String
-    let vehicles: [String]
+// MARK: - Trip Selection View
+struct TripSelectionView: View {
+    @Binding var selectedTrip: Trip?
+    @State private var showTripPicker = false
+    
+    // Mock data for trips
+    let mockTrips: [Trip] = [
+        Trip(
+            id: "1",
+            driverId: "driver1",
+            vehicleId: "vehicle1",
+            startLocation: "Chennai",
+            endLocation: "Bangalore",
+            date: "2024-04-25",
+            time: "09:00",
+            startTime: Date(),
+            status: .assigned,
+            vehicleType: "Passenger Vehicle",
+            passengers: 4,
+            loadWeight: nil
+        ),
+        Trip(
+            id: "2",
+            driverId: "driver1",
+            vehicleId: "vehicle2",
+            startLocation: "Mumbai",
+            endLocation: "Pune",
+            date: "2024-04-26",
+            time: "14:00",
+            startTime: Date(),
+            status: .assigned,
+            vehicleType: "Cargo Vehicle",
+            passengers: nil,
+            loadWeight: 500
+        )
+    ]
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("VEHICLE NUMBER")
-                .font(.subheadline)
-                .foregroundStyle(.orange)
-            
-            Menu {
-                ForEach(vehicles, id: \.self) { vehicle in
-                    Button(action: {
-                        vehicleNumber = vehicle
-                    }) {
-                        Text(vehicle)
+        Button {
+            showTripPicker = true
+        } label: {
+            HStack {
+                if let trip = selectedTrip {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("\(trip.startLocation) → \(trip.endLocation)")
+                        Text("\(trip.date) at \(trip.time)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                }
-            } label: {
-                HStack {
-                    Text(vehicleNumber.isEmpty ? "Select vehicle" : vehicleNumber)
-                        .foregroundStyle(vehicleNumber.isEmpty ? .gray : .primary)
-                    Spacer()
-                    Image(systemName: "chevron.down")
-                        .foregroundStyle(.gray)
-                }
-                .padding()
-                .background(Color(.systemBackground))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                )
-            }
-        }
-    }
-}
-
-struct IssueTypeSection: View {
-    @Binding var issueType: AddTicketView.IssueType
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("ISSUE TYPE")
-                .font(.subheadline)
-                .foregroundStyle(.orange)
-            
-            Menu {
-                ForEach(AddTicketView.IssueType.allCases) { type in
-                    Button(action: {
-                        issueType = type
-                    }) {
-                        Text(type.rawValue)
-                    }
-                }
-            } label: {
-                HStack {
-                    Text(issueType.rawValue)
-                        .foregroundStyle(.primary)
-                    Spacer()
-                    Image(systemName: "chevron.down")
-                        .foregroundStyle(.gray)
-                }
-                .padding()
-                .background(Color(.systemBackground))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                )
-            }
-        }
-    }
-}
-
-struct DescriptionSection: View {
-    @Binding var description: String
-    @State private var isRecording = false
-    @State private var audioURL: URL?
-    @State private var audioRecorder: AVAudioRecorder?
-    @State private var audioPlayer: AVAudioPlayer?
-    @State private var isPlaying = false
-    @State private var playerDelegate: AVPlayerDelegateBridge?
-    
-    let audioSession = AVAudioSession.sharedInstance()
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("DESCRIPTION")
-                .font(.subheadline)
-                .foregroundStyle(.orange)
-            
-            VStack(spacing: 12) {
-                if isRecording {
-                    VStack(spacing: 8) {
-                        Text("Recording...")
-                            .foregroundColor(.red)
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle())
-                    }
-                } else if audioURL == nil {
-                    Text("Tap the mic to record an audio description")
-                        .foregroundColor(.gray)
                 } else {
-                    Text("Audio recorded. You can play or delete it.")
-                        .foregroundColor(.gray)
+                    Text("Select Trip")
+                        .foregroundStyle(.blue)
                 }
-                
-                HStack(spacing: 20) {
-                    Button(action: {
-                        isRecording ? stopRecording() : startRecording()
-                    }) {
-                        Image(systemName: isRecording ? "stop.fill" : "mic.fill")
-                            .font(.system(size: 28))
-                            .foregroundColor(.white)
-                            .padding()
-                            .background(Circle().fill(isRecording ? Color.red : Color.green))
-                            .shadow(radius: 4)
-                    }
-                    
-                    if let _ = audioURL {
-                        Button(action: {
-                            playAudio()
-                        }) {
-                            HStack {
-                                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                                Text(isPlaying ? "Pause" : "Play")
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .sheet(isPresented: $showTripPicker) {
+            NavigationStack {
+                List(mockTrips) { trip in
+                    Button {
+                        selectedTrip = trip
+                        showTripPicker = false
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("\(trip.startLocation) → \(trip.endLocation)")
+                                    .font(.headline)
+                                Text("\(trip.date) at \(trip.time)")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                Text(trip.vehicleType)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                             }
-                            .padding()
-                            .frame(maxWidth: .infinity)
-                            .background(Color.blue.opacity(0.1))
-                            .foregroundColor(.blue)
-                            .cornerRadius(10)
+                            Spacer()
+                            if selectedTrip?.id == trip.id {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(.blue)
+                            }
                         }
-                        
-                        Button(action: {
-                            deleteRecording()
-                        }) {
-                            HStack {
-                                Image(systemName: "trash.fill")
-                                Text("Delete")
-                            }
-                            .padding()
-                            .frame(maxWidth: .infinity)
-                            .background(Color.red.opacity(0.1))
-                            .foregroundColor(.red)
-                            .cornerRadius(10)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .navigationTitle("Select Trip")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") {
+                            showTripPicker = false
                         }
                     }
                 }
             }
-            .padding()
-            .frame(maxWidth: .infinity)
-            .background(Color(.white))
-            .cornerRadius(12)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-            )
-        }
-        .onAppear {
-            setupAudioSession()
+            .presentationDetents([.medium, .large])
         }
     }
+}
+
+// MARK: - Vehicle Selection View
+struct VehicleSelectionView: View {
+    @Binding var selectedVehicle: Vehicle?
+    @State private var showVehiclePicker = false
     
-    private func setupAudioSession() {
-        do {
-            try audioSession.setCategory(.playAndRecord, mode: .default)
-            try audioSession.setActive(true)
-        } catch {
-            print("Audio session setup failed: \(error)")
+    // Mock data for vehicles
+    let mockVehicles: [Vehicle] = [
+        Vehicle(
+            id: UUID(),
+            make: "Toyota",
+            model: "Innova",
+            year: "2023",
+            vin: "ABC123",
+            licensePlate: "KA01AB1234",
+            vehicleType: .car,
+            status: .active,
+            assignedDriverId: nil,
+            passengerCapacity: 7,
+            cargoCapacity: nil
+        ),
+        Vehicle(
+            id: UUID(),
+            make: "Tata",
+            model: "407",
+            year: "2023",
+            vin: "XYZ789",
+            licensePlate: "KA01CD5678",
+            vehicleType: .truck,
+            status: .active,
+            assignedDriverId: nil,
+            passengerCapacity: nil,
+            cargoCapacity: 1000
+        )
+    ]
+    
+    var body: some View {
+        Button {
+            showVehiclePicker = true
+        } label: {
+            HStack {
+                if let vehicle = selectedVehicle {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(vehicle.licensePlate)
+                        Text("\(vehicle.make) \(vehicle.model)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Text("Select Vehicle")
+                        .foregroundStyle(.blue)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .sheet(isPresented: $showVehiclePicker) {
+            NavigationStack {
+                List(mockVehicles) { vehicle in
+                    Button {
+                        selectedVehicle = vehicle
+                        showVehiclePicker = false
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(vehicle.licensePlate)
+                                    .font(.headline)
+                                Text("\(vehicle.make) \(vehicle.model) (\(vehicle.year))")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                Text(vehicle.vehicleType.rawValue.capitalized)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if selectedVehicle?.id == vehicle.id {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(.blue)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .navigationTitle("Select Vehicle")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") {
+                            showVehiclePicker = false
+                        }
+                    }
+                }
+            }
+            .presentationDetents([.medium, .large])
         }
     }
+}
+
+// MARK: - Camera View
+struct CameraVieww: UIViewControllerRepresentable {
+    var completion: (UIImage?) -> Void
     
-    private func startRecording() {
-        let fileName = UUID().uuidString + ".m4a"
-        let path = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.delegate = context.coordinator
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(completion: completion)
+    }
+    
+    class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
+        var completion: (UIImage?) -> Void
         
-        let settings: [String: Any] = [
-            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-            AVSampleRateKey: 12000,
-            AVNumberOfChannelsKey: 1,
-            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
-        ]
-        
-        do {
-            audioRecorder = try AVAudioRecorder(url: path, settings: settings)
-            audioRecorder?.record()
-            isRecording = true
-            audioURL = path
-        } catch {
-            print("Recording failed: \(error)")
+        init(completion: @escaping (UIImage?) -> Void) {
+            self.completion = completion
         }
-    }
-    
-    private func stopRecording() {
-        audioRecorder?.stop()
-        isRecording = false
-    }
-    
-    private func playAudio() {
-        guard let url = audioURL else { return }
         
-        do {
-            if isPlaying {
-                audioPlayer?.pause()
-                isPlaying = false
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+            if let image = info[.originalImage] as? UIImage {
+                completion(image)
             } else {
-                audioPlayer = try AVAudioPlayer(contentsOf: url)
-                let delegate = AVPlayerDelegateBridge {
-                    isPlaying = false
-                }
-                audioPlayer?.delegate = delegate
-                playerDelegate = delegate
-                audioPlayer?.prepareToPlay()
-                audioPlayer?.play()
-                isPlaying = true
+                completion(nil)
             }
-        } catch {
-            print("Playback failed: \(error)")
-            isPlaying = false
+            picker.dismiss(animated: true)
         }
-    }
-    
-    private func deleteRecording() {
-        if let url = audioURL {
-            try? FileManager.default.removeItem(at: url)
-        }
-        audioURL = nil
-        isPlaying = false
-        audioPlayer = nil
-    }
-}
-
-class AVPlayerDelegateBridge: NSObject, AVAudioPlayerDelegate {
-    var onFinish: () -> Void
-    
-    init(onFinish: @escaping () -> Void) {
-        self.onFinish = onFinish
-    }
-    
-    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        onFinish()
-    }
-}
-
-struct AttachmentsSection: View {
-    @Binding var selectedPhotos: [PhotosPickerItem]
-    @Binding var photoImages: [UIImage]
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("UPLOAD A PHOTO")
-                .font(.subheadline)
-                .foregroundStyle(.orange)
-            
-            PhotosPicker(
-                selection: $selectedPhotos,
-                maxSelectionCount: 5,
-                matching: .images
-            ) {
-                HStack {
-                    Image(systemName: "camera")
-                        .foregroundStyle(.gray)
-                    Text("Upload Photo")
-                        .foregroundStyle(.gray)
-                    Spacer()
-                }
-                .padding()
-                .background(Color(.systemBackground))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                )
-            }
-            
-            if !photoImages.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(photoImages.indices, id: \.self) { index in
-                            Image(uiImage: photoImages[index])
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 80, height: 80)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                                )
-                        }
-                    }
-                    .padding(.vertical, 8)
-                }
-            }
-        }
-    }
-}
-
-struct PrioritySection: View {
-    @Binding var priority: AddTicketView.Priority
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("PRIORITY")
-                .font(.subheadline)
-                .foregroundStyle(.orange)
-            
-            Menu {
-                ForEach(AddTicketView.Priority.allCases) { priority in
-                    Button(action: {
-                        self.priority = priority
-                    }) {
-                        Text(priority.rawValue)
-                    }
-                }
-            } label: {
-                HStack {
-                    Text(priority.rawValue)
-                        .foregroundStyle(.primary)
-                    Spacer()
-                    Image(systemName: "chevron.down")
-                        .foregroundStyle(.gray)
-                }
-                .padding()
-                .background(Color(.systemBackground))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                )
-            }
+        
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            completion(nil)
+            picker.dismiss(animated: true)
         }
     }
 }
