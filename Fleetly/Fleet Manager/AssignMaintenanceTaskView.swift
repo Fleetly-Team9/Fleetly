@@ -1,4 +1,5 @@
 import SwiftUI
+import FirebaseFirestore
 
 struct AssignTaskView: View {
     @State private var selectedVehicle: String = ""
@@ -9,12 +10,19 @@ struct AssignTaskView: View {
     @State private var completionTime = Date()
     @State private var priority: String = "Medium"
     @State private var selectedPersonnel: String = ""
+    @State private var isLoading = false
+    @State private var showAlert = false
+    @State private var alertMessage = ""
     
-    let vehicleNumbers = ["KA12AH8879", "KA13BH9901", "KA14CJ1123"]
-    let genericIssues = ["Engine Overheating", "Brake Failure", "Tire Puncture", "Oil Leak", "Other"]
+    @State private var vehicles: [Vehicle] = []
+    @State private var personnel: [String] = []
+    
+    let genericIssues = ["Engine Overheating", "Brake Failure", "Tire Puncture", "Oil Leak", "Battery Issue", "AC Problem", "Other"]
     let priorities = ["High", "Medium", "Low"]
-    let personnel = ["John Doe", "Jane Smith", "Mike Johnson"]
     
+    private let db = Firestore.firestore()
+    
+    // Define the minimum date and time (current date and time)
     private var minimumDate: Date {
         return Date()
     }
@@ -25,14 +33,13 @@ struct AssignTaskView: View {
                 LinearGradient(gradient: Gradient(colors: [Color(.systemGray6).opacity(0.8), Color(.systemBackground)]), startPoint: .top, endPoint: .bottom)
                     .edgesIgnoringSafeArea(.all)
                 
-                VStack(spacing: 0) {
-                    // Task Details Sheet
+                VStack(spacing: 10) {
                     Form {
                         Section(header: Text("TASK DETAILS").font(.caption).foregroundColor(.gray)) {
                             Picker("Vehicle", selection: $selectedVehicle) {
                                 Text("Select Vehicle").tag("")
-                                ForEach(vehicleNumbers, id: \.self) { vehicle in
-                                    Text(vehicle).tag(vehicle)
+                                ForEach(vehicles, id: \.id) { vehicle in
+                                    Text(vehicle.licensePlate).tag(vehicle.licensePlate)
                                 }
                             }
                             .pickerStyle(.menu)
@@ -75,115 +82,151 @@ struct AssignTaskView: View {
                             }
                             .pickerStyle(.menu)
                         }
-                        
-                        .frame(maxHeight: 400)
-                        
-                        Spacer() // Spacer to create space between Form and Card
-                        
-                        // Independent Work Order Card
-                        VStack {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color(.systemGroupedBackground)) // Match Form background
-                                    .shadow(radius: 4)
-                                
-                                VStack(alignment: .leading, spacing: 8) {
-                                    HStack {
-                                        Text("Work Order #\(Int.random(in: 1...100))")
-                                            .font(.headline)
-                                        Spacer()
-                                        Text(selectedVehicle.isEmpty ? "N/A" : selectedVehicle)
-                                            .foregroundColor(.blue)
-                                    }
-                                    .padding(.top, 8)
-                                    
-                                    Text(selectedIssue == "Other" ? otherIssueDescription : (selectedIssue.isEmpty ? "N/A" : selectedIssue))
-                                        .font(.subheadline)
-                                    
-                                    Text("Due: \(formattedDate(from: completionDate)) \(formattedTime(from: completionTime))")
-                                        .font(.subheadline)
-                                        .foregroundColor(.gray)
-                                    
-                                    if !selectedIssue.isEmpty {
-                                        Text("Issues: \(selectedIssue == "Other" ? otherIssueDescription : selectedIssue)")
-                                            .font(.caption)
-                                            .foregroundColor(.red)
-                                    }
-                                    
-                                    HStack {
-                                        Text("To Be Done")
-                                            .font(.caption)
-                                        Spacer()
-                                        Text(priority.isEmpty ? "N/A" : priority)
-                                            .font(.caption)
-                                            .foregroundColor(.red)
-                                            .padding(.horizontal, 8)
-                                            .padding(.vertical, 4)
-                                            .background(priorityColor(priority: priority))
-                                            .cornerRadius(4)
-                                    }
-                                    
-                                    Text("Assigned to: \(selectedPersonnel.isEmpty ? "N/A" : selectedPersonnel)")
-                                        .font(.caption)
-                                        .foregroundColor(.gray)
-                                }
-                                
-                            }
-                            
-                        }
                     }
-                    // Spacer to create space between Card and Button
+                    .frame(maxHeight: .infinity)
                     
-                    // Independent Assign Button Section
-                    VStack {
-                        Button(action: {
-                            let issue = showOtherIssue ? otherIssueDescription : selectedIssue
-                            print("Assigned Task - Vehicle: \(selectedVehicle), Issue: \(issue), Completion Date: \(completionDate), Completion Time: \(completionTime), Priority: \(priority), Personnel: \(selectedPersonnel)")
-                        }) {
+                    Button(action: assignTask) {
+                        if isLoading {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        } else {
                             Text("Assign")
                                 .font(.headline)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.blue)
-                                .foregroundColor(.white)
-                                .cornerRadius(10)
                         }
-                        .disabled(selectedVehicle.isEmpty || selectedPersonnel.isEmpty || (selectedIssue.isEmpty && otherIssueDescription.isEmpty) || (showOtherIssue && otherIssueDescription.isEmpty))
-                        .opacity(selectedVehicle.isEmpty || selectedPersonnel.isEmpty || (selectedIssue.isEmpty && otherIssueDescription.isEmpty) || (showOtherIssue && otherIssueDescription.isEmpty) ? 0.5 : 1.0)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 20)
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(10)
+                    .disabled(isLoading || selectedVehicle.isEmpty || selectedPersonnel.isEmpty || (selectedIssue.isEmpty && otherIssueDescription.isEmpty) || (showOtherIssue && otherIssueDescription.isEmpty))
+                    .opacity(isLoading || selectedVehicle.isEmpty || selectedPersonnel.isEmpty || (selectedIssue.isEmpty && otherIssueDescription.isEmpty) || (showOtherIssue && otherIssueDescription.isEmpty) ? 0.5 : 1.0)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 20)
                     
-                    Spacer() // Extra Spacer to push content up if needed
+                    Spacer()
                 }
             }
             .navigationTitle("Assign Task")
             .navigationBarTitleDisplayMode(.large)
+            .alert("Task Assignment", isPresented: $showAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(alertMessage)
+            }
+            .onAppear {
+                fetchVehicles()
+                fetchPersonnel()
+            }
         }
     }
     
-    private func formattedDate(from date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        return formatter.string(from: date)
+    private func fetchVehicles() {
+        db.collection("vehicles")
+            .whereField("status", isEqualTo: VehicleStatus.active.rawValue)
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    print("Error fetching vehicles: \(error.localizedDescription)")
+                    return
+                }
+                
+                vehicles = snapshot?.documents.compactMap { document in
+                    try? document.data(as: Vehicle.self)
+                } ?? []
+            }
     }
     
-    private func formattedTime(from date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
+    private func fetchPersonnel() {
+        db.collection("users")
+            .whereField("role", isEqualTo: "maintenance")
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    print("Error fetching personnel: \(error.localizedDescription)")
+                    return
+                }
+                
+                personnel = snapshot?.documents.compactMap { document in
+                    document.data()["name"] as? String
+                } ?? []
+            }
     }
     
-    private func priorityColor(priority: String) -> Color {
+    private func assignTask() {
+        isLoading = true
+        
+        let issue = showOtherIssue ? otherIssueDescription : selectedIssue
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "HH:mm"
+        let timeString = dateFormatter.string(from: completionTime)
+        
+        let workOrder = WorkOrder(
+            id: Int.random(in: 1000...9999),
+            vehicleNumber: selectedVehicle,
+            issue: issue,
+            status: "To be Done",
+            expectedDelivery: timeString,
+            priority: priorityValue(priority),
+            parts: [],
+            laborCost: nil,
+            issues: [issue]
+        )
+        
+        // Update vehicle status to in maintenance
+        if let vehicle = vehicles.first(where: { $0.licensePlate == selectedVehicle }) {
+            db.collection("vehicles").document(vehicle.id.uuidString).updateData([
+                "status": VehicleStatus.inMaintenance.rawValue
+            ]) { error in
+                if let error = error {
+                    print("Error updating vehicle status: \(error.localizedDescription)")
+                    isLoading = false
+                    alertMessage = "Failed to update vehicle status"
+                    showAlert = true
+                    return
+                }
+                
+                // Create work order
+                db.collection("workOrders").document(String(workOrder.id)).setData([
+                    "id": workOrder.id,
+                    "vehicleNumber": workOrder.vehicleNumber,
+                    "issue": workOrder.issue,
+                    "status": workOrder.status,
+                    "expectedDelivery": workOrder.expectedDelivery,
+                    "priority": workOrder.priority,
+                    "parts": workOrder.parts,
+                    "laborCost": workOrder.laborCost as Any,
+                    "issues": workOrder.issues,
+                    "assignedTo": selectedPersonnel,
+                    "createdAt": FieldValue.serverTimestamp()
+                ]) { error in
+                    isLoading = false
+                    if let error = error {
+                        print("Error creating work order: \(error.localizedDescription)")
+                        alertMessage = "Failed to create work order"
+                        showAlert = true
+                    } else {
+                        alertMessage = "Task assigned successfully"
+                        showAlert = true
+                        // Reset form
+                        selectedVehicle = ""
+                        selectedIssue = ""
+                        showOtherIssue = false
+                        otherIssueDescription = ""
+                        completionDate = Date()
+                        completionTime = Date()
+                        priority = "Medium"
+                        selectedPersonnel = ""
+                    }
+                }
+            }
+        }
+    }
+    
+    private func priorityValue(_ priority: String) -> Int {
         switch priority {
-        case "High":
-            return Color.red.opacity(0.1)
-        case "Medium":
-            return Color.yellow.opacity(0.1)
-        case "Low":
-            return Color.green.opacity(0.1)
-        default:
-            return Color.gray.opacity(0.1)
+        case "High": return 2
+        case "Medium": return 1
+        case "Low": return 0
+        default: return 1
         }
     }
 }

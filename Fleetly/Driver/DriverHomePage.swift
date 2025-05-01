@@ -3,6 +3,8 @@ import MapKit
 
 struct MainView: View {
     @ObservedObject var authVM: AuthViewModel
+    @State private var showProfile = false
+    
     var body: some View {
         TabView {
             DriverHomePage(authVM: authVM)
@@ -14,7 +16,21 @@ struct MainView: View {
                     Label("Schedule", systemImage: "calendar")
                 }
         }
-        
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: {
+                    showProfile = true
+                }) {
+                    Image(systemName: "person.circle.fill")
+                        .resizable()
+                        .frame(width: 28, height: 28)
+                        .foregroundColor(.blue)
+                }
+            }
+        }
+        .sheet(isPresented: $showProfile) {
+            DriverProfileView(authVM: authVM)
+        }
     }
 }
 
