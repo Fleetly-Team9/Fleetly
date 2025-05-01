@@ -1,5 +1,4 @@
 import SwiftUI
-import FirebaseFirestore
 
 struct AssignTaskView: View {
     @State private var selectedVehicle: String = ""
@@ -10,19 +9,14 @@ struct AssignTaskView: View {
     @State private var completionTime = Date()
     @State private var priority: String = "Medium"
     @State private var selectedPersonnel: String = ""
-    @State private var isLoading = false
-    @State private var showAlert = false
-    @State private var alertMessage = ""
+    @State private var showVehicleSheet = false
+    @State private var showPersonnelSheet = false
     
-    @State private var vehicles: [Vehicle] = []
-    @State private var personnel: [String] = []
-    
-    let genericIssues = ["Engine Overheating", "Brake Failure", "Tire Puncture", "Oil Leak", "Battery Issue", "AC Problem", "Other"]
+    let vehicleNumbers = ["KA12AH8879", "KA13BH9901", "KA14CJ1123"]
+    let genericIssues = ["Engine Overheating", "Brake Failure", "Tire Puncture", "Oil Leak", "Other"]
     let priorities = ["High", "Medium", "Low"]
+    let personnel = ["John Doe", "Jane Smith", "Mike Johnson"]
     
-    private let db = Firestore.firestore()
-    
-    // Define the minimum date and time (current date and time)
     private var minimumDate: Date {
         return Date()
     }
@@ -36,13 +30,14 @@ struct AssignTaskView: View {
                 VStack(spacing: 10) {
                     Form {
                         Section(header: Text("TASK DETAILS").font(.caption).foregroundColor(.gray)) {
-                            Picker("Vehicle", selection: $selectedVehicle) {
-                                Text("Select Vehicle").tag("")
-                                ForEach(vehicles, id: \.id) { vehicle in
-                                    Text(vehicle.licensePlate).tag(vehicle.licensePlate)
+                            HStack {
+                                Text("Vehicle")
+                                Spacer()
+                                Button(action: { showVehicleSheet = true }) {
+                                    Text(selectedVehicle.isEmpty ? "Select Vehicle" : selectedVehicle)
+                                        .foregroundColor(selectedVehicle.isEmpty ? .gray : .blue)
                                 }
                             }
-                            .pickerStyle(.menu)
                             
                             Picker("Issue", selection: $selectedIssue) {
                                 ForEach(genericIssues, id: \.self) { issue in
@@ -74,33 +69,32 @@ struct AssignTaskView: View {
                             }
                             .pickerStyle(.menu)
                             
-                            Picker("Maintenance Personnel", selection: $selectedPersonnel) {
-                                Text("Select Personnel").tag("")
-                                ForEach(personnel, id: \.self) { person in
-                                    Text(person).tag(person)
+                            HStack {
+                                Text("Maintenance Personnel")
+                                Spacer()
+                                Button(action: { showPersonnelSheet = true }) {
+                                    Text(selectedPersonnel.isEmpty ? "Select Personnel" : selectedPersonnel)
+                                        .foregroundColor(selectedPersonnel.isEmpty ? .gray : .blue)
                                 }
                             }
-                            .pickerStyle(.menu)
                         }
                     }
                     .frame(maxHeight: .infinity)
                     
-                    Button(action: assignTask) {
-                        if isLoading {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        } else {
-                            Text("Assign")
-                                .font(.headline)
-                        }
+                    Button(action: {
+                        let issue = showOtherIssue ? otherIssueDescription : selectedIssue
+                        print("Assigned Task - Vehicle: \(selectedVehicle), Issue: \(issue), Completion Date: \(completionDate), Completion Time: \(completionTime), Priority: \(priority), Personnel: \(selectedPersonnel)")
+                    }) {
+                        Text("Assign")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
-                    .disabled(isLoading || selectedVehicle.isEmpty || selectedPersonnel.isEmpty || (selectedIssue.isEmpty && otherIssueDescription.isEmpty) || (showOtherIssue && otherIssueDescription.isEmpty))
-                    .opacity(isLoading || selectedVehicle.isEmpty || selectedPersonnel.isEmpty || (selectedIssue.isEmpty && otherIssueDescription.isEmpty) || (showOtherIssue && otherIssueDescription.isEmpty) ? 0.5 : 1.0)
+                    .disabled(selectedVehicle.isEmpty || selectedPersonnel.isEmpty || (selectedIssue.isEmpty && otherIssueDescription.isEmpty) || (showOtherIssue && otherIssueDescription.isEmpty))
+                    .opacity(selectedVehicle.isEmpty || selectedPersonnel.isEmpty || (selectedIssue.isEmpty && otherIssueDescription.isEmpty) || (showOtherIssue && otherIssueDescription.isEmpty) ? 0.5 : 1.0)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 20)
                     
@@ -109,124 +103,102 @@ struct AssignTaskView: View {
             }
             .navigationTitle("Assign Task")
             .navigationBarTitleDisplayMode(.large)
-            .alert("Task Assignment", isPresented: $showAlert) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text(alertMessage)
+            .sheet(isPresented: $showVehicleSheet) {
+                VehicleListView(selectedVehicle: $selectedVehicle)
+                    .presentationDetents([.medium, .large])
+                    .cornerRadius(30)
             }
-            .onAppear {
-                fetchVehicles()
-                fetchPersonnel()
+            .sheet(isPresented: $showPersonnelSheet) {
+                PersonnelListView(selectedPersonnel: $selectedPersonnel)
+                    .presentationDetents([.medium, .large])
+                    .cornerRadius(30)
             }
         }
     }
+}
+
+struct VehicleListView: View {
+    @Binding var selectedVehicle: String
+    @Environment(\.dismiss) var dismiss
     
-    private func fetchVehicles() {
-        db.collection("vehicles")
-            .whereField("status", isEqualTo: VehicleStatus.active.rawValue)
-            .addSnapshotListener { snapshot, error in
-                if let error = error {
-                    print("Error fetching vehicles: \(error.localizedDescription)")
-                    return
-                }
-                
-                vehicles = snapshot?.documents.compactMap { document in
-                    try? document.data(as: Vehicle.self)
-                } ?? []
-            }
-    }
+    let vehicles = [
+        ("Tata 407", "AP12XY9087"),
+        ("Mahindra Supro Maxitruck", "MH01GH2312"),
+        ("Mahindra Bolero Maxx", "MP14TR5432")
+    ]
     
-    private func fetchPersonnel() {
-        db.collection("users")
-            .whereField("role", isEqualTo: "maintenance")
-            .addSnapshotListener { snapshot, error in
-                if let error = error {
-                    print("Error fetching personnel: \(error.localizedDescription)")
-                    return
-                }
-                
-                personnel = snapshot?.documents.compactMap { document in
-                    document.data()["name"] as? String
-                } ?? []
-            }
-    }
-    
-    private func assignTask() {
-        isLoading = true
-        
-        let issue = showOtherIssue ? otherIssueDescription : selectedIssue
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "HH:mm"
-        let timeString = dateFormatter.string(from: completionTime)
-        
-        let workOrder = WorkOrder(
-            id: Int.random(in: 1000...9999),
-            vehicleNumber: selectedVehicle,
-            issue: issue,
-            status: "To be Done",
-            expectedDelivery: timeString,
-            priority: priorityValue(priority),
-            parts: [],
-            laborCost: nil,
-            issues: [issue]
-        )
-        
-        // Update vehicle status to in maintenance
-        if let vehicle = vehicles.first(where: { $0.licensePlate == selectedVehicle }) {
-            db.collection("vehicles").document(vehicle.id.uuidString).updateData([
-                "status": VehicleStatus.inMaintenance.rawValue
-            ]) { error in
-                if let error = error {
-                    print("Error updating vehicle status: \(error.localizedDescription)")
-                    isLoading = false
-                    alertMessage = "Failed to update vehicle status"
-                    showAlert = true
-                    return
-                }
-                
-                // Create work order
-                db.collection("workOrders").document(String(workOrder.id)).setData([
-                    "id": workOrder.id,
-                    "vehicleNumber": workOrder.vehicleNumber,
-                    "issue": workOrder.issue,
-                    "status": workOrder.status,
-                    "expectedDelivery": workOrder.expectedDelivery,
-                    "priority": workOrder.priority,
-                    "parts": workOrder.parts,
-                    "laborCost": workOrder.laborCost as Any,
-                    "issues": workOrder.issues,
-                    "assignedTo": selectedPersonnel,
-                    "createdAt": FieldValue.serverTimestamp()
-                ]) { error in
-                    isLoading = false
-                    if let error = error {
-                        print("Error creating work order: \(error.localizedDescription)")
-                        alertMessage = "Failed to create work order"
-                        showAlert = true
-                    } else {
-                        alertMessage = "Task assigned successfully"
-                        showAlert = true
-                        // Reset form
-                        selectedVehicle = ""
-                        selectedIssue = ""
-                        showOtherIssue = false
-                        otherIssueDescription = ""
-                        completionDate = Date()
-                        completionTime = Date()
-                        priority = "Medium"
-                        selectedPersonnel = ""
+    var body: some View {
+        NavigationView {
+            List {
+                Section(header: Text("Select Vehicle").font(.title2).bold()) {
+                    ForEach(vehicles, id: \.1) { vehicle in
+                        Button(action: {
+                            selectedVehicle = vehicle.1
+                            dismiss()
+                        }) {
+                            HStack {
+                                Image(systemName: "car.fill")
+                                    .foregroundColor(.blue)
+                                    .frame(width: 24, height: 24)
+                                VStack(alignment: .leading) {
+                                    Text(vehicle.0)
+                                        .font(.headline)
+                                    Text(vehicle.1)
+                                        .font(.subheadline)
+                                        .foregroundColor(.gray)
+                                }
+                                Spacer()
+                            }
+                            .padding(.vertical, 8)
+                        }
+                        .buttonStyle(PlainButtonStyle())
                     }
                 }
             }
+            .listStyle(InsetGroupedListStyle())
         }
     }
+}
+
+struct PersonnelListView: View {
+    @Binding var selectedPersonnel: String
+    @Environment(\.dismiss) var dismiss
     
-    private func priorityValue(_ priority: String) -> Int {
-        switch priority {
-        case "High": return 2
-        case "Medium": return 1
-        case "Low": return 0
-        default: return 1
+    let personnel = [
+        ("John Doe", "ID: 96033893868"),
+        ("Jane Smith", "ID: 7908523797"),
+        ("Mike Johnson", "ID: 8609131313")
+    ]
+    
+    var body: some View {
+        NavigationView {
+            List {
+                Section(header: Text("Select Maintenance Personnel").font(.title2).bold()) {
+                    ForEach(personnel, id: \.1) { person in
+                        Button(action: {
+                            selectedPersonnel = person.0
+                            dismiss()
+                        }) {
+                            HStack {
+                                Image(systemName: "person.fill")
+                                    .foregroundColor(.green) // Changed to green
+                                    .frame(width: 24, height: 24)
+                                VStack(alignment: .leading) {
+                                    Text(person.0)
+                                        .font(.headline)
+                                    Text(person.1)
+                                        .font(.subheadline)
+                                        .foregroundColor(.gray)
+                                }
+                                Spacer()
+                            }
+                            .padding(.vertical, 8)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+            }
+            .listStyle(InsetGroupedListStyle())
         }
     }
 }
