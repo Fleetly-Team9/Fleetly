@@ -2,7 +2,7 @@
 //  RideCard.swift
 //  FleetlyDriver
 //
-//  Created by Sayal Singh on 25/04/25.
+//  Created by Srijon on 25/04/25.
 //
 import SwiftUI
 
