@@ -50,11 +50,10 @@ struct DriverHomePage: View {
     @StateObject private var assignedTripsVM = AssignedTripsViewModel()
     @State private var didStartListener = false
     
-    
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     let hours = (0...12).map { $0 == 0 ? "0hr" : "\($0)hr\($0 == 1 ? "" : "s")" }
     
-    let dropoffLocation = "Kolkata" // Define the drop-off location here
+    let dropoffLocation = "Kolkata"
     let vehicleNumber: String = "KA6A1204"
     
     @State private var region = MKCoordinateRegion(
@@ -62,7 +61,6 @@ struct DriverHomePage: View {
         span: MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03)
     )
     
-
     static let darkGray = Color(red: 68/255, green: 6/255, blue: 52/255)
     static let lightGray = Color(red: 240/255, green: 242/255, blue: 245/255)
     static let highlightYellow = Color(red: 235/255, green: 64/255, blue: 52/255)
@@ -105,14 +103,8 @@ struct DriverHomePage: View {
             case .failure(let error):
                 print("Error fetching worked time: \(error)")
             }
-            
         }
-        
-        
-        
-
     }
-    
     
     private func currentDateString() -> String {
         let formatter = DateFormatter()
@@ -233,7 +225,6 @@ struct DriverHomePage: View {
                                 .frame(width: 684, height: 12)
                                 .padding(.horizontal, 10)
                             
-                            // Moved progressWidth computation here
                             let progressWidth: CGFloat = {
                                 let maxTime: TimeInterval = 12 * 3600
                                 let progress = min(elapsedTime / maxTime, 1.0)
@@ -302,7 +293,7 @@ struct DriverHomePage: View {
                                 }
                             case .failure(let error):
                                 print("Error recording clock event: \(error)")
-                                isClockedIn.toggle() // Revert the toggle on failure
+                                isClockedIn.toggle()
                             }
                         }
                     }) {
@@ -321,187 +312,190 @@ struct DriverHomePage: View {
         .offset(y: -25)
     }
     
-    private var assignedTripSection: some View {
-        
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("Assigned Trips")
-                    .font(.title2.bold())
-                    .foregroundStyle(Color.primary)
-
-                if !assignedTripsVM.assignedTrips.isEmpty {
-                    Text("\(assignedTripsVM.assignedTrips.count)")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(
-                            Capsule()
-                                .fill(Color.accentColor)
+    private var tripsHeader: some View {
+        HStack {
+            Text("Assigned Trips")
+                .font(.title2.bold())
+                .foregroundStyle(Color.primary)
+            
+            if !assignedTripsVM.assignedTrips.isEmpty {
+                Text("\(assignedTripsVM.assignedTrips.count)")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule()
+                            .fill(Color.accentColor)
+                    )
+                    .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+            }
+        }
+    }
+    
+    private func tripCardView(for trip: Trip) -> some View {
+        VStack(spacing: 0) {
+            Map(coordinateRegion: $region)
+                .frame(width: 300, height: 200)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "mappin.circle.fill")
+                            .foregroundStyle(Color.blue)
+                        VStack(alignment: .leading) {
+                            Text("From")
+                                .font(.subheadline)
+                                .foregroundStyle(Color.secondary)
+                            Text(trip.startLocation)
+                                .font(.headline)
+                        }
+                    }
+                    
+                    HStack(spacing: 12) {
+                        Image(systemName: "mappin.circle.fill")
+                            .foregroundStyle(Color.green)
+                        VStack(alignment: .leading) {
+                            Text("To")
+                                .font(.subheadline)
+                                .foregroundStyle(Color.secondary)
+                            Text(trip.endLocation)
+                                .font(.headline)
+                        }
+                    }
+                }
+                
+                Divider()
+                
+                HStack(spacing: 24) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Time")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.secondary)
+                        Text(trip.time)
+                            .font(.headline)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Vehicle Type")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.secondary)
+                        Text(trip.vehicleType)
+                            .font(.headline)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(trip.vehicleType == "Passenger Vehicle" ? "Passengers" : "Load")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.secondary)
+                        Text(trip.vehicleType == "Passenger Vehicle" ?
+                             "\(trip.passengers ?? 0)" :
+                             "\(Int(trip.loadWeight ?? 0)) kg")
+                            .font(.headline)
+                    }
+                }
+                
+                ZStack(alignment: .leading) {
+                    NavigationLink(
+                        destination: PreInspectionView(authVM: authVM, dropoffLocation: trip.endLocation, vehicleNumber: trip.vehicleId, tripID: trip.id, vehicleID: trip.vehicleId),
+                        isActive: $isNavigating,
+                        label: {
+                            LinearGradient(
+                                colors: swipeOffset == 0 ? [Color(.systemGray5), Color(.systemGray5)] : [
+                                    Self.gradientStart,
+                                    swipeOffset >= maxX - 10 || isDragCompleted ? Self.gradientEnd : Self.gradientStart
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                            .frame(height: 55)
+                            .clipShape(Capsule())
+                        }
+                    )
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    HStack(spacing: 0) {
+                        ZStack {
+                            Circle()
+                                .fill(Color(.systemBlue))
+                                .frame(width: 53, height: 53)
+                            Image(systemName: "car.side.fill")
+                                .scaleEffect(x: -1, y: 1)
+                                .foregroundStyle(Color(.systemBackground))
+                        }
+                        .offset(x: swipeOffset)
+                        .gesture(
+                            isDragCompleted ? nil : DragGesture()
+                                .onChanged { value in
+                                    isSwiping = true
+                                    let newOffset = max(value.translation.width, 0)
+                                    swipeOffset = min(newOffset, maxX)
+                                }
+                                .onEnded { _ in
+                                    isSwiping = false
+                                    if swipeOffset >= maxX - 10 {
+                                        currentWorkOrderIndex += 1
+                                        swipeOffset = maxX
+                                        isDragCompleted = true
+                                        isNavigating = true
+                                    } else {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                            swipeOffset = 0
+                                        }
+                                    }
+                                }
                         )
-                        .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+                        
+                        Spacer()
+                        
+                        Text("Slide to get Ready")
+                            .font(.headline)
+                            .foregroundColor(swipeOffset > 0 || isDragCompleted ? .white : Color(.systemBlue))
+                            .padding(.trailing, 16)
+                    }
+                    .padding(.horizontal, 8)
+                }
+                .frame(maxWidth: .infinity)
+                .background(
+                    Capsule()
+                        .fill(Color(.systemGray6))
+                        .overlay(
+                            Capsule()
+                                .stroke(Color(.systemGray4), lineWidth: 1)
+                        )
+                )
+                .padding(.horizontal, 8)
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(colorScheme == .dark ? Color(UIColor.systemGray4) : Color.white)
+                    .shadow(color: colorScheme == .dark ? Color.black.opacity(0.3) : Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
+            )
+        }
+        .frame(width: 300)
+    }
+    
+    private var tripsListView: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                ForEach(assignedTripsVM.assignedTrips) { trip in
+                    tripCardView(for: trip)
                 }
             }
-
-            
+            .padding(.horizontal)
+        }
+    }
+    
+    private var emptyOrLoadingStateView: some View {
+        Group {
             if assignedTripsVM.isLoading {
                 ProgressView()
                     .frame(maxWidth: .infinity)
                     .frame(height: 200)
             } else if !assignedTripsVM.assignedTrips.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ForEach(assignedTripsVM.assignedTrips) { trip in
-                            VStack(spacing: 0) {
-                                // Map View
-                                Map(coordinateRegion: $region)
-                                    .frame(width: 300, height: 200)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                
-                                // Trip Details Card
-                                VStack(alignment: .leading, spacing: 16) {
-                                    // Route Information
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        HStack(spacing: 12) {
-                                            Image(systemName: "mappin.circle.fill")
-                                                .foregroundStyle(Color.blue)
-                                            VStack(alignment: .leading) {
-                                                Text("From")
-                                                    .font(.subheadline)
-                                                    .foregroundStyle(Color.secondary)
-                                                Text(trip.startLocation)
-                                                    .font(.headline)
-                                            }
-                                        }
-                                        
-                                        HStack(spacing: 12) {
-                                            Image(systemName: "mappin.circle.fill")
-                                                .foregroundStyle(Color.green)
-                                            VStack(alignment: .leading) {
-                                                Text("To")
-                                                    .font(.subheadline)
-                                                    .foregroundStyle(Color.secondary)
-                                                Text(trip.endLocation)
-                                                    .font(.headline)
-                                            }
-                                        }
-                                    }
-                                    
-                                    Divider()
-                                    
-                                    // Trip Details
-                                    HStack(spacing: 24) {
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text("Time")
-                                                .font(.subheadline)
-                                                .foregroundStyle(Color.secondary)
-                                            Text(trip.time)
-                                                .font(.headline)
-                                        }
-                                        
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text("Vehicle Type")
-                                                .font(.subheadline)
-                                                .foregroundStyle(Color.secondary)
-                                            Text(trip.vehicleType)
-                                                .font(.headline)
-                                        }
-                                        
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text(trip.vehicleType == "Passenger Vehicle" ? "Passengers" : "Load")
-                                                .font(.subheadline)
-                                                .foregroundStyle(Color.secondary)
-                                            Text(trip.vehicleType == "Passenger Vehicle" ? 
-                                                 "\(trip.passengers ?? 0)" : 
-                                                 "\(Int(trip.loadWeight ?? 0)) kg")
-                                                .font(.headline)
-                                        }
-                                    }
-                                    
-                                    // Get Ready Button
-                                    ZStack(alignment: .leading) {
-                                        NavigationLink(
-                                            destination: PreInspectionView(authVM: authVM, dropoffLocation: trip.endLocation, vehicleNumber: trip.vehicleId),
-                                            isActive: $isNavigating,
-                                            label: {
-                                                LinearGradient(
-                                                    colors: swipeOffset == 0 ? [Color(.systemGray5), Color(.systemGray5)] : [
-                                                        Self.gradientStart,
-                                                        swipeOffset >= maxX - 10 || isDragCompleted ? Self.gradientEnd : Self.gradientStart
-                                                    ],
-                                                    startPoint: .leading,
-                                                    endPoint: .trailing
-                                                )
-                                                .frame(height: 55)
-                                                .clipShape(Capsule())
-                                            }
-                                        )
-                                        .buttonStyle(PlainButtonStyle())
-                                        
-                                        HStack(spacing: 0) {
-                                            ZStack {
-                                                Circle()
-                                                    .fill(Color(.systemBlue))
-                                                    .frame(width: 53, height: 53)
-                                                Image(systemName: "car.side.fill")
-                                                    .scaleEffect(x: -1, y: 1)
-                                                    .foregroundStyle(Color(.systemBackground))
-                                            }
-                                            .offset(x: swipeOffset)
-                                            .gesture(
-                                                isDragCompleted ? nil : DragGesture()
-                                                    .onChanged { value in
-                                                        isSwiping = true
-                                                        let newOffset = max(value.translation.width, 0)
-                                                        swipeOffset = min(newOffset, maxX)
-                                                    }
-                                                    .onEnded { _ in
-                                                        isSwiping = false
-                                                        if swipeOffset >= maxX - 10 {
-                                                            currentWorkOrderIndex += 1
-                                                            swipeOffset = maxX
-                                                            isDragCompleted = true
-                                                            isNavigating = true
-                                                        } else {
-                                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                                                swipeOffset = 0
-                                                            }
-                                                        }
-                                                    }
-                                            )
-                                            
-                                            Spacer()
-                                            
-                                            Text("Slide to get Ready")
-                                                .font(.headline)
-                                                .foregroundColor(swipeOffset > 0 || isDragCompleted ? .white : Color(.systemBlue))
-                                                .padding(.trailing, 16)
-                                        }
-                                        .padding(.horizontal, 8)
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .background(
-                                        Capsule()
-                                            .fill(Color(.systemGray6))
-                                            .overlay(
-                                                Capsule()
-                                                    .stroke(Color(.systemGray4), lineWidth: 1)
-                                            )
-                                    )
-                                    .padding(.horizontal, 8)
-                                }
-                                .padding(16)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .fill(colorScheme == .dark ? Color(UIColor.systemGray4) : Color.white)
-                                        .shadow(color: colorScheme == .dark ? Color.black.opacity(0.3) : Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
-                                )
-                            }
-                            .frame(width: 300)
-                        }
-                    }
-                    .padding(.horizontal)
-                }
+                tripsListView
             } else {
                 VStack(spacing: 12) {
                     Image(systemName: "car.circle")
@@ -514,6 +508,13 @@ struct DriverHomePage: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 200)
             }
+        }
+    }
+    
+    private var assignedTripSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            tripsHeader
+            emptyOrLoadingStateView
         }
         .padding(.horizontal)
     }
@@ -544,14 +545,12 @@ struct DriverHomePage: View {
                     }
                 }
                 .onAppear {
-                    initializeData()  // keep your attendance/time fetch
-
-                                    // ── NEW: start the Firestore listener exactly once ──
-                                    guard !didStartListener,
-                                          let driverId = authVM.user?.id
-                                    else { return }
-                                    assignedTripsVM.startListening(driverId: driverId)
-                                    didStartListener = true
+                    initializeData()
+                    guard !didStartListener,
+                          let driverId = authVM.user?.id
+                    else { return }
+                    assignedTripsVM.startListening(driverId: driverId)
+                    didStartListener = true
                 }
             }
         }
@@ -570,4 +569,3 @@ struct ContentView_Previews: PreviewProvider {
         }
     }
 }
-

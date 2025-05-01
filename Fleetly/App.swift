@@ -5,7 +5,7 @@ import Firebase
 struct FMSApp: App {
     @StateObject private var authVM = AuthViewModel()
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-
+    
     init() { 
         FirebaseApp.configure()
         NotificationManager.shared.requestAuthorization()
@@ -40,7 +40,8 @@ struct FMSApp: App {
                 } else {
                     LoginView(authVM: authVM)
                 }
-            //}
+                //}
+            }
         }
     }
 }

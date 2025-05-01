@@ -34,40 +34,31 @@ struct AttendanceRecord: Codable {
 
 struct InspectionRecord: Codable {
     @DocumentID var id: String? // Will be the vehicleNumber (e.g., "KA1234")
-    let driverId: String
-    let vehicleNumber: String
+    let driverID: String
     let timestamp: Timestamp
-    let tyrePressureRemarks: String
-    let brakeRemarks: String
-    let oilCheck: Bool
-    let hornCheck: Bool
-    let clutchCheck: Bool
-    let airbagsCheck: Bool
-    let physicalDamageCheck: Bool
-    let tyrePressureCheck: Bool
-    let brakesCheck: Bool
-    let indicatorsCheck: Bool
     let overallCheckStatus: String
     let imageURLs: [String]
+    let defects: [String: Bool] // Updated to store booleans
+    let Remarks: [String: String] // New map for remarks
+    let needsMaintence: Bool
+    let photoURL: String
+    let tripID: String
+    let vehicleID: String
     
     enum CodingKeys: String, CodingKey {
-        case driverId
-        case vehicleNumber
+        case driverID = "driverID"
         case timestamp
-        case tyrePressureRemarks
-        case brakeRemarks
-        case oilCheck
-        case hornCheck
-        case clutchCheck
-        case airbagsCheck
-        case physicalDamageCheck
-        case tyrePressureCheck
-        case brakesCheck
-        case indicatorsCheck
         case overallCheckStatus
         case imageURLs
+        case defects
+        case Remarks
+        case needsMaintence
+        case photoURL
+        case tripID
+        case vehicleID
     }
 }
+
 
 class FirebaseManager {
     static let shared = FirebaseManager()
@@ -78,6 +69,14 @@ class FirebaseManager {
     
     private func attendanceCollection(for driverId: String) -> CollectionReference {
         return db.collection("users").document(driverId).collection("attendance")
+    }
+    
+    private func tripsCollection() -> CollectionReference {
+        return db.collection("trips")
+    }
+    
+    private func preinspectionCollection(for tripId: String) -> CollectionReference {
+        return tripsCollection().document(tripId).collection("preinspection")
     }
     
     private func inspectionCollection(for driverId: String) -> CollectionReference {
@@ -261,105 +260,117 @@ class FirebaseManager {
     }
     
     func recordInspection(
-        driverId: String,
-        tyrePressureRemarks: String,
-        brakeRemarks: String,
-        oilCheck: Bool,
-        hornCheck: Bool,
-        clutchCheck: Bool,
-        airbagsCheck: Bool,
-        physicalDamageCheck: Bool,
-        tyrePressureCheck: Bool,
-        brakesCheck: Bool,
-        indicatorsCheck: Bool,
-        overallCheckStatus: String,
-        images: [UIImage],
-        vehicleNumber: String,
-        date: String,
-        completion: @escaping (Result<Void, Error>) -> Void
-    ) {
-        let timestamp = Timestamp(date: Date())
-        
-        uploadImages(images, driverId: driverId, date: date, vehicleNumber: vehicleNumber) { result in
-            switch result {
-            case .success(let imageURLs):
-                let inspectionRecord = InspectionRecord(
-                    id: vehicleNumber,
-                    driverId: driverId,
-                    vehicleNumber: vehicleNumber,
-                    timestamp: timestamp,
-                    tyrePressureRemarks: tyrePressureRemarks,
-                    brakeRemarks: brakeRemarks,
-                    oilCheck: oilCheck,
-                    hornCheck: hornCheck,
-                    clutchCheck: clutchCheck,
-                    airbagsCheck: airbagsCheck,
-                    physicalDamageCheck: physicalDamageCheck,
-                    tyrePressureCheck: tyrePressureCheck,
-                    brakesCheck: brakesCheck,
-                    indicatorsCheck: indicatorsCheck,
-                    overallCheckStatus: overallCheckStatus,
-                    imageURLs: imageURLs
-                )
-                
-                let dateDocRef = self.inspectionCollection(for: driverId).document(date)
-                let vehicleDocRef = dateDocRef.collection(vehicleNumber).document("details")
-                
-                do {
-                    try vehicleDocRef.setData(from: inspectionRecord) { error in
-                        if let error = error {
-                            completion(.failure(error))
-                        } else {
-                            completion(.success(()))
-                        }
+            driverId: String,
+            tyrePressureRemarks: String,
+            brakeRemarks: String,
+            oilCheck: Bool,
+            hornCheck: Bool,
+            clutchCheck: Bool,
+            airbagsCheck: Bool,
+            physicalDamageCheck: Bool,
+            tyrePressureCheck: Bool,
+            brakesCheck: Bool,
+            indicatorsCheck: Bool,
+            overallCheckStatus: String,
+            images: [UIImage],
+            vehicleNumber: String, // Used only as document ID
+            date: String,
+            tripId: String,
+            vehicleID: String,
+            completion: @escaping (Result<Void, Error>) -> Void
+        ) {
+            let timestamp = Timestamp(date: Date())
+            
+            uploadImages(images, driverId: driverId, date: date, vehicleNumber: vehicleNumber) { result in
+                switch result {
+                case .success(let imageURLs):
+                    let photoURL = imageURLs.first ?? ""
+                    
+                    // Consolidate boolean checks into defects map
+                    let defects: [String: Bool] = [
+                        "Oil": oilCheck,
+                        "Horns": hornCheck,
+                        "Clutch": clutchCheck,
+                        "Airbags": airbagsCheck,
+                        "PhysicalDamage": physicalDamageCheck,
+                        "TyrePressure": tyrePressureCheck,
+                        "Brakes": brakesCheck,
+                        "Indicators": indicatorsCheck
+                    ]
+                    
+                    // Create remarks map
+                    let remarks: [String: String] = [
+                        "TyrePressure": tyrePressureRemarks.isEmpty ? "No issues" : tyrePressureRemarks,
+                        "Brakes": brakeRemarks.isEmpty ? "No issues" : brakeRemarks
+                    ]
+                    
+                    // Set needsMaintence based on overallCheckStatus
+                    let needsMaintence: Bool
+                    switch overallCheckStatus {
+                    case "Verified":
+                        needsMaintence = false
+                    case "Ticket raised":
+                        needsMaintence = true
+                    default:
+                        needsMaintence = false // Default to false for unexpected values
                     }
-                } catch {
+                    
+                    let inspectionRecord = InspectionRecord(
+                        id: vehicleNumber, // Used as document ID
+                        driverID: driverId,
+                        timestamp: timestamp,
+                        overallCheckStatus: overallCheckStatus,
+                        imageURLs: imageURLs,
+                        defects: defects,
+                        Remarks: remarks,
+                        needsMaintence: needsMaintence,
+                        photoURL: photoURL,
+                        tripID: tripId,
+                        vehicleID: vehicleID
+                    )
+                    
+                    let preinspectionDocRef = self.preinspectionCollection(for: tripId).document(vehicleNumber)
+                    
+                    do {
+                        try preinspectionDocRef.setData(from: inspectionRecord) { error in
+                            if let error = error {
+                                completion(.failure(error))
+                            } else {
+                                completion(.success(()))
+                            }
+                        }
+                    } catch {
+                        completion(.failure(error))
+                    }
+                    
+                case .failure(let error):
                     completion(.failure(error))
                 }
-                
-            case .failure(let error):
-                completion(.failure(error))
             }
         }
-    }
-    
-    func fetchLatestInspection(driverId: String, completion: @escaping (Result<InspectionRecord?, Error>) -> Void) {
-        inspectionCollection(for: driverId)
-            .order(by: "id", descending: true)
-            .limit(to: 1)
-            .getDocuments { (dateSnapshot, error) in
-                if let error = error {
-                    completion(.failure(error))
-                    return
-                }
-                
-                guard let dateDoc = dateSnapshot?.documents.first else {
-                    completion(.success(nil))
-                    return
-                }
-                
-                let date = dateDoc.documentID
-                
-                let vehicleCollection = self.inspectionCollection(for: driverId).document(date)
-                
-                vehicleCollection.collection("KA1234").document("details")
-                    .getDocument { (vehicleSnapshot, error) in
-                        if let error = error {
-                            completion(.failure(error))
-                            return
-                        }
-                        
-                        do {
-                            if vehicleSnapshot?.exists == true {
-                                let record = try vehicleSnapshot?.data(as: InspectionRecord.self)
-                                completion(.success(record))
-                            } else {
-                                completion(.success(nil))
-                            }
-                        } catch {
-                            completion(.failure(error))
-                        }
+        
+        func fetchLatestInspection(driverId: String, tripId: String, completion: @escaping (Result<InspectionRecord?, Error>) -> Void) {
+            preinspectionCollection(for: tripId)
+                .order(by: "timestamp", descending: true)
+                .limit(to: 1)
+                .getDocuments { (snapshot, error) in
+                    if let error = error {
+                        completion(.failure(error))
+                        return
                     }
-            }
+                    
+                    guard let doc = snapshot?.documents.first else {
+                        completion(.success(nil))
+                        return
+                    }
+                    
+                    do {
+                        let record = try doc.data(as: InspectionRecord.self)
+                        completion(.success(record))
+                    } catch {
+                        completion(.failure(error))
+                    }
+                }
+        }
     }
-}
+
