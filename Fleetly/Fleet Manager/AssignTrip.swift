@@ -746,7 +746,7 @@ struct AssignView: View {
                 }
             }
             .sheet(isPresented: $showVehicleSheet) {
-                VehicleListView(selectedVehicle: $selectedVehicle, vehicles: assignViewModel.vehicles, viewModel: assignViewModel)
+                TaskVehicleListView(selectedVehicle: $selectedVehicle, vehicles: assignViewModel.vehicles, viewModel: assignViewModel)
                     .background(
                         RoundedRectangle(cornerRadius: 30)
                             .fill(Color(.systemBackground))
@@ -869,7 +869,7 @@ struct AssignView: View {
 }
 
 // MARK: - VehicleListView
-struct VehicleListView: View {
+struct TaskVehicleListView: View {
     @Binding var selectedVehicle: Vehicle?
     let vehicles: [Vehicle]
     @ObservedObject var viewModel: AssignTripViewModel
