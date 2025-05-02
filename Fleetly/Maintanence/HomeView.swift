@@ -1,34 +1,157 @@
 import SwiftUI
 import UIKit
+import Firebase
+import FirebaseFirestore
+
+// ViewModel to fetch tasks and inventory from Firestore
+class HomeViewModel: ObservableObject {
+    @Published var workOrders: [WorkOrder] = []
+    @Published var inventoryItems: [InventoryItem] = []
+    @Published var isLoading = false
+    @Published var isInventoryLoading = false
+    @Published var errorMessage: String?
+    @Published var inventoryErrorMessage: String?
+    
+    private let db = Firestore.firestore()
+    private var taskListener: ListenerRegistration?
+    private var inventoryListener: ListenerRegistration?
+    
+    init() {
+        fetchWorkOrders()
+        fetchInventory()
+    }
+    
+    deinit {
+        taskListener?.remove()
+        inventoryListener?.remove()
+    }
+    
+    func fetchWorkOrders() {
+        isLoading = true
+        taskListener = db.collection("maintenance_tasks")
+            .whereField("assignedToId", isEqualTo: "maintenance_user_id") // Replace with actual user ID
+            .whereField("status", in: ["pending", "in_progress"])
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let self = self else { return }
+                self.isLoading = false
+                
+                if let error = error {
+                    self.errorMessage = "Error fetching tasks: \(error.localizedDescription)"
+                    return
+                }
+                
+                guard let documents = snapshot?.documents else {
+                    self.errorMessage = "No tasks found"
+                    return
+                }
+                
+                Task {
+                    var orders: [WorkOrder] = []
+                    for document in documents {
+                        do {
+                            let task = try document.data(as: MaintenanceTask.self)
+                            let vehicleNumber = await self.fetchVehicleNumber(for: task.vehicleId)
+                            let workOrder = self.mapToWorkOrder(task: task, vehicleNumber: vehicleNumber)
+                            orders.append(workOrder)
+                        } catch {
+                            self.errorMessage = "Error decoding task: \(error.localizedDescription)"
+                        }
+                    }
+                    self.workOrders = orders.sorted { $0.priority > $1.priority }
+                }
+            }
+    }
+    
+    func fetchInventory() {
+        isInventoryLoading = true
+        inventoryListener = db.collection("inventory")
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let self = self else { return }
+                self.isInventoryLoading = false
+                
+                if let error = error {
+                    self.inventoryErrorMessage = "Error fetching inventory: \(error.localizedDescription)"
+                    return
+                }
+                
+                guard let documents = snapshot?.documents else {
+                    self.inventoryErrorMessage = "No inventory items found"
+                    return
+                }
+                
+                self.inventoryItems = documents.compactMap { document in
+                    guard let name = document.data()["name"] as? String,
+                          let units = document.data()["units"] as? Int else {
+                        return nil
+                    }
+                    return InventoryItem(id: document.documentID, name: name, units: units)
+                }
+            }
+    }
+    
+    func updateTaskStatus(taskId: String, newStatus: String, completion: @escaping (Bool) -> Void) {
+        let status: MaintenanceTask.TaskStatus
+        switch newStatus.lowercased() {
+        case "in progress":
+            status = .inProgress
+        case "completed":
+            status = .completed
+        case "to be done":
+            status = .pending
+        default:
+            status = .pending
+        }
+        
+        db.collection("maintenance_tasks").document(taskId).updateData(["status": status.rawValue]) { error in
+            if let error = error {
+                self.errorMessage = "Error updating status: \(error.localizedDescription)"
+                completion(false)
+            } else {
+                completion(true)
+            }
+        }
+    }
+    
+    private func fetchVehicleNumber(for vehicleId: String) async -> String {
+        do {
+            let document = try await db.collection("vehicles").document(vehicleId).getDocument()
+            if let data = document.data(),
+               let licensePlate = data["licensePlate"] as? String {
+                return licensePlate
+            }
+        } catch {
+            self.errorMessage = "Error fetching vehicle: \(error.localizedDescription)"
+        }
+        return "Unknown Vehicle"
+    }
+    
+    private func mapToWorkOrder(task: MaintenanceTask, vehicleNumber: String) -> WorkOrder {
+        let priorityValue: Int
+        switch task.priority.lowercased() {
+        case "high": priorityValue = 2
+        case "medium": priorityValue = 1
+        case "low": priorityValue = 0
+        default: priorityValue = 0
+        }
+        
+        return WorkOrder(
+            id: task.id,
+            vehicleNumber: vehicleNumber,
+            issue: task.issue,
+            status: task.status.rawValue.capitalized,
+            expectedDelivery: task.completionDate,
+            priority: priorityValue,
+            issues: [task.issue],
+            parts: [],
+            laborCost: nil
+        )
+    }
+}
 
 struct HomeView: View {
-    @State private var showingUpdateUnits = false
-    @State private var selectedItem: InventoryItem?
-    @State private var unitsToUpdate: Int = 5
-
-    @State private var workOrders: [WorkOrder] = [
-        WorkOrder(id: 23, vehicleNumber: "KA01AB4321", issue: "Brake Pad Replacement", status: "To be Done", expectedDelivery: "6:00 PM", priority: 2, issues: ["Worn brake pads"]),
-        WorkOrder(id: 24, vehicleNumber: "KA02CD9876", issue: "Oil Change", status: "To be Done", expectedDelivery: "7:00 PM", priority: 1, issues: ["Low oil"]),
-        WorkOrder(id: 25, vehicleNumber: "KA03EF5432", issue: "Tire Rotation", status: "To be Done", expectedDelivery: "8:00 PM", priority: 0, issues: ["Uneven wear"])
-    ]
-
+    @StateObject private var viewModel = HomeViewModel()
     @State private var currentWorkOrderIndex: Int = 0
-    @State private var swipeOffset: CGFloat = 0
-    @State private var isSwiping: Bool = false
-
-    @State private var inventoryItems = [
-        InventoryItem(id: 1, name: "Brake Pads", units: 12),
-        InventoryItem(id: 2, name: "Oil Filter", units: 0),
-        InventoryItem(id: 3, name: "Air Filter", units: 17),
-        InventoryItem(id: 4, name: "Spark Plug", units: 20),
-        InventoryItem(id: 5, name: "Battery", units: 6),
-        InventoryItem(id: 6, name: "Clutch Plate", units: 9)
-    ]
-
-    // --- THE FIX: Per-workorder slider state ---
-    @State private var sliderOffsets: [Int: CGFloat] = [:]
-    @State private var sliderAnimations: [Int: Bool] = [:]
-
+    
     var body: some View {
         NavigationView {
             ScrollView {
@@ -56,98 +179,44 @@ struct HomeView: View {
                         .padding(.horizontal, 20)
                     }
                     .frame(maxWidth: .infinity)
-
+                    
                     // Assigned Work
                     VStack(alignment: .leading, spacing: 20) {
                         Text("Assigned Work")
                             .font(.system(.title2, design: .rounded).weight(.semibold))
                             .foregroundColor(.primary)
                             .frame(maxWidth: .infinity, alignment: .leading)
-
-                        if currentWorkOrderIndex < workOrders.count {
-                            let workOrder = workOrders[currentWorkOrderIndex]
+                        
+                        if viewModel.isLoading {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                        } else if let errorMessage = viewModel.errorMessage {
+                            Text(errorMessage)
+                                .font(.system(.title3, design: .rounded).weight(.medium))
+                                .foregroundColor(.red)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.cardBackground)
+                                .cornerRadius(16)
+                                .shadow(color: Color.black.opacity(0.1), radius: 6, x: 0, y: 3)
+                        } else if currentWorkOrderIndex < viewModel.workOrders.count {
                             WorkOrderCard(
-                                workOrder: $workOrders[currentWorkOrderIndex],
+                                workOrder: $viewModel.workOrders[currentWorkOrderIndex],
                                 onStatusChange: { newStatus, workOrderId in
-                                    if let index = workOrders.firstIndex(where: { $0.id == workOrderId }) {
-                                        workOrders[index].status = newStatus
-                                        if newStatus == "Completed" {
-                                            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                                                isSwiping = true
-                                                swipeOffset = -UIScreen.main.bounds.width
-                                            }
-                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                    viewModel.updateTaskStatus(taskId: workOrderId, newStatus: newStatus) { success in
+                                        if success {
+                                            if newStatus == "Completed" {
                                                 withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                                                    if currentWorkOrderIndex < workOrders.count - 1 {
+                                                    if currentWorkOrderIndex < viewModel.workOrders.count - 1 {
                                                         currentWorkOrderIndex += 1
                                                     }
-                                                    swipeOffset = UIScreen.main.bounds.width
-                                                    swipeOffset = 0
-                                                    isSwiping = false
                                                 }
                                             }
-                                        }
-                                    }
-                                },
-                                dragOffset: Binding(
-                                    get: { sliderOffsets[workOrder.id] ?? 0 },
-                                    set: { sliderOffsets[workOrder.id] = $0 }
-                                ),
-                                showAnimation: Binding(
-                                    get: { sliderAnimations[workOrder.id] ?? false },
-                                    set: { sliderAnimations[workOrder.id] = $0 }
-                                )
-                            )
-                            .offset(x: swipeOffset)
-                            .gesture(
-                                DragGesture()
-                                    .onChanged { value in
-                                        if !isSwiping {
-                                            swipeOffset = value.translation.width
-                                        }
-                                    }
-                                    .onEnded { value in
-                                        if !isSwiping && swipeOffset < -50 {
-                                            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                                                isSwiping = true
-                                                workOrders[currentWorkOrderIndex].status = "Completed"
-                                                swipeOffset = -UIScreen.main.bounds.width
-                                            }
-                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                                                    if currentWorkOrderIndex < workOrders.count - 1 {
-                                                        currentWorkOrderIndex += 1
-                                                    }
-                                                    swipeOffset = UIScreen.main.bounds.width
-                                                    swipeOffset = 0
-                                                    isSwiping = false
-                                                }
-                                            }
-                                        } else {
-                                            withAnimation(.spring()) {
-                                                swipeOffset = 0
-                                            }
-                                        }
-                                    }
-                            )
-                            .onChange(of: workOrders[currentWorkOrderIndex].status) { oldValue, newValue in
-                                if newValue == "Completed" && !isSwiping {
-                                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                                        isSwiping = true
-                                        swipeOffset = -UIScreen.main.bounds.width
-                                    }
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                                            if currentWorkOrderIndex < workOrders.count - 1 {
-                                                currentWorkOrderIndex += 1
-                                            }
-                                            swipeOffset = UIScreen.main.bounds.width
-                                            swipeOffset = 0
-                                            isSwiping = false
                                         }
                                     }
                                 }
-                            }
+                            )
                         } else {
                             Text("No Work Orders Left")
                                 .font(.system(.title3, design: .rounded).weight(.medium))
@@ -162,7 +231,7 @@ struct HomeView: View {
                     }
                     .padding(.horizontal, 20)
                     .frame(maxWidth: .infinity)
-
+                    
                     // Inventory
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
@@ -170,32 +239,43 @@ struct HomeView: View {
                                 .font(.system(.title2, design: .rounded).weight(.semibold))
                                 .foregroundColor(.darkGray)
                             Spacer()
-                            NavigationLink("View All", destination: InventoryManagementView(items: $inventoryItems))
+                            NavigationLink("View All", destination: InventoryManagementView()) // Removed 'items' parameter
                                 .font(.system(.subheadline, design: .rounded).weight(.medium))
                                 .foregroundColor(.customBlue)
                         }
                         .padding(.horizontal, 20)
-
-                        HStack(spacing: 16) {
-                            ForEach(inventoryItems.prefix(4)) { item in
-                                InventoryIcon(item: item)
-                                    .background(Color.backgroundGray)
-                                    .cornerRadius(12)
-                                    .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
+                        
+                        if viewModel.isInventoryLoading {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                        } else if let errorMessage = viewModel.inventoryErrorMessage {
+                            Text(errorMessage)
+                                .font(.system(.subheadline, design: .rounded))
+                                .foregroundColor(.red)
+                                .padding(.horizontal, 20)
+                        } else {
+                            HStack(spacing: 16) {
+                                ForEach(viewModel.inventoryItems.prefix(4)) { item in
+                                    InventoryIcon(item: item)
+                                        .background(Color.backgroundGray)
+                                        .cornerRadius(12)
+                                        .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
+                                }
                             }
+                            .frame(width: 353, height: 120)
+                            .padding(.horizontal, 20)
                         }
-                        .frame(width: 353, height: 120)
-                        .padding(.horizontal, 20)
                     }
                     .frame(maxWidth: .infinity)
-
+                    
                     // Alerts
                     VStack(alignment: .leading, spacing: 20) {
                         Text("Alerts")
                             .font(.system(.title2, design: .rounded).weight(.semibold))
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 20)
-
+                        
                         AlertItem(text: "Vehicle 23 needs maintenance")
                         AlertItem(text: "Vehicle 2 is due for service in 3 days")
                     }
@@ -209,20 +289,22 @@ struct HomeView: View {
             .navigationBarHidden(true)
         }
     }
-
+    
     private func getUserName() -> String {
         return "manash"
     }
 }
 
-// --- WorkOrderCard now uses only the passed-in bindings for slider state ---
 struct WorkOrderCard: View {
     @Binding var workOrder: WorkOrder
-    var onStatusChange: (String, Int) -> Void
-
-    @Binding var dragOffset: CGFloat
-    @Binding var showAnimation: Bool
-
+    var onStatusChange: (String, String) -> Void
+    
+    @State private var dragOffset: CGFloat = 0
+    @State private var isDragging: Bool = false
+    
+    private let sliderWidth: CGFloat = UIScreen.main.bounds.width - 60
+    private let swipeThreshold: CGFloat = 120
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Header: ID and Vehicle Number
@@ -235,7 +317,7 @@ struct WorkOrderCard: View {
                     .font(.system(.subheadline, design: .rounded).weight(.medium))
                     .foregroundColor(.gray)
             }
-
+            
             // Body: Issue, Delivery, Issues
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
@@ -256,19 +338,18 @@ struct WorkOrderCard: View {
                             .foregroundColor(.gray)
                     }
                 }
-                let components = !workOrder.issues.isEmpty ? workOrder.issues : workOrder.parts
-                if !components.isEmpty {
+                if !workOrder.issues.isEmpty {
                     HStack {
                         Image(systemName: "exclamationmark.triangle")
                             .foregroundColor(.red)
                             .imageScale(.small)
-                        Text("Issues: \(components.joined(separator: ", "))")
+                        Text("Issues: \(workOrder.issues.joined(separator: ", "))")
                             .font(.system(.caption, design: .rounded))
                             .foregroundColor(.red)
                     }
                 }
             }
-
+            
             // Status and Priority
             HStack(spacing: 10) {
                 // Status Badge
@@ -284,7 +365,7 @@ struct WorkOrderCard: View {
                 .padding(.vertical, 4)
                 .background(statusColor(workOrder.status).opacity(0.15))
                 .cornerRadius(6)
-
+                
                 // Priority Badge
                 HStack(spacing: 4) {
                     Image(systemName: priorityIcon(workOrder.priority))
@@ -299,33 +380,24 @@ struct WorkOrderCard: View {
                 .background(priorityColor(workOrder.priority).opacity(0.15))
                 .cornerRadius(6)
             }
-
+            
             // Action
-            if workOrder.status == "To be Done" {
+            if workOrder.status.lowercased() == "to be done" {
                 VStack(spacing: 8) {
-                    // Label above the slider
                     Text("Slide to Start")
                         .font(.system(.caption, design: .rounded).weight(.medium))
                         .foregroundColor(.gray)
                         .frame(maxWidth: .infinity, alignment: .center)
-
+                    
                     ZStack(alignment: .leading) {
-                        // Slider track
                         RoundedRectangle(cornerRadius: 12)
                             .fill(Color.lightGray)
                             .frame(height: 48)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                            )
-
-                        // Gradient fill
+                        
                         RoundedRectangle(cornerRadius: 12)
                             .fill(LinearGradient(gradient: Gradient(colors: [Color.gradientStart, Color.gradientEnd]), startPoint: .leading, endPoint: .trailing))
-                            .frame(width: min(max(dragOffset, 0), UIScreen.main.bounds.width - 60), height: 48)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                        // Draggable handle
+                            .frame(width: max(0, min(dragOffset, sliderWidth)), height: 48)
+                        
                         ZStack {
                             Circle()
                                 .fill(Color.white)
@@ -335,50 +407,44 @@ struct WorkOrderCard: View {
                                 .resizable()
                                 .scaledToFit()
                                 .frame(width: 24, height: 24)
-                                .foregroundColor(dragOffset >= 120 ? .todayGreen : .darkGray)
+                                .foregroundColor(dragOffset >= swipeThreshold ? .todayGreen : .darkGray)
                         }
                         .offset(x: dragOffset)
                         .gesture(
                             DragGesture()
                                 .onChanged { value in
-                                    withAnimation(.spring(response: 0.1, dampingFraction: 0.7)) {
-                                        dragOffset = min(max(value.translation.width, 0), UIScreen.main.bounds.width - 60)
-                                    }
-                                    if dragOffset >= 120 {
-                                        showAnimation = true
+                                    isDragging = true
+                                    dragOffset = max(0, min(value.translation.width, sliderWidth))
+                                    if dragOffset >= swipeThreshold {
                                         let impact = UIImpactFeedbackGenerator(style: .medium)
                                         impact.impactOccurred()
-                                    } else {
-                                        showAnimation = false
                                     }
                                 }
-                                .onEnded { value in
-                                    if dragOffset >= 120 {
-                                        workOrder.status = "In Progress"
-                                        onStatusChange("In Progress", workOrder.id)
-                                        DispatchQueue.main.async {
-                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                                                dragOffset = 0
-                                                showAnimation = false
-                                            }
+                                .onEnded { _ in
+                                    if dragOffset >= swipeThreshold {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                                            workOrder.status = "In Progress"
+                                            onStatusChange("In Progress", workOrder.id)
+                                            dragOffset = 0
+                                            isDragging = false
                                         }
                                     } else {
                                         withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
                                             dragOffset = 0
-                                            showAnimation = false
+                                            isDragging = false
                                         }
                                     }
                                 }
                         )
-                        .scaleEffect(showAnimation ? 1.2 : 1.0)
-                        .animation(.easeInOut(duration: 0.2), value: showAnimation)
                     }
                     .frame(height: 48)
                 }
-            } else if workOrder.status == "In Progress" {
+            } else if workOrder.status.lowercased() == "in progress" {
                 Button(action: {
-                    workOrder.status = "Completed"
-                    onStatusChange("Completed", workOrder.id)
+                    withAnimation {
+                        workOrder.status = "Completed"
+                        onStatusChange("Completed", workOrder.id)
+                    }
                 }) {
                     HStack {
                         Image(systemName: "checkmark.circle.fill")
@@ -393,7 +459,7 @@ struct WorkOrderCard: View {
                     .cornerRadius(10)
                 }
                 .buttonStyle(PlainButtonStyle())
-            } else if workOrder.status == "Completed" {
+            } else if workOrder.status.lowercased() == "completed" {
                 HStack {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.todayGreen)
@@ -413,8 +479,12 @@ struct WorkOrderCard: View {
         .cornerRadius(16)
         .shadow(color: Color.black.opacity(0.1), radius: 6, x: 0, y: 3)
         .id(workOrder.id)
+        .onAppear {
+            dragOffset = 0
+            isDragging = false
+        }
     }
-
+    
     private func priorityText(_ priority: Int) -> String {
         switch priority {
         case 0: return "Low"
@@ -423,7 +493,7 @@ struct WorkOrderCard: View {
         default: return "Low"
         }
     }
-
+    
     private func priorityColor(_ priority: Int) -> Color {
         switch priority {
         case 0: return .todayGreen
@@ -432,7 +502,7 @@ struct WorkOrderCard: View {
         default: return .todayGreen
         }
     }
-
+    
     private func statusColor(_ status: String) -> Color {
         switch status.lowercased() {
         case "completed": return .todayGreen
@@ -441,7 +511,7 @@ struct WorkOrderCard: View {
         default: return .gray
         }
     }
-
+    
     private func statusIcon(_ status: String) -> String {
         switch status.lowercased() {
         case "completed": return "checkmark.circle.fill"
@@ -450,7 +520,7 @@ struct WorkOrderCard: View {
         default: return "questionmark.circle"
         }
     }
-
+    
     private func priorityIcon(_ priority: Int) -> String {
         switch priority {
         case 0: return "arrow.down.circle"
@@ -466,4 +536,3 @@ struct HomeView_Previews: PreviewProvider {
         HomeView()
     }
 }
-
