@@ -1,7 +1,6 @@
 import Foundation
 import SwiftUI
 import PhotosUI
-import FirebaseFirestore
 
 struct PreInspectionView: View {
     @Environment(\.presentationMode) var presentationMode
@@ -18,18 +17,12 @@ struct PreInspectionView: View {
     @State private var selectedImages: [UIImage] = []
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var overallCheckStatus: String = "Ticket raised"
-    @State private var navigateToMapView = false
-    @State private var fetchedTrip: Trip?
-    @State private var errorMessage: String?
-    
     @ObservedObject var authVM: AuthViewModel
     let dropoffLocation: String
     let vehicleNumber: String
-    let tripID: String
-    let vehicleID: String
-    let vehicleModel: String
+    let tripID: String // New parameter
+    let vehicleID: String // New parameter
     
-    private let db = Firestore.firestore()
     private let overallCheckOptions = ["Ticket raised", "Verified"]
     
     private var currentDateString: String {
@@ -52,26 +45,8 @@ struct PreInspectionView: View {
         return formatter.string(from: Date())
     }
     
-    private func fetchTrip(completion: @escaping (Result<Trip, Error>) -> Void) {
-        db.collection("trips").document(tripID).getDocument { document, error in
-            if let error = error {
-                completion(.failure(error))
-                return
-            }
-            guard let document = document, document.exists else {
-                completion(.failure(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Trip not found"])))
-                return
-            }
-            if let trip = Trip.from(document: document) {
-                completion(.success(trip))
-            } else {
-                completion(.failure(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to parse trip"])))
-            }
-        }
-    }
-    
     var body: some View {
-        //NavigationView {
+        NavigationView {
             VStack(spacing: 0) {
                 Form {
                     Section(header: Text("Trip Details")) {
@@ -93,12 +68,12 @@ struct PreInspectionView: View {
                         HStack {
                             Text("Pickup Location")
                             Spacer()
-                            Text(fetchedTrip?.startLocation ?? "Loading...")
+                            Text("Chennai")
                         }
                         HStack {
                             Text("Dropoff Location")
                             Spacer()
-                            Text(fetchedTrip?.endLocation ?? dropoffLocation)
+                            Text(dropoffLocation)
                         }
                     }
                     
@@ -142,8 +117,8 @@ struct PreInspectionView: View {
                                     .foregroundColor(.gray)
                                 
                                 TextField("Examples: All tyres at 35 PSI, Front-left slightly low, No visible damage",
-                                          text: $tyrePressureRemarks,
-                                          axis: .vertical)
+                                         text: $tyrePressureRemarks,
+                                         axis: .vertical)
                                 .lineLimit(2...4)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
                                 .font(.caption)
@@ -151,7 +126,7 @@ struct PreInspectionView: View {
                         }
                         .padding(.vertical, 8)
                     }
-                    
+
                     Section {
                         VStack(alignment: .leading, spacing: 8) {
                             Toggle(isOn: $brakesCheck) {
@@ -165,8 +140,8 @@ struct PreInspectionView: View {
                                     .foregroundColor(.gray)
                                 
                                 TextField("Examples: Brake pads 50% worn, Fluid level normal, No unusual noises",
-                                          text: $brakeRemarks,
-                                          axis: .vertical)
+                                         text: $brakeRemarks,
+                                         axis: .vertical)
                                 .lineLimit(2...4)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
                                 .font(.caption)
@@ -247,136 +222,75 @@ struct PreInspectionView: View {
                     let date = currentDateForFirestore
                     
                     FirebaseManager.shared.recordInspection(
-                        driverId: driverId,
-                        tyrePressureRemarks: tyrePressureRemarks,
-                        brakeRemarks: brakeRemarks,
-                        oilCheck: oilCheck,
-                        hornCheck: hornCheck,
-                        clutchCheck: clutchCheck,
-                        airbagsCheck: airbagsCheck,
-                        physicalDamageCheck: physicalDamageCheck,
-                        tyrePressureCheck: tyrePressureCheck,
-                        brakesCheck: brakesCheck,
-                        indicatorsCheck: indicatorsCheck,
-                        overallCheckStatus: overallCheckStatus,
-                        images: selectedImages,
-                        vehicleNumber: vehicleNumber,
-                        date: date,
-                        tripId: tripID,
-                        vehicleID: vehicleID,
-                        completion: { result in
-                            switch result {
-                            case .success:
-                                print("Inspection recorded successfully")
-                                fetchTrip { fetchResult in
-                                    switch fetchResult {
-                                    case .success(let trip):
-                                        self.fetchedTrip = trip
-                                        DispatchQueue.main.async {
-                                            self.navigateToMapView = true
+                                            driverId: driverId,
+                                            tyrePressureRemarks: tyrePressureRemarks,
+                                            brakeRemarks: brakeRemarks,
+                                            oilCheck: oilCheck,
+                                            hornCheck: hornCheck,
+                                            clutchCheck: clutchCheck,
+                                            airbagsCheck: airbagsCheck,
+                                            physicalDamageCheck: physicalDamageCheck,
+                                            tyrePressureCheck: tyrePressureCheck,
+                                            brakesCheck: brakesCheck,
+                                            indicatorsCheck: indicatorsCheck,
+                                            overallCheckStatus: overallCheckStatus,
+                                            images: selectedImages,
+                                            vehicleNumber: vehicleNumber,
+                                            date: date,
+                                            tripId: tripID, // Pass the tripID
+                                            vehicleID: vehicleID, // Pass the vehicleID
+                                            completion: { result in
+                                                switch result {
+                                                case .success:
+                                                    print("Inspection recorded successfully")
+                                                case .failure(let error):
+                                                    print("Error recording inspection: \(error)")
+                                                }
+                                            }
+                                        )
+                                    }) {
+                                        Text("Ready for trip")
+                                            .font(.system(size: 18, weight: .semibold, design: .default))
+                                            .foregroundStyle(Color.white)
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 10)
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .tint(.blue)
+                                    .padding(.horizontal)
+                                    .padding(.top, 10)
+                                    .disabled(selectedImages.count != 4)
+                                }
+                                .navigationTitle(Text("Pre Inspection"))
+                                .toolbar {
+                                    ToolbarItem(placement: .navigationBarLeading) {
+                                        Button(action: {
+                                            presentationMode.wrappedValue.dismiss()
+                                        }) {
+                                            HStack {
+                                                Image(systemName: "chevron.left")
+                                                Text("Back")
+                                            }
                                         }
-                                    case .failure(let error):
-                                        self.errorMessage = "Failed to fetch trip: \(error.localizedDescription)"
-                                        print(self.errorMessage ?? "Unknown error")
                                     }
                                 }
-                            case .failure(let error):
-                                self.errorMessage = "Error recording inspection: \(error.localizedDescription)"
-                                print(self.errorMessage ?? "Unknown error")
                             }
                         }
-                    )
-                }) {
-                    Text("Ready for trip")
-                        .font(.system(size: 18, weight: .semibold, design: .default))
-                        .foregroundStyle(Color.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.blue)
-                .padding(.horizontal)
-                .padding(.top, 10)
-                .disabled(selectedImages.count != 4)
-            }
-            .navigationTitle(Text("Pre Inspection"))
-            /* .toolbar {
-             ToolbarItem(placement: .navigationBarLeading) {
-             Button(action: {
-             presentationMode.wrappedValue.dismiss()
-             }) {
-             HStack {
-             Image(systemName: "chevron.left")
-             Text("Back")
-             }
-             }
-             }*/
-        //}
-        .alert(isPresented: Binding<Bool>(
-            get: { errorMessage != nil },
-            set: { if !$0 { errorMessage = nil } }
-        )) {
-            Alert(
-                title: Text("Error"),
-                message: Text(errorMessage ?? "Unknown error"),
-                dismissButton: .default(Text("OK"))
-            )
-        }
-        .onAppear {
-            fetchTrip { result in
-                switch result {
-                case .success(let trip):
-                    self.fetchedTrip = trip
-                case .failure(let error):
-                    self.errorMessage = "Failed to fetch trip: \(error.localizedDescription)"
-                    print(self.errorMessage ?? "Unknown error")
-                }
-            }
-        }
-        .background(
-            NavigationLink(
-                destination: NavigationMapView(
-                    trip: fetchedTrip ?? Trip(
-                        id: tripID,
-                        driverId: authVM.user?.id ?? "",
-                        vehicleId: vehicleID,
-                        startLocation: "Unknown",
-                        endLocation: dropoffLocation,
-                        date: currentDateForFirestore,
-                        time: currentTimeString,
-                        startTime: Date(),
-                        endTime: nil,
-                        status: .assigned,
-                        vehicleType: "Unknown",
-                        passengers: nil,
-                        loadWeight: nil
-                    ),
-                    vehicleID: vehicleID,
-                    vehicleNumber: vehicleNumber,
-                    vehicleModel: vehicleModel,
-                    authVM:authVM
-                ),
-                isActive: $navigateToMapView
-            ) {
-                EmptyView()
-            }
-        )
-    }
-}
+                    }
 
+                    struct CheckboxToggleStyle: ToggleStyle {
+                        func makeBody(configuration: Configuration) -> some View {
+                            HStack {
+                                configuration.label
+                                Spacer()
+                                Image(systemName: configuration.isOn ? "checkmark.circle.fill" : "circle")
+                                    .resizable()
+                                    .frame(width: 20, height: 20)
+                                    .foregroundColor(configuration.isOn ? .green : .gray)
+                                    .onTapGesture {
+                                        configuration.isOn.toggle()
+                                    }
+                            }
+                        }
+                    }
 
-struct CheckboxToggleStyle: ToggleStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        HStack {
-            configuration.label
-            Spacer()
-            Image(systemName: configuration.isOn ? "checkmark.circle.fill" : "circle")
-                .resizable()
-                .frame(width: 20, height: 20)
-                .foregroundColor(configuration.isOn ? .green : .gray)
-                .onTapGesture {
-                    configuration.isOn.toggle()
-                }
-        }
-    }
-}
