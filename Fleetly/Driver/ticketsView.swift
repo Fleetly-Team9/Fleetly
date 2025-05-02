@@ -1,10 +1,3 @@
-//
-//  ticketsView.swift
-//  Fleetly
-//
-//  Created by admin40 on 02/05/25.
-//
-
 import SwiftUI
 
 // MARK: - Ticket Model
@@ -23,6 +16,7 @@ struct TicketsView: View {
     @StateObject private var ticketManager = TicketManager()
     @State private var showAddTicket = false
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.dynamicTypeSize) var dynamicTypeSize
 
     var body: some View {
         NavigationStack {
@@ -31,37 +25,51 @@ struct TicketsView: View {
 
                 if ticketManager.tickets.isEmpty {
                     // Empty State View
-                    VStack(spacing: 24) {
+                    VStack {
                         Spacer()
-
-                        VStack(spacing: 24) {
-                            Image(systemName: "exclamationmark.bubble.fill")
-                                .font(.system(size: 70, weight: .bold))
-                                .foregroundStyle(.blue)
+                        
+                        VStack(spacing: 20) {
+                            Image(systemName: "ticket.fill")
+                                .font(.system(size: 60, weight: .medium))
+                                .foregroundStyle(LinearGradient(
+                                    colors: [.blue, .purple],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ))
                                 .scaleEffect(1.0)
-                                .animation(Animation.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: true)
+                                .animation(
+                                    Animation.easeInOut(duration: 2.0)
+                                        .repeatForever(autoreverses: true),
+                                    value: UUID()
+                                )
+                                .accessibilityLabel("Ticket icon")
 
-                            Text("No Tickets Yet!")
-                                .font(.system(.title2, design: .rounded).weight(.bold))
+                            Text("No Tickets Available")
+                                .font(.system(.title, design: .rounded, weight: .bold))
+                                .foregroundStyle(.primary)
                                 .multilineTextAlignment(.center)
+                                .accessibilityAddTraits(.isHeader)
 
-                            Text("Facing an issue? Raise a ticket and we'll help you out.")
-                                .font(.system(.body, design: .rounded))
+                            Text("Raise a ticket to report an issue, and we'll assist you promptly.")
+                                .font(.system(.subheadline, design: .rounded))
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
-                                .padding(.horizontal, 40)
+                                .padding(.horizontal, 32)
+                                .accessibilityLabel("Raise a ticket to report an issue")
                         }
-                        .padding(36)
-                        .frame(maxWidth: .infinity)
+                        .padding(24)
+                        .frame(maxWidth: 400)
                         .background(
-                            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
                                 .fill(colorScheme == .dark ? Color(.systemGray6) : .white)
-                                .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
+                                .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
                         )
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, 16)
+                        .dynamicTypeSize(...DynamicTypeSize.xxxLarge) // Support dynamic type
 
                         Spacer()
                     }
+                    .accessibilityElement(children: .combine)
                 } else {
                     // List of Tickets
                     ScrollView {
@@ -102,6 +110,8 @@ struct TicketsView: View {
                         .padding(.horizontal)
                         .padding(.bottom, 10)
                     }
+                    .accessibilityLabel("Raise a new ticket")
+                    .accessibilityHint("Opens a form to create a new ticket")
                 }
             }
             .navigationTitle("My Tickets")
