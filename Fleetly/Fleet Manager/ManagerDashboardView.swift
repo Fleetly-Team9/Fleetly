@@ -94,12 +94,14 @@ struct DashboardHomeView: View {
                             value: "\(dashboardVM.maintenanceVehicles)", // Dynamic value
                             color: .orange
                         )
-                        StatCardGridView(
-                            icon: "exclamationmark.triangle.fill",
-                            title: "Alerts",
-                            value: "0", // Still hardcoded, can be made dynamic later
-                            color: .red
-                        )
+                        NavigationLink(destination:TicketListView()){
+                            StatCardGridView(
+                                icon: "ticket.fill",
+                                title: "Tickets",
+                                value: "0", // Still hardcoded, can be made dynamic later
+                                color: .red
+                            )
+                        }
                     }
                     .padding(.horizontal)
 
