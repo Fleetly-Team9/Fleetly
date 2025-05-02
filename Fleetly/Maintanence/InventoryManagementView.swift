@@ -1,134 +1,150 @@
 import SwiftUI
-import Firebase
-import FirebaseFirestore
 
 struct InventoryManagementView: View {
-    @StateObject private var viewModel = InventoryViewModel()
-
+    @Binding var items: [InventoryItem]
+    @State private var selectedItemIndex: Int?
+    @State private var isSheetPresented = false
+    
     var body: some View {
-        NavigationView {
-            VStack(spacing: 0) {
-                if viewModel.isLoading {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                } else if let errorMessage = viewModel.errorMessage {
-                    Text(errorMessage)
-                        .font(.system(.body, design: .rounded))
-                        .foregroundColor(.red)
-                        .padding()
-                } else {
-                    List {
-                        ForEach(viewModel.inventoryItems.indices, id: \.self) { index in
-                            let item = viewModel.inventoryItems[index]
-                            HStack {
-                                VStack(alignment: .leading, spacing: 5) {
-                                    Text(item.name)
-                                        .font(.system(.headline, design: .rounded))
-                                        .foregroundColor(.primary)
-                                    Text("Units: \(item.units)")
-                                        .font(.system(.subheadline, design: .rounded))
-                                        .foregroundColor(item.units > 0 ? .gray : .red)
-                                }
-                                Spacer()
-                                HStack(spacing: 15) {
-                                    Button(action: {
-                                        viewModel.decrementUnits(for: item.id)
-                                    }) {
-                                        Image(systemName: "minus.circle")
-                                            .foregroundColor(.red)
-                                            .font(.system(size: 20))
-                                    }
-                                    Button(action: {
-                                        viewModel.incrementUnits(for: item.id)
-                                    }) {
-                                        Image(systemName: "plus.circle")
-                                            .foregroundColor(.green)
-                                            .font(.system(size: 20))
-                                    }
-                                }
-                            }
-                            .padding(.vertical, 8)
+        ZStack {
+            Color.white.ignoresSafeArea()
+            
+            VStack(spacing: 16) {
+                Text("Inventory Management")
+                    .font(.system(.title2, design: .rounded).weight(.semibold))
+                    .foregroundColor(Color(hex: "444444"))
+                    .padding(.top, 20)
+                
+                ScrollView {
+                    VStack(spacing: 12) {
+                        ForEach(items.indices, id: \.self) { index in
+                            InventoryRow(item: items[index], onUpdate: {
+                                selectedItemIndex = index
+                                isSheetPresented = true
+                            })
+                            .background(Color(hex: "D1D5DB"))
+                            .cornerRadius(16)
+                            .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
                         }
                     }
-                    .listStyle(InsetGroupedListStyle())
+                    .padding(.top)
                 }
+                
+                Spacer()
             }
-            .background(Color(hex: "F3F3F3").ignoresSafeArea())
-            .navigationTitle("Inventory Management")
-            .navigationBarTitleDisplayMode(.inline)
+            
+            if isSheetPresented, let index = selectedItemIndex {
+                Color.black.opacity(0.25).ignoresSafeArea()
+                    .onTapGesture {
+                        isSheetPresented = false
+                    }
+                
+                UpdateSheet(item: $items[index]) {
+                    isSheetPresented = false
+                }
+                .frame(width: 250, height: 200)
+                .background(Color(hex: "D1D5DB"))
+                .cornerRadius(20)
+                .shadow(radius: 10)
+            }
         }
+        .navigationTitle("Inventory")
     }
 }
 
-class InventoryViewModel: ObservableObject {
-    @Published var inventoryItems: [InventoryItem] = []
-    @Published var isLoading = false
-    @Published var errorMessage: String?
+struct UpdateSheet: View {
+    @Binding var item: InventoryItem
+    var onClose: () -> Void
+    @State private var minusTapped = false
+    @State private var plusTapped = false
+    @State private var cancelTapped = false
+    @State private var updateTapped = false
     
-    private let db = Firestore.firestore()
-    private var listener: ListenerRegistration?
-    
-    init() {
-        fetchInventory()
-    }
-    
-    deinit {
-        listener?.remove()
-    }
-    
-    func fetchInventory() {
-        isLoading = true
-        listener = db.collection("inventory")
-            .addSnapshotListener { [weak self] snapshot, error in
-                guard let self = self else { return }
-                self.isLoading = false
-                
-                if let error = error {
-                    self.errorMessage = "Error fetching inventory: \(error.localizedDescription)"
-                    return
-                }
-                
-                guard let documents = snapshot?.documents else {
-                    self.errorMessage = "No inventory items found"
-                    return
-                }
-                
-                self.inventoryItems = documents.compactMap { document in
-                    guard let name = document.data()["name"] as? String,
-                          let units = document.data()["units"] as? Int else {
-                        return nil
+    var body: some View {
+        VStack(spacing: 10) {
+            Text("Update Units")
+                .font(.system(.headline, design: .rounded).weight(.semibold))
+                .foregroundColor(Color(hex: "444444"))
+            Text(item.name)
+                .font(.system(.subheadline, design: .rounded))
+                .foregroundColor(Color(hex: "444444").opacity(0.6))
+            
+            HStack(spacing: 30) {
+                Button {
+                    if item.units > 0 {
+                        withAnimation(.spring()) {
+                            minusTapped.toggle()
+                            item.units -= 1
+                        }
                     }
-                    return InventoryItem(id: document.documentID, name: name, units: units)
+                } label: {
+                    Circle()
+                        .fill(Color.gray.opacity(0.2))
+                        .frame(width: 36, height: 36)
+                        .overlay(Image(systemName: "minus").foregroundColor(Color(hex: "444444")))
                 }
-            }
-    }
-    
-    func incrementUnits(for itemId: String) {
-        if let index = inventoryItems.firstIndex(where: { $0.id == itemId }) {
-            let newUnits = inventoryItems[index].units + 1
-            db.collection("inventory").document(itemId).updateData(["units": newUnits]) { error in
-                if let error = error {
-                    self.errorMessage = "Error updating units: \(error.localizedDescription)"
+                .scaleEffect(minusTapped ? 1.1 : 1.0)
+                .accessibilityLabel("Decrease units")
+                
+                Text("\(item.units)")
+                    .font(.system(.title2, design: .rounded).weight(.medium))
+                    .foregroundColor(Color(hex: "444444"))
+                
+                Button {
+                    withAnimation(.spring()) {
+                        plusTapped.toggle()
+                        item.units += 1
+                    }
+                } label: {
+                    Circle()
+                        .fill(Color.blue.opacity(0.2))
+                        .frame(width: 36, height: 36)
+                        .overlay(Image(systemName: "plus").foregroundColor(.blue))
                 }
+                .scaleEffect(plusTapped ? 1.1 : 1.0)
+                .accessibilityLabel("Increase units")
             }
-        }
-    }
-    
-    func decrementUnits(for itemId: String) {
-        if let index = inventoryItems.firstIndex(where: { $0.id == itemId }) {
-            let newUnits = max(0, inventoryItems[index].units - 1)
-            db.collection("inventory").document(itemId).updateData(["units": newUnits]) { error in
-                if let error = error {
-                    self.errorMessage = "Error updating units: \(error.localizedDescription)"
+            
+            HStack(spacing: 20) {
+                Button("Cancel") {
+                    withAnimation(.spring()) {
+                        cancelTapped.toggle()
+                        onClose()
+                    }
                 }
+                .frame(width: 100, height: 36)
+                .background(Color.gray.opacity(0.2))
+                .foregroundColor(.blue)
+                .cornerRadius(8)
+                .scaleEffect(cancelTapped ? 1.05 : 1.0)
+                .accessibilityLabel("Cancel update")
+                
+                Button("Update") {
+                    withAnimation(.spring()) {
+                        updateTapped.toggle()
+                        onClose()
+                    }
+                }
+                .frame(width: 100, height: 36)
+                .background(Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(8)
+                .scaleEffect(updateTapped ? 1.05 : 1.0)
+                .accessibilityLabel("Confirm update")
             }
+            .padding(.top, 10)
         }
     }
 }
 
 struct InventoryManagementView_Previews: PreviewProvider {
     static var previews: some View {
-        InventoryManagementView()
+        InventoryManagementView(
+            items: .constant([
+                InventoryItem(id: 1, name: "Brake Pads", units: 12),
+                InventoryItem(id: 2, name: "Oil Filter", units: 10)
+            ])
+        )
     }
 }
+

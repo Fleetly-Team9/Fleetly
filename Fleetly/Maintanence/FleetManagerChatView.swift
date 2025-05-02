@@ -60,3 +60,4 @@ struct FleetManagerChatView: View {
         }
     }
 }
+

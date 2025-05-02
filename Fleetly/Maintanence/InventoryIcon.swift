@@ -209,3 +209,4 @@ struct InventoryRow: View {
         }
     }
 }
+

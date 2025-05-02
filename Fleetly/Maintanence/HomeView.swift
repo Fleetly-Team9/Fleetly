@@ -3,32 +3,26 @@ import UIKit
 import Firebase
 import FirebaseFirestore
 
-// ViewModel to fetch tasks and inventory from Firestore
+// ViewModel to fetch tasks from Firestore
 class HomeViewModel: ObservableObject {
     @Published var workOrders: [WorkOrder] = []
-    @Published var inventoryItems: [InventoryItem] = []
     @Published var isLoading = false
-    @Published var isInventoryLoading = false
     @Published var errorMessage: String?
-    @Published var inventoryErrorMessage: String?
     
     private let db = Firestore.firestore()
-    private var taskListener: ListenerRegistration?
-    private var inventoryListener: ListenerRegistration?
+    private var listener: ListenerRegistration?
     
     init() {
         fetchWorkOrders()
-        fetchInventory()
     }
     
     deinit {
-        taskListener?.remove()
-        inventoryListener?.remove()
+        listener?.remove()
     }
     
     func fetchWorkOrders() {
         isLoading = true
-        taskListener = db.collection("maintenance_tasks")
+        listener = db.collection("maintenance_tasks")
             .whereField("assignedToId", isEqualTo: "maintenance_user_id") // Replace with actual user ID
             .whereField("status", in: ["pending", "in_progress"])
             .addSnapshotListener { [weak self] snapshot, error in
@@ -58,33 +52,6 @@ class HomeViewModel: ObservableObject {
                         }
                     }
                     self.workOrders = orders.sorted { $0.priority > $1.priority }
-                }
-            }
-    }
-    
-    func fetchInventory() {
-        isInventoryLoading = true
-        inventoryListener = db.collection("inventory")
-            .addSnapshotListener { [weak self] snapshot, error in
-                guard let self = self else { return }
-                self.isInventoryLoading = false
-                
-                if let error = error {
-                    self.inventoryErrorMessage = "Error fetching inventory: \(error.localizedDescription)"
-                    return
-                }
-                
-                guard let documents = snapshot?.documents else {
-                    self.inventoryErrorMessage = "No inventory items found"
-                    return
-                }
-                
-                self.inventoryItems = documents.compactMap { document in
-                    guard let name = document.data()["name"] as? String,
-                          let units = document.data()["units"] as? Int else {
-                        return nil
-                    }
-                    return InventoryItem(id: document.documentID, name: name, units: units)
                 }
             }
     }
@@ -151,6 +118,15 @@ class HomeViewModel: ObservableObject {
 struct HomeView: View {
     @StateObject private var viewModel = HomeViewModel()
     @State private var currentWorkOrderIndex: Int = 0
+    
+    @State private var inventoryItems = [
+        InventoryItem(id: 1, name: "Brake Pads", units: 12),
+        InventoryItem(id: 2, name: "Oil Filter", units: 0),
+        InventoryItem(id: 3, name: "Air Filter", units: 17),
+        InventoryItem(id: 4, name: "Spark Plug", units: 20),
+        InventoryItem(id: 5, name: "Battery", units: 6),
+        InventoryItem(id: 6, name: "Clutch Plate", units: 9)
+    ]
     
     var body: some View {
         NavigationView {
@@ -239,33 +215,22 @@ struct HomeView: View {
                                 .font(.system(.title2, design: .rounded).weight(.semibold))
                                 .foregroundColor(.darkGray)
                             Spacer()
-                            NavigationLink("View All", destination: InventoryManagementView()) // Removed 'items' parameter
+                            NavigationLink("View All", destination: InventoryManagementView(items: $inventoryItems))
                                 .font(.system(.subheadline, design: .rounded).weight(.medium))
                                 .foregroundColor(.customBlue)
                         }
                         .padding(.horizontal, 20)
                         
-                        if viewModel.isInventoryLoading {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                        } else if let errorMessage = viewModel.inventoryErrorMessage {
-                            Text(errorMessage)
-                                .font(.system(.subheadline, design: .rounded))
-                                .foregroundColor(.red)
-                                .padding(.horizontal, 20)
-                        } else {
-                            HStack(spacing: 16) {
-                                ForEach(viewModel.inventoryItems.prefix(4)) { item in
-                                    InventoryIcon(item: item)
-                                        .background(Color.backgroundGray)
-                                        .cornerRadius(12)
-                                        .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
-                                }
+                        HStack(spacing: 16) {
+                            ForEach(inventoryItems.prefix(4)) { item in
+                                InventoryIcon(item: item)
+                                    .background(Color.backgroundGray)
+                                    .cornerRadius(12)
+                                    .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
                             }
-                            .frame(width: 353, height: 120)
-                            .padding(.horizontal, 20)
                         }
+                        .frame(width: 353, height: 120)
+                        .padding(.horizontal, 20)
                     }
                     .frame(maxWidth: .infinity)
                     
