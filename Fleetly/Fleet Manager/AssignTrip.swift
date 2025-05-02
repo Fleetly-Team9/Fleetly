@@ -4,28 +4,28 @@ import Firebase
 import FirebaseFirestore
 
 // MARK: - Trip Model
-struct Trip: Identifiable, Codable {
-    let id: String
-    let driverId: String
-    let vehicleId: String
-    let startLocation: String
-    let endLocation: String
-    let date: String
-    let time: String
-    let startTime: Date
-    var endTime: Date?
-    let status: TripStatus
-    let vehicleType: String
-    let passengers: Int?
-    let loadWeight: Double?
-    
-    enum TripStatus: String, Codable {
-        case assigned = "assigned"
-        case ongoing = "ongoing"
-        case completed = "completed"
-        case cancelled = "cancelled"
-    }
-}
+//struct Trip: Identifiable, Codable {
+//    let id: String
+//    let driverId: String
+//    let vehicleId: String
+//    let startLocation: String
+//    let endLocation: String
+//    let date: String
+//    let time: String
+//    let startTime: Date
+//    var endTime: Date?
+//    let status: TripStatus
+//    let vehicleType: String
+//    let passengers: Int?
+//    let loadWeight: Double?
+//    
+//    enum TripStatus: String, Codable {
+//        case assigned = "assigned"
+//        case ongoing = "ongoing"
+//        case completed = "completed"
+//        case cancelled = "cancelled"
+//    }
+//}
 
 // MARK: - ViewModel
 class AssignTripViewModel: ObservableObject {
@@ -1036,3 +1036,5 @@ struct DriverListView: View {
         }
     }
 }
+
+
