@@ -3,7 +3,7 @@ import SwiftUI
 import PhotosUI
 import FirebaseFirestore
 
-struct PreInspectionView: View {
+struct PostInspectionView: View {
     @Environment(\.presentationMode) var presentationMode
     @State private var tyrePressureRemarks: String = ""
     @State private var brakeRemarks: String = ""
@@ -18,16 +18,15 @@ struct PreInspectionView: View {
     @State private var selectedImages: [UIImage] = []
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var overallCheckStatus: String = "Ticket raised"
-    @State private var navigateToMapView = false
     @State private var fetchedTrip: Trip?
     @State private var errorMessage: String?
-    
+    @State private var inspectionCompleted = false
+  
     @ObservedObject var authVM: AuthViewModel
     let dropoffLocation: String
     let vehicleNumber: String
     let tripID: String
     let vehicleID: String
-   
     
     private let db = Firestore.firestore()
     private let overallCheckOptions = ["Ticket raised", "Verified"]
@@ -71,7 +70,7 @@ struct PreInspectionView: View {
     }
     
     var body: some View {
-        //NavigationView {
+       // NavigationView {
             VStack(spacing: 0) {
                 Form {
                     Section(header: Text("Trip Details")) {
@@ -81,7 +80,7 @@ struct PreInspectionView: View {
                             Text(currentDateString)
                         }
                         HStack {
-                            Text("Start time")
+                            Text("End time")
                             Spacer()
                             Text(currentTimeString)
                         }
@@ -98,7 +97,7 @@ struct PreInspectionView: View {
                         HStack {
                             Text("Dropoff Location")
                             Spacer()
-                            Text(fetchedTrip?.endLocation ?? dropoffLocation)
+                            Text(dropoffLocation)
                         }
                     }
                     
@@ -106,27 +105,27 @@ struct PreInspectionView: View {
                         Toggle(isOn: $oilCheck) {
                             Text("Oil")
                         }
-                        .toggleStyle(CheckboxToggleStyle())
+                        .toggleStyle(CheckboxToggleStyle2())
                         
                         Toggle(isOn: $hornCheck) {
                             Text("Horns")
                         }
-                        .toggleStyle(CheckboxToggleStyle())
+                        .toggleStyle(CheckboxToggleStyle2())
                         
                         Toggle(isOn: $clutchCheck) {
                             Text("Clutch")
                         }
-                        .toggleStyle(CheckboxToggleStyle())
+                        .toggleStyle(CheckboxToggleStyle2())
                         
                         Toggle(isOn: $airbagsCheck) {
                             Text("Airbags")
                         }
-                        .toggleStyle(CheckboxToggleStyle())
+                        .toggleStyle(CheckboxToggleStyle2())
                         
                         Toggle(isOn: $physicalDamageCheck) {
-                            Text("No Physical damage")
+                            Text("Physical damage")
                         }
-                        .toggleStyle(CheckboxToggleStyle())
+                        .toggleStyle(CheckboxToggleStyle2())
                     }
                     
                     Section {
@@ -134,7 +133,7 @@ struct PreInspectionView: View {
                             Toggle(isOn: $tyrePressureCheck) {
                                 Text("Tyre Pressure").font(.headline)
                             }
-                            .toggleStyle(CheckboxToggleStyle())
+                            .toggleStyle(CheckboxToggleStyle2())
                             
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Remarks:")
@@ -142,8 +141,8 @@ struct PreInspectionView: View {
                                     .foregroundColor(.gray)
                                 
                                 TextField("Examples: All tyres at 35 PSI, Front-left slightly low, No visible damage",
-                                          text: $tyrePressureRemarks,
-                                          axis: .vertical)
+                                         text: $tyrePressureRemarks,
+                                         axis: .vertical)
                                 .lineLimit(2...4)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
                                 .font(.caption)
@@ -151,13 +150,13 @@ struct PreInspectionView: View {
                         }
                         .padding(.vertical, 8)
                     }
-                    
+
                     Section {
                         VStack(alignment: .leading, spacing: 8) {
                             Toggle(isOn: $brakesCheck) {
                                 Text("Brakes").font(.headline)
                             }
-                            .toggleStyle(CheckboxToggleStyle())
+                            .toggleStyle(CheckboxToggleStyle2())
                             
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Remarks:")
@@ -165,8 +164,8 @@ struct PreInspectionView: View {
                                     .foregroundColor(.gray)
                                 
                                 TextField("Examples: Brake pads 50% worn, Fluid level normal, No unusual noises",
-                                          text: $brakeRemarks,
-                                          axis: .vertical)
+                                         text: $brakeRemarks,
+                                         axis: .vertical)
                                 .lineLimit(2...4)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
                                 .font(.caption)
@@ -246,7 +245,7 @@ struct PreInspectionView: View {
                     
                     let date = currentDateForFirestore
                     
-                    FirebaseManager.shared.recordInspection(
+                    FirebaseManager.shared.recordPostInspection(
                         driverId: driverId,
                         tyrePressureRemarks: tyrePressureRemarks,
                         brakeRemarks: brakeRemarks,
@@ -267,27 +266,16 @@ struct PreInspectionView: View {
                         completion: { result in
                             switch result {
                             case .success:
-                                print("Inspection recorded successfully")
-                                fetchTrip { fetchResult in
-                                    switch fetchResult {
-                                    case .success(let trip):
-                                        self.fetchedTrip = trip
-                                        DispatchQueue.main.async {
-                                            self.navigateToMapView = true
-                                        }
-                                    case .failure(let error):
-                                        self.errorMessage = "Failed to fetch trip: \(error.localizedDescription)"
-                                        print(self.errorMessage ?? "Unknown error")
-                                    }
-                                }
+                                print("Post-inspection recorded successfully")
+                                inspectionCompleted = true
                             case .failure(let error):
-                                self.errorMessage = "Error recording inspection: \(error.localizedDescription)"
-                                print(self.errorMessage ?? "Unknown error")
+                                errorMessage = "Error recording post-inspection: \(error.localizedDescription)"
+                                print(errorMessage ?? "Unknown error")
                             }
                         }
                     )
                 }) {
-                    Text("Ready for trip")
+                    Text("Complete Inspection")
                         .font(.system(size: 18, weight: .semibold, design: .default))
                         .foregroundStyle(Color.white)
                         .frame(maxWidth: .infinity)
@@ -299,72 +287,50 @@ struct PreInspectionView: View {
                 .padding(.top, 10)
                 .disabled(selectedImages.count != 4)
             }
-            .navigationTitle(Text("Pre Inspection"))
-            /* .toolbar {
-             ToolbarItem(placement: .navigationBarLeading) {
-             Button(action: {
-             presentationMode.wrappedValue.dismiss()
-             }) {
-             HStack {
-             Image(systemName: "chevron.left")
-             Text("Back")
-             }
-             }
-             }*/
-        //}
-        .alert(isPresented: Binding<Bool>(
-            get: { errorMessage != nil },
-            set: { if !$0 { errorMessage = nil } }
-        )) {
-            Alert(
-                title: Text("Error"),
-                message: Text(errorMessage ?? "Unknown error"),
-                dismissButton: .default(Text("OK"))
-            )
-        }
-        .onAppear {
-            fetchTrip { result in
-                switch result {
-                case .success(let trip):
-                    self.fetchedTrip = trip
-                case .failure(let error):
-                    self.errorMessage = "Failed to fetch trip: \(error.localizedDescription)"
-                    print(self.errorMessage ?? "Unknown error")
+            .navigationTitle(Text("Post Inspection"))
+           /* .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        presentationMode.wrappedValue.dismiss()
+                    }) {
+                        HStack {
+                            Image(systemName: "chevron.left")
+                            Text("Back")
+                        }
+                    }
+                }
+            }*/
+            .alert(isPresented: Binding<Bool>(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )) {
+                Alert(
+                    title: Text("Error"),
+                    message: Text(errorMessage ?? "Unknown error"),
+                    dismissButton: .default(Text("OK"))
+                )
+            }
+            .onChange(of: inspectionCompleted) { completed in
+                if completed {
+                    presentationMode.wrappedValue.dismiss()
                 }
             }
-        }
-        .background(
-            NavigationLink(
-                destination: NavigationMapView(
-                    trip: fetchedTrip ?? Trip(
-                        id: tripID,
-                        driverId: authVM.user?.id ?? "",
-                        vehicleId: vehicleID,
-                        startLocation: "Unknown",
-                        endLocation: dropoffLocation,
-                        date: currentDateForFirestore,
-                        time: currentTimeString,
-                        startTime: Date(),
-                        status: .assigned,
-                        vehicleType: "Unknown",
-                        passengers: nil,
-                        loadWeight: nil
-                    ),
-                    vehicleID: vehicleID,
-                    vehicleNumber: vehicleNumber,
-            
-                    authVM: authVM
-                ),
-                isActive: $navigateToMapView
-            ) {
-                EmptyView()
+            .onAppear {
+                fetchTrip { result in
+                    switch result {
+                    case .success(let trip):
+                        self.fetchedTrip = trip
+                    case .failure(let error):
+                        self.errorMessage = "Failed to fetch trip: \(error.localizedDescription)"
+                        print(self.errorMessage ?? "Unknown error")
+                    }
+                }
             }
-        )
+        //}
     }
 }
 
-
-struct CheckboxToggleStyle: ToggleStyle {
+struct CheckboxToggleStyle2: ToggleStyle {
     func makeBody(configuration: Configuration) -> some View {
         HStack {
             configuration.label

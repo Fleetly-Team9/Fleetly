@@ -1,13 +1,13 @@
 import SwiftUI
 import MapKit
-
+import CoreLocation
 struct MainView: View {
     @ObservedObject var authVM: AuthViewModel
     @State private var showProfile = false
     
     var body: some View {
         TabView {
-            DriverHomePage(authVM: authVM)
+            DriverHomePage(authVM: authVM, showProfile: $showProfile)
                 .tabItem {
                     Label("Home", systemImage: "house.fill")
                 }
@@ -17,10 +17,10 @@ struct MainView: View {
                 }
             TicketsView()
                 .tabItem {
-                    Label("Tickets", systemImage: "ticket.fill")
+                    Label("Tickets", systemImage: "ticket")
                 }
         }
-        .toolbar {
+        /*.toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button(action: {
                     showProfile = true
@@ -31,7 +31,7 @@ struct MainView: View {
                         .foregroundColor(.blue)
                 }
             }
-        }
+        }*/
         .sheet(isPresented: $showProfile) {
             DriverProfileView(authVM: authVM)
         }
@@ -40,6 +40,7 @@ struct MainView: View {
 
 struct DriverHomePage: View {
     @ObservedObject var authVM: AuthViewModel
+    @Binding var showProfile: Bool
     @State private var currentTime = Date()
     @State private var elapsedTime: TimeInterval = 0
     @State private var isStopwatchRunning = false
@@ -53,17 +54,15 @@ struct DriverHomePage: View {
     @State private var isDragCompleted: Bool = false
     @StateObject private var assignedTripsVM = AssignedTripsViewModel()
     @State private var didStartListener = false
-    
+    @State private var profileImage: Image?
+
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     let hours = (0...12).map { $0 == 0 ? "0hr" : "\($0)hr\($0 == 1 ? "" : "s")" }
     
     let dropoffLocation = "Kolkata"
     let vehicleNumber: String = "KA6A1204"
-    
-    @State private var region = MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 12.9716, longitude: 77.5946),
-        span: MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03)
-    )
+    private let profileImageKey = "profileImage"
+
     
     static let darkGray = Color(red: 68/255, green: 6/255, blue: 52/255)
     static let lightGray = Color(red: 240/255, green: 242/255, blue: 245/255)
@@ -108,7 +107,19 @@ struct DriverHomePage: View {
                 print("Error fetching worked time: \(error)")
             }
         }
+        
+        // Load profile image from UserDefaults
+        if let data = UserDefaults.standard.data(forKey: profileImageKey),
+           let uiImage = UIImage(data: data) {
+            profileImage = Image(uiImage: uiImage)
+        } else {
+            profileImage = nil
+        }
     }
+    
+        
+
+    
     
     private func currentDateString() -> String {
         let formatter = DateFormatter()
@@ -144,9 +155,9 @@ struct DriverHomePage: View {
         return startOfNow > startOfToday
     }
     
-    private var headerSection: some View {
+/*  private var headerSection: some View {
         HStack {
-            VStack {
+            VStack{
                 Text("Here's your schedule for today!")
                     .font(.system(size: 15, design: .default))
                     .foregroundStyle(Color.secondary)
@@ -160,7 +171,45 @@ struct DriverHomePage: View {
             }
             .offset(y: -40)
         }
+    }*/
+    
+    
+    private var headerSection: some View {
+        HStack {
+            VStack(alignment: .leading) {
+                Text("Here's your schedule for today!")
+                    .font(.system(size: 15))
+                    .foregroundStyle(Color.secondary)
+            }
+            Spacer()
+            Button(action: {
+                print("Profile image tapped") // Debug
+                showProfile = true
+            }) {
+                Group {
+                    if let profileImage = profileImage {
+                        profileImage
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 40, height: 40)
+                            .clipShape(Circle())
+                    } else {
+                        Image(systemName: "person.crop.circle.fill")
+                            .resizable()
+                            .frame(width: 40, height: 40)
+                            .foregroundStyle(Color.primary)
+                    }
+                }
+                .contentShape(Circle()) // Ensure entire circle is tappable
+            }
+        }
+        .padding(.horizontal)
     }
+    
+
+
+
+
     
     private var workingHoursSection: some View {
         VStack {
@@ -337,139 +386,282 @@ struct DriverHomePage: View {
         }
     }
     
-    private func tripCardView(for trip: Trip) -> some View {
-        VStack(spacing: 0) {
-            Map(coordinateRegion: $region)
-                .frame(width: 300, height: 200)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    // State to manage each trip's map data
+    struct TripMapData {
+        var region: MKCoordinateRegion
+        var pickup: Location?
+        var drop: Location?
+        var route: MKRoute?
+        
+        init() {
+            self.region = MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: 12.9716, longitude: 77.5946),
+                span: MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03)
+            )
+            self.pickup = nil
+            self.drop = nil
+            self.route = nil
+        }
+    }
+    
+    @State private var tripMapData: [String: TripMapData] = [:] // Map trip ID to its map data
+    
+    private func fetchRoute(for trip: Trip) {
+        // Initialize map data for this trip if not already present
+        if tripMapData[trip.id] == nil {
+            tripMapData[trip.id] = TripMapData()
+        }
+        
+        let geocoder = CLGeocoder()
+        
+        // Geocode startLocation
+        geocoder.geocodeAddressString(trip.startLocation) { placemarks, error in
+            guard let startPlacemark = placemarks?.first,
+                  let startLocation = startPlacemark.location else {
+                print("Failed to geocode start location: \(trip.startLocation), error: \(String(describing: error))")
+                return
+            }
             
-            VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "mappin.circle.fill")
-                            .foregroundStyle(Color.blue)
-                        VStack(alignment: .leading) {
-                            Text("From")
-                                .font(.subheadline)
-                                .foregroundStyle(Color.secondary)
-                            Text(trip.startLocation)
-                                .font(.headline)
-                        }
+            // Geocode endLocation
+            geocoder.geocodeAddressString(trip.endLocation) { placemarks, error in
+                guard let endPlacemark = placemarks?.first,
+                      let endLocation = endPlacemark.location else {
+                    print("Failed to geocode end location: \(trip.endLocation), error: \(String(describing: error))")
+                    return
+                }
+                
+                let pickup = Location(name: trip.startLocation, coordinate: startLocation.coordinate)
+                let drop = Location(name: trip.endLocation, coordinate: endLocation.coordinate)
+                
+                // Calculate the route
+                let request = MKDirections.Request()
+                request.source = MKMapItem(placemark: MKPlacemark(coordinate: startLocation.coordinate))
+                request.destination = MKMapItem(placemark: MKPlacemark(coordinate: endLocation.coordinate))
+                request.transportType = .automobile
+                
+                let directions = MKDirections(request: request)
+                directions.calculate { response, error in
+                    guard let route = response?.routes.first else {
+                        print("Failed to calculate route: \(String(describing: error))")
+                        return
                     }
                     
-                    HStack(spacing: 12) {
-                        Image(systemName: "mappin.circle.fill")
-                            .foregroundStyle(Color.green)
-                        VStack(alignment: .leading) {
-                            Text("To")
-                                .font(.subheadline)
-                                .foregroundStyle(Color.secondary)
-                            Text(trip.endLocation)
-                                .font(.headline)
-                        }
+                    // Calculate the region to encompass the entire route
+                    let coordinates = route.polyline.coordinates
+                    let region = MKCoordinateRegion(coordinates: coordinates, latitudinalMetersPadding: 1000, longitudinalMetersPadding: 1000)
+                    
+                    // Update the trip's map data
+                    DispatchQueue.main.async {
+                        tripMapData[trip.id]?.region = region
+                        tripMapData[trip.id]?.pickup = pickup
+                        tripMapData[trip.id]?.drop = drop
+                        tripMapData[trip.id]?.route = route
                     }
                 }
+            }
+        }
+    }
+    
+    // MARK: - Trip Card Components
+    private struct TripMapSection: View {
+        let mapData: TripMapData
+        
+        var body: some View {
+            MapViewWithRoute(
+                region: .constant(mapData.region),
+                pickup: mapData.pickup ?? Location(name: "Default Start", coordinate: CLLocationCoordinate2D(latitude: 12.9716, longitude: 77.5946)),
+                drop: mapData.drop ?? Location(name: "Default End", coordinate: CLLocationCoordinate2D(latitude: 22.5726, longitude: 88.3639)),
+                route: mapData.route,
+                mapStyle: .constant(.standard),
+                isTripStarted: false,
+                userLocationCoordinate: nil
+            )
+            .frame(width: 300, height: 200)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+    }
+
+    private struct TripLocationSection: View {
+        let trip: Trip
+        
+        var body: some View {
+            VStack(alignment: .leading, spacing: 8) {
+                LocationRow(icon: "mappin.circle.fill", color: .blue, label: "From", value: trip.startLocation)
+                LocationRow(icon: "mappin.circle.fill", color: .green, label: "To", value: trip.endLocation)
+            }
+        }
+    }
+
+    private struct LocationRow: View {
+        let icon: String
+        let color: Color
+        let label: String
+        let value: String
+        
+        var body: some View {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .foregroundStyle(color)
+                VStack(alignment: .leading) {
+                    Text(label)
+                        .font(.subheadline)
+                        .foregroundStyle(Color.secondary)
+                    Text(value)
+                        .font(.headline)
+                }
+            }
+        }
+    }
+
+    private struct TripDetailsSection: View {
+        let trip: Trip
+        
+        var body: some View {
+            HStack(spacing: 24) {
+                DetailColumn(label: "Time", value: trip.time)
+                DetailColumn(label: "Vehicle Type", value: trip.vehicleType)
+                DetailColumn(
+                    label: trip.vehicleType == "Passenger Vehicle" ? "Passengers" : "Load",
+                    value: trip.vehicleType == "Passenger Vehicle" ?
+                        "\(trip.passengers ?? 0)" :
+                        "\(Int(trip.loadWeight ?? 0)) kg"
+                )
+            }
+        }
+    }
+
+    private struct DetailColumn: View {
+        let label: String
+        let value: String
+        
+        var body: some View {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(label)
+                    .font(.subheadline)
+                    .foregroundStyle(Color.secondary)
+                Text(value)
+                    .font(.headline)
+            }
+        }
+    }
+
+    private struct TripActionButton: View {
+        let trip: Trip
+        @Binding var isNavigating: Bool
+        @Binding var swipeOffset: CGFloat
+        @Binding var isDragCompleted: Bool
+        @Binding var isSwiping: Bool
+        let maxX: CGFloat
+        let authVM: AuthViewModel
+        let gradientStart: Color
+        let gradientEnd: Color
+        @Environment(\.colorScheme) var colorScheme
+        
+        var body: some View {
+            ZStack(alignment: .leading) {
+                NavigationLink(
+                    destination: PreInspectionView(
+                        authVM: authVM,
+                        dropoffLocation: trip.endLocation,
+                        vehicleNumber: trip.vehicleId,
+                        tripID: trip.id,
+                        vehicleID: trip.vehicleId
+                    ),
+                    isActive: $isNavigating,
+                    label: {
+                        LinearGradient(
+                            colors: swipeOffset == 0 ? [Color(.systemGray5), Color(.systemGray5)] : [
+                                gradientStart,
+                                swipeOffset >= maxX - 10 || isDragCompleted ? gradientEnd : gradientStart
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .frame(height: 55)
+                        .clipShape(Capsule())
+                    }
+                )
+                .buttonStyle(PlainButtonStyle())
+                
+                HStack(spacing: 0) {
+                    ZStack {
+                        Circle()
+                            .fill(Color(.systemBlue))
+                            .frame(width: 53, height: 53)
+                        Image(systemName: "car.side.fill")
+                            .scaleEffect(x: -1, y: 1)
+                            .foregroundStyle(Color(.systemBackground))
+                    }
+                    .padding(.trailing, 16)
+                    .offset(x: swipeOffset)
+                    .gesture(
+                        isDragCompleted ? nil : DragGesture()
+                            .onChanged { value in
+                                isSwiping = true
+                                let newOffset = max(value.translation.width, 0)
+                                swipeOffset = min(newOffset, maxX)
+                            }
+                            .onEnded { _ in
+                                isSwiping = false
+                                if swipeOffset >= maxX - 10 {
+                                    swipeOffset = maxX
+                                    isDragCompleted = true
+                                    isNavigating = true
+                                } else {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                        swipeOffset = 0
+                                    }
+                                }
+                            }
+                    )
+                    
+                    Spacer()
+                    
+                    Text("Slide to get Ready")
+                        .font(.headline)
+                        .foregroundColor(swipeOffset > 0 || isDragCompleted ? .white : Color(.systemBlue))
+                        .padding(.trailing, 16)
+                }
+                .padding(.horizontal, 8)
+            }
+            .frame(maxWidth: .infinity)
+            .background(
+                Capsule()
+                    .fill(Color(.systemGray6))
+                    .overlay(
+                        Capsule()
+                            .stroke(Color(.systemGray4), lineWidth: 1)
+                    )
+            )
+            .padding(.horizontal, 8)
+        }
+    }
+
+    // MARK: - Main Trip Card View
+    private func tripCardView(for trip: Trip) -> some View {
+        let mapData = tripMapData[trip.id] ?? TripMapData()
+        
+        return VStack(spacing: 0) {
+            TripMapSection(mapData: mapData)
+            
+            VStack(alignment: .leading, spacing: 16) {
+                TripLocationSection(trip: trip)
                 
                 Divider()
                 
-                HStack(spacing: 24) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Time")
-                            .font(.subheadline)
-                            .foregroundStyle(Color.secondary)
-                        Text(trip.time)
-                            .font(.headline)
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Vehicle Type")
-                            .font(.subheadline)
-                            .foregroundStyle(Color.secondary)
-                        Text(trip.vehicleType)
-                            .font(.headline)
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(trip.vehicleType == "Passenger Vehicle" ? "Passengers" : "Load")
-                            .font(.subheadline)
-                            .foregroundStyle(Color.secondary)
-                        Text(trip.vehicleType == "Passenger Vehicle" ?
-                             "\(trip.passengers ?? 0)" :
-                             "\(Int(trip.loadWeight ?? 0)) kg")
-                            .font(.headline)
-                    }
-                }
+                TripDetailsSection(trip: trip)
                 
-                ZStack(alignment: .leading) {
-                    NavigationLink(
-                        destination: PreInspectionView(authVM: authVM, dropoffLocation: trip.endLocation, vehicleNumber: trip.vehicleId, tripID: trip.id, vehicleID: trip.vehicleId),
-                        isActive: $isNavigating,
-                        label: {
-                            LinearGradient(
-                                colors: swipeOffset == 0 ? [Color(.systemGray5), Color(.systemGray5)] : [
-                                    Self.gradientStart,
-                                    swipeOffset >= maxX - 10 || isDragCompleted ? Self.gradientEnd : Self.gradientStart
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                            .frame(height: 55)
-                            .clipShape(Capsule())
-                        }
-                    )
-                    .buttonStyle(PlainButtonStyle())
-                    
-                    HStack(spacing: 0) {
-                        ZStack {
-                            Circle()
-                                .fill(Color(.systemBlue))
-                                .frame(width: 53, height: 53)
-                            Image(systemName: "car.side.fill")
-                                .scaleEffect(x: -1, y: 1)
-                                .foregroundStyle(Color(.systemBackground))
-                        }
-                        .offset(x: swipeOffset)
-                        .gesture(
-                            isDragCompleted ? nil : DragGesture()
-                                .onChanged { value in
-                                    isSwiping = true
-                                    let newOffset = max(value.translation.width, 0)
-                                    swipeOffset = min(newOffset, maxX)
-                                }
-                                .onEnded { _ in
-                                    isSwiping = false
-                                    if swipeOffset >= maxX - 10 {
-                                        currentWorkOrderIndex += 1
-                                        swipeOffset = maxX
-                                        isDragCompleted = true
-                                        isNavigating = true
-                                    } else {
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                            swipeOffset = 0
-                                        }
-                                    }
-                                }
-                        )
-                        
-                        Spacer()
-                        
-                        Text("Slide to get Ready")
-                            .font(.headline)
-                            .foregroundColor(swipeOffset > 0 || isDragCompleted ? .white : Color(.systemBlue))
-                            .padding(.trailing, 16)
-                    }
-                    .padding(.horizontal, 8)
-                }
-                .frame(maxWidth: .infinity)
-                .background(
-                    Capsule()
-                        .fill(Color(.systemGray6))
-                        .overlay(
-                            Capsule()
-                                .stroke(Color(.systemGray4), lineWidth: 1)
-                        )
+                TripActionButton(
+                    trip: trip,
+                    isNavigating: $isNavigating,
+                    swipeOffset: $swipeOffset,
+                    isDragCompleted: $isDragCompleted,
+                    isSwiping: $isSwiping,
+                    maxX: maxX,
+                    authVM: authVM,
+                    gradientStart: Self.gradientStart,
+                    gradientEnd: Self.gradientEnd
                 )
-                .padding(.horizontal, 8)
             }
             .padding(16)
             .background(
@@ -479,6 +671,9 @@ struct DriverHomePage: View {
             )
         }
         .frame(width: 300)
+        .onAppear {
+            fetchRoute(for: trip)
+        }
     }
     
     private var tripsListView: some View {
@@ -556,20 +751,74 @@ struct DriverHomePage: View {
                     assignedTripsVM.startListening(driverId: driverId)
                     didStartListener = true
                 }
+                .onChange(of: showProfile) { newValue in
+                    // Reload profile image when profile sheet is dismissed
+                    if !newValue {
+                        if let data = UserDefaults.standard.data(forKey: profileImageKey),
+                           let uiImage = UIImage(data: data) {
+                            profileImage = Image(uiImage: uiImage)
+                        } else {
+                            profileImage = nil
+                        }
+                    }
+                }
             }
         }
     }
 }
-
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        Group {
-            MainView(authVM: AuthViewModel())
-                .previewDisplayName("Light Mode")
-            
-            MainView(authVM: AuthViewModel())
-                .preferredColorScheme(.dark)
-                .previewDisplayName("Dark Mode")
+// Extension to calculate a region encompassing a set of coordinates
+extension MKCoordinateRegion {
+    init(coordinates: [CLLocationCoordinate2D], latitudinalMetersPadding: CLLocationDistance, longitudinalMetersPadding: CLLocationDistance) {
+        guard !coordinates.isEmpty else {
+            self.init(
+                center: CLLocationCoordinate2D(latitude: 0, longitude: 0),
+                span: MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03)
+            )
+            return
         }
+        
+        var minLat = coordinates[0].latitude
+        var maxLat = coordinates[0].latitude
+        var minLon = coordinates[0].longitude
+        var maxLon = coordinates[0].longitude
+        
+        for coordinate in coordinates {
+            minLat = min(minLat, coordinate.latitude)
+            maxLat = max(maxLat, coordinate.latitude)
+            minLon = min(minLon, coordinate.longitude)
+            maxLon = max(maxLon, coordinate.longitude)
+        }
+        
+        let center = CLLocationCoordinate2D(
+            latitude: (minLat + maxLat) / 2,
+            longitude: (minLon + maxLon) / 2
+        )
+        
+        let span = MKCoordinateSpan(
+            latitudeDelta: (maxLat - minLat) + (latitudinalMetersPadding / 111320.0), // Rough conversion: 1 degree latitude ~ 111,320 meters
+            longitudeDelta: (maxLon - minLon) + (longitudinalMetersPadding / (111320.0 * cos(center.latitude * .pi / 180.0)))
+        )
+        
+        self.init(center: center, span: span)
     }
 }
+
+// Corrected extension to get coordinates from MKPolyline
+extension MKPolyline {
+    var coordinates: [CLLocationCoordinate2D] {
+        var coords = [CLLocationCoordinate2D](repeating: .init(), count: pointCount)
+        coords.withUnsafeMutableBufferPointer { ptr in
+            getCoordinates(ptr.baseAddress!, range: NSRange(location: 0, length: pointCount))
+        }
+        return coords
+    }
+}
+
+// Define Location struct if not already defined elsewhere
+/*struct Location {
+    let coordinate: CLLocationCoordinate2D
+    let name: String
+}*/
+
+
+//hello
