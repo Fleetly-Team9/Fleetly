@@ -3,29 +3,7 @@ import MapKit
 import Firebase
 import FirebaseFirestore
 
-// MARK: - Trip Model
-struct Trip: Identifiable, Codable,Hashable {
-    let id: String
-    let driverId: String
-    let vehicleId: String
-    let startLocation: String
-    let endLocation: String
-    let date: String
-    let time: String
-    let startTime: Date
-    var endTime: Date?
-    let status: TripStatus
-    let vehicleType: String
-    let passengers: Int?
-    let loadWeight: Double?
-    
-    enum TripStatus: String, Codable {
-        case assigned = "assigned"
-        case ongoing = "ongoing"
-        case completed = "completed"
-        case cancelled = "cancelled"
-    }
-}
+
 
 // MARK: - ViewModel
 class AssignTripViewModel: ObservableObject {
@@ -746,7 +724,7 @@ struct AssignView: View {
                 }
             }
             .sheet(isPresented: $showVehicleSheet) {
-                VehicleListView(selectedVehicle: $selectedVehicle, vehicles: assignViewModel.vehicles, viewModel: assignViewModel)
+                TaskVehicleListView(selectedVehicle: $selectedVehicle, vehicles: assignViewModel.vehicles, viewModel: assignViewModel)
                     .background(
                         RoundedRectangle(cornerRadius: 30)
                             .fill(Color(.systemBackground))
@@ -869,7 +847,7 @@ struct AssignView: View {
 }
 
 // MARK: - VehicleListView
-struct VehicleListView: View {
+struct TaskVehicleListView: View {
     @Binding var selectedVehicle: Vehicle?
     let vehicles: [Vehicle]
     @ObservedObject var viewModel: AssignTripViewModel
@@ -1036,3 +1014,5 @@ struct DriverListView: View {
         }
     }
 }
+
+
