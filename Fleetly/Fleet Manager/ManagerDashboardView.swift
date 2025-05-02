@@ -30,12 +30,6 @@ struct MainTabView: View {
 }
 
 
-
-
-
-
-
-
 struct MaintenanceView: View {
     var body: some View {
         Text("Maintenance View")
@@ -57,8 +51,6 @@ struct TrackView: View {
     }
 }
 
-
-// Dashboard Home View
 struct DashboardHomeView: View {
     @State private var showProfile = false
     @State private var selectedAction: ActionType?
@@ -89,12 +81,14 @@ struct DashboardHomeView: View {
                             value: "\(dashboardVM.totalVehicles)", // Dynamic value
                             color: .blue
                         )
-                        StatCardGridView(
-                            icon: "location.fill",
-                            title: "Active Trips",
-                            value: "0", // Still hardcoded, can be made dynamic later
-                            color: .green
-                        )
+                        NavigationLink(destination: AllTripsView()) { // Link to Active Trips
+                            StatCardGridView(
+                                icon: "location.fill",
+                                title: "Active Trips",
+                                value: "0", // Still hardcoded, can be made dynamic later
+                                color: .green
+                            )
+                        }
                         StatCardGridView(
                             icon: "wrench.fill",
                             title: "Maintenance",
@@ -378,4 +372,8 @@ struct AlertRowView: View {
         .cornerRadius(12)
         .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
     }
+}
+
+#Preview{
+    MainTabView(authVM: AuthViewModel())
 }
