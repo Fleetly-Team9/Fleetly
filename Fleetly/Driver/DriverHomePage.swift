@@ -17,7 +17,7 @@ struct MainView: View {
                 }
             TicketsView()
                 .tabItem {
-                    Label("Tickets", systemImage: "ticket")
+                    Label("Tickets", systemImage: "ticket.fill")
                 }
         }
         /*.toolbar {

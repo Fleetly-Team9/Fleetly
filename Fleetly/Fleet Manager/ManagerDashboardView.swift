@@ -508,7 +508,7 @@ struct DashboardHomeView: View {
                         NavigationLink(destination:TicketListView()){
                             StatCardGridView(
                                 icon: "ticket.fill",
-                                title: "Active Tickets",
+                                title: "Tickets",
                                 value: "\(dashboardVM.activeTickets)",
                                 color: .orange
                             )
