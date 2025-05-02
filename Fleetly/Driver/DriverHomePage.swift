@@ -34,6 +34,10 @@ struct MainView: View {
     }
 }
 
+import SwiftUI
+import MapKit
+import CoreLocation
+
 struct DriverHomePage: View {
     @ObservedObject var authVM: AuthViewModel
     @State private var currentTime = Date()
@@ -55,11 +59,6 @@ struct DriverHomePage: View {
     
     let dropoffLocation = "Kolkata"
     let vehicleNumber: String = "KA6A1204"
-    
-    @State private var region = MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 12.9716, longitude: 77.5946),
-        span: MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03)
-    )
     
     static let darkGray = Color(red: 68/255, green: 6/255, blue: 52/255)
     static let lightGray = Color(red: 240/255, green: 242/255, blue: 245/255)
@@ -333,11 +332,99 @@ struct DriverHomePage: View {
         }
     }
     
+    // State to manage each trip's map data
+    struct TripMapData {
+        var region: MKCoordinateRegion
+        var pickup: Location?
+        var drop: Location?
+        var route: MKRoute?
+        
+        init() {
+            self.region = MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: 12.9716, longitude: 77.5946),
+                span: MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03)
+            )
+            self.pickup = nil
+            self.drop = nil
+            self.route = nil
+        }
+    }
+    
+    @State private var tripMapData: [String: TripMapData] = [:] // Map trip ID to its map data
+    
+    private func fetchRoute(for trip: Trip) {
+        // Initialize map data for this trip if not already present
+        if tripMapData[trip.id] == nil {
+            tripMapData[trip.id] = TripMapData()
+        }
+        
+        let geocoder = CLGeocoder()
+        
+        // Geocode startLocation
+        geocoder.geocodeAddressString(trip.startLocation) { placemarks, error in
+            guard let startPlacemark = placemarks?.first,
+                  let startLocation = startPlacemark.location else {
+                print("Failed to geocode start location: \(trip.startLocation), error: \(String(describing: error))")
+                return
+            }
+            
+            // Geocode endLocation
+            geocoder.geocodeAddressString(trip.endLocation) { placemarks, error in
+                guard let endPlacemark = placemarks?.first,
+                      let endLocation = endPlacemark.location else {
+                    print("Failed to geocode end location: \(trip.endLocation), error: \(String(describing: error))")
+                    return
+                }
+                
+                let pickup = Location(name: trip.startLocation, coordinate: startLocation.coordinate)
+                let drop = Location(name: trip.endLocation, coordinate: endLocation.coordinate)
+                
+                // Calculate the route
+                let request = MKDirections.Request()
+                request.source = MKMapItem(placemark: MKPlacemark(coordinate: startLocation.coordinate))
+                request.destination = MKMapItem(placemark: MKPlacemark(coordinate: endLocation.coordinate))
+                request.transportType = .automobile
+                
+                let directions = MKDirections(request: request)
+                directions.calculate { response, error in
+                    guard let route = response?.routes.first else {
+                        print("Failed to calculate route: \(String(describing: error))")
+                        return
+                    }
+                    
+                    // Calculate the region to encompass the entire route
+                    let coordinates = route.polyline.coordinates
+                    let region = MKCoordinateRegion(coordinates: coordinates, latitudinalMetersPadding: 1000, longitudinalMetersPadding: 1000)
+                    
+                    // Update the trip's map data
+                    DispatchQueue.main.async {
+                        tripMapData[trip.id]?.region = region
+                        tripMapData[trip.id]?.pickup = pickup
+                        tripMapData[trip.id]?.drop = drop
+                        tripMapData[trip.id]?.route = route
+                    }
+                }
+            }
+        }
+    }
+    
     private func tripCardView(for trip: Trip) -> some View {
-        VStack(spacing: 0) {
-            Map(coordinateRegion: $region)
-                .frame(width: 300, height: 200)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        // Ensure map data exists for this trip
+        let mapData = tripMapData[trip.id] ?? TripMapData()
+        
+        return VStack(spacing: 0) {
+            // Replace the sample map with MapViewWithRoute showing the route
+            MapViewWithRoute(
+                region: .constant(mapData.region),
+                pickup: mapData.pickup ?? Location(name: "Default Start", coordinate: CLLocationCoordinate2D(latitude: 12.9716, longitude: 77.5946)),
+                drop: mapData.drop ?? Location(name: "Default End", coordinate: CLLocationCoordinate2D(latitude: 22.5726, longitude: 88.3639)),
+                route: mapData.route,
+                mapStyle: .constant(.standard),
+                isTripStarted: false,
+                userLocationCoordinate: nil
+            )
+            .frame(width: 300, height: 200)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -475,6 +562,9 @@ struct DriverHomePage: View {
             )
         }
         .frame(width: 300)
+        .onAppear {
+            fetchRoute(for: trip)
+        }
     }
     
     private var tripsListView: some View {
@@ -557,15 +647,56 @@ struct DriverHomePage: View {
     }
 }
 
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        Group {
-            MainView(authVM: AuthViewModel())
-                .previewDisplayName("Light Mode")
-            
-            MainView(authVM: AuthViewModel())
-                .preferredColorScheme(.dark)
-                .previewDisplayName("Dark Mode")
+// Extension to calculate a region encompassing a set of coordinates
+extension MKCoordinateRegion {
+    init(coordinates: [CLLocationCoordinate2D], latitudinalMetersPadding: CLLocationDistance, longitudinalMetersPadding: CLLocationDistance) {
+        guard !coordinates.isEmpty else {
+            self.init(
+                center: CLLocationCoordinate2D(latitude: 0, longitude: 0),
+                span: MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03)
+            )
+            return
         }
+        
+        var minLat = coordinates[0].latitude
+        var maxLat = coordinates[0].latitude
+        var minLon = coordinates[0].longitude
+        var maxLon = coordinates[0].longitude
+        
+        for coordinate in coordinates {
+            minLat = min(minLat, coordinate.latitude)
+            maxLat = max(maxLat, coordinate.latitude)
+            minLon = min(minLon, coordinate.longitude)
+            maxLon = max(maxLon, coordinate.longitude)
+        }
+        
+        let center = CLLocationCoordinate2D(
+            latitude: (minLat + maxLat) / 2,
+            longitude: (minLon + maxLon) / 2
+        )
+        
+        let span = MKCoordinateSpan(
+            latitudeDelta: (maxLat - minLat) + (latitudinalMetersPadding / 111320.0), // Rough conversion: 1 degree latitude ~ 111,320 meters
+            longitudeDelta: (maxLon - minLon) + (longitudinalMetersPadding / (111320.0 * cos(center.latitude * .pi / 180.0)))
+        )
+        
+        self.init(center: center, span: span)
     }
 }
+
+// Corrected extension to get coordinates from MKPolyline
+extension MKPolyline {
+    var coordinates: [CLLocationCoordinate2D] {
+        var coords = [CLLocationCoordinate2D](repeating: .init(), count: pointCount)
+        coords.withUnsafeMutableBufferPointer { ptr in
+            getCoordinates(ptr.baseAddress!, range: NSRange(location: 0, length: pointCount))
+        }
+        return coords
+    }
+}
+
+// Define Location struct if not already defined elsewhere
+/*struct Location {
+    let coordinate: CLLocationCoordinate2D
+    let name: String
+}*/
