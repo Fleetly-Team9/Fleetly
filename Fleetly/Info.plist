@@ -2,24 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>CFBundleIdentifier</key>
-	<string></string>
-	<key>CFBundleExecutable</key>
-	<string></string>
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
-	<key>LSApplicationCategoryType</key>
-	<string></string>
-	<key>CFBundleName</key>
-	<string></string>
-	<key>CFBundleDisplayName</key>
-	<string></string>
-	<key>CFBundleVersion</key>
-	<string></string>
-	<key>CFBundleShortVersionString</key>
-	<string></string>
-	<key>NSCameraUsageDescription</key>
-	<string>Need to scan documents</string>
 	<key>CFBundleGetInfoString</key>
 	<string></string>
 </dict>
