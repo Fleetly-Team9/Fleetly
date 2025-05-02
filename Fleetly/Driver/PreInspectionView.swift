@@ -21,7 +21,7 @@ struct PreInspectionView: View {
     @State private var navigateToMapView = false
     @State private var fetchedTrip: Trip?
     @State private var errorMessage: String?
-   
+    
     @ObservedObject var authVM: AuthViewModel
     let dropoffLocation: String
     let vehicleNumber: String
@@ -71,7 +71,7 @@ struct PreInspectionView: View {
     }
     
     var body: some View {
-        NavigationView {
+        //NavigationView {
             VStack(spacing: 0) {
                 Form {
                     Section(header: Text("Trip Details")) {
@@ -142,8 +142,8 @@ struct PreInspectionView: View {
                                     .foregroundColor(.gray)
                                 
                                 TextField("Examples: All tyres at 35 PSI, Front-left slightly low, No visible damage",
-                                         text: $tyrePressureRemarks,
-                                         axis: .vertical)
+                                          text: $tyrePressureRemarks,
+                                          axis: .vertical)
                                 .lineLimit(2...4)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
                                 .font(.caption)
@@ -151,7 +151,7 @@ struct PreInspectionView: View {
                         }
                         .padding(.vertical, 8)
                     }
-
+                    
                     Section {
                         VStack(alignment: .leading, spacing: 8) {
                             Toggle(isOn: $brakesCheck) {
@@ -165,8 +165,8 @@ struct PreInspectionView: View {
                                     .foregroundColor(.gray)
                                 
                                 TextField("Examples: Brake pads 50% worn, Fluid level normal, No unusual noises",
-                                         text: $brakeRemarks,
-                                         axis: .vertical)
+                                          text: $brakeRemarks,
+                                          axis: .vertical)
                                 .lineLimit(2...4)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
                                 .font(.caption)
@@ -300,70 +300,70 @@ struct PreInspectionView: View {
                 .disabled(selectedImages.count != 4)
             }
             .navigationTitle(Text("Pre Inspection"))
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: {
-                        presentationMode.wrappedValue.dismiss()
-                    }) {
-                        HStack {
-                            Image(systemName: "chevron.left")
-                            Text("Back")
-                        }
-                    }
-                }
-            }
-            .alert(isPresented: Binding<Bool>(
-                get: { errorMessage != nil },
-                set: { if !$0 { errorMessage = nil } }
-            )) {
-                Alert(
-                    title: Text("Error"),
-                    message: Text(errorMessage ?? "Unknown error"),
-                    dismissButton: .default(Text("OK"))
-                )
-            }
-            .onAppear {
-                fetchTrip { result in
-                    switch result {
-                    case .success(let trip):
-                        self.fetchedTrip = trip
-                    case .failure(let error):
-                        self.errorMessage = "Failed to fetch trip: \(error.localizedDescription)"
-                        print(self.errorMessage ?? "Unknown error")
-                    }
-                }
-            }
-            .background(
-                NavigationLink(
-                    destination: NavigationMapView(
-                        trip: fetchedTrip ?? Trip(
-                            id: tripID,
-                            driverId: authVM.user?.id ?? "",
-                            vehicleId: vehicleID,
-                            startLocation: "Unknown",
-                            endLocation: dropoffLocation,
-                            date: currentDateForFirestore,
-                            time: currentTimeString,
-                            startTime: Date(),
-                            endTime: nil,
-                            status: .assigned,
-                            vehicleType: "Unknown",
-                            passengers: nil,
-                            loadWeight: nil
-                        ),
-                        vehicleID: vehicleID,
-                        vehicleNumber: vehicleNumber,
-                        vehicleModel: vehicleModel,
-                        authVM:authVM
-                    ),
-                    isActive: $navigateToMapView
-                ) {
-                    EmptyView()
-                }
+            /* .toolbar {
+             ToolbarItem(placement: .navigationBarLeading) {
+             Button(action: {
+             presentationMode.wrappedValue.dismiss()
+             }) {
+             HStack {
+             Image(systemName: "chevron.left")
+             Text("Back")
+             }
+             }
+             }*/
+        //}
+        .alert(isPresented: Binding<Bool>(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Alert(
+                title: Text("Error"),
+                message: Text(errorMessage ?? "Unknown error"),
+                dismissButton: .default(Text("OK"))
             )
         }
+        .onAppear {
+            fetchTrip { result in
+                switch result {
+                case .success(let trip):
+                    self.fetchedTrip = trip
+                case .failure(let error):
+                    self.errorMessage = "Failed to fetch trip: \(error.localizedDescription)"
+                    print(self.errorMessage ?? "Unknown error")
+                }
+            }
+        }
+        .background(
+            NavigationLink(
+                destination: NavigationMapView(
+                    trip: fetchedTrip ?? Trip(
+                        id: tripID,
+                        driverId: authVM.user?.id ?? "",
+                        vehicleId: vehicleID,
+                        startLocation: "Unknown",
+                        endLocation: dropoffLocation,
+                        date: currentDateForFirestore,
+                        time: currentTimeString,
+                        startTime: Date(),
+                        endTime: nil,
+                        status: .assigned,
+                        vehicleType: "Unknown",
+                        passengers: nil,
+                        loadWeight: nil
+                    ),
+                    vehicleID: vehicleID,
+                    vehicleNumber: vehicleNumber,
+                    vehicleModel: vehicleModel,
+                    authVM:authVM
+                ),
+                isActive: $navigateToMapView
+            ) {
+                EmptyView()
+            }
+        )
     }
 }
+
 
 struct CheckboxToggleStyle: ToggleStyle {
     func makeBody(configuration: Configuration) -> some View {

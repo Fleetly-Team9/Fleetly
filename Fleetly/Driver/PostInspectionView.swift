@@ -70,7 +70,7 @@ struct PostInspectionView: View {
     }
     
     var body: some View {
-        NavigationView {
+       // NavigationView {
             VStack(spacing: 0) {
                 Form {
                     Section(header: Text("Trip Details")) {
@@ -288,7 +288,7 @@ struct PostInspectionView: View {
                 .disabled(selectedImages.count != 4)
             }
             .navigationTitle(Text("Post Inspection"))
-            .toolbar {
+           /* .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: {
                         presentationMode.wrappedValue.dismiss()
@@ -299,7 +299,7 @@ struct PostInspectionView: View {
                         }
                     }
                 }
-            }
+            }*/
             .alert(isPresented: Binding<Bool>(
                 get: { errorMessage != nil },
                 set: { if !$0 { errorMessage = nil } }
@@ -326,7 +326,7 @@ struct PostInspectionView: View {
                     }
                 }
             }
-        }
+        //}
     }
 }
 
