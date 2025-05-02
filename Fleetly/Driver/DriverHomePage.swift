@@ -485,7 +485,7 @@ struct DriverHomePage: View {
                 
                 ZStack(alignment: .leading) {
                     NavigationLink(
-                        destination: PreInspectionView(authVM: authVM, dropoffLocation: trip.endLocation, vehicleNumber: trip.vehicleId, tripID: trip.id, vehicleID: trip.vehicleId),
+                        destination: PreInspectionView(authVM: authVM, dropoffLocation: trip.endLocation, vehicleNumber: trip.vehicleId, tripID: trip.id, vehicleID: trip.vehicleId, vehicleModel: "SwiftDzire"),
                         isActive: $isNavigating,
                         label: {
                             LinearGradient(

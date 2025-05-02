@@ -1,13 +1,10 @@
 import SwiftUI
 import MapKit
 import CoreLocation
-import Firebase
 
 class NavigationViewModel: NSObject, ObservableObject {
     @Published var trip: Trip?
     @Published var userLocation: CLLocationCoordinate2D?
-    @Published var startCoordinate: CLLocationCoordinate2D?
-    @Published var endCoordinate: CLLocationCoordinate2D?
     @Published var route: MKRoute?
     @Published var isLoading = false
     @Published var fuelExpense: Double = 0
@@ -15,10 +12,11 @@ class NavigationViewModel: NSObject, ObservableObject {
     @Published var miscExpense: Double = 0
     @Published var totalExpenses: Double = 0
     @Published var startTime: Date?
-    @Published var error: String?
+    @Published var pickupLocation: Location?
+    @Published var dropLocation: Location?
     
-    private let geocoder = CLGeocoder()
     private let locationManager = CLLocationManager()
+    private let geocoder = CLGeocoder()
     
     override init() {
         super.init()
@@ -28,87 +26,74 @@ class NavigationViewModel: NSObject, ObservableObject {
         locationManager.startUpdatingLocation()
     }
     
-    func loadTrip(_ trip: Trip) {
+    func startTrip(trip: Trip) {
         self.trip = trip
         self.startTime = Date()
-        
-        // Geocode the addresses to get coordinates
-        convertAddressesToCoordinates()
+        geocodeLocations()
     }
     
-    private func convertAddressesToCoordinates() {
+    private func geocodeLocations() {
         guard let trip = trip else { return }
         isLoading = true
-        error = nil
         
-        // Geocode start location
-        geocoder.geocodeAddressString(trip.startLocation) { [weak self] startPlacemarks, startError in
+        // Geocode startLocation
+        geocoder.geocodeAddressString(trip.startLocation) { [weak self] placemarks, error in
             guard let self = self else { return }
-            
-            if let startError = startError {
+            if let error = error {
+                print("Error geocoding start location: \(error.localizedDescription)")
                 self.isLoading = false
-                self.error = "Error geocoding start location: \(startError.localizedDescription)"
                 return
             }
-            
-            guard let startLocation = startPlacemarks?.first?.location else {
+            guard let placemark = placemarks?.first, let coordinate = placemark.location?.coordinate else {
+                print("No coordinates found for start location: \(trip.startLocation)")
                 self.isLoading = false
-                self.error = "Could not find coordinates for start location"
                 return
             }
+            self.pickupLocation = Location(name: trip.startLocation, coordinate: coordinate)
             
-            self.startCoordinate = startLocation.coordinate
-            
-            // Geocode end location
-            self.geocoder.geocodeAddressString(trip.endLocation) { endPlacemarks, endError in
-                if let endError = endError {
+            // Geocode endLocation
+            self.geocoder.geocodeAddressString(trip.endLocation) { placemarks, error in
+                if let error = error {
+                    print("Error geocoding end location: \(error.localizedDescription)")
                     self.isLoading = false
-                    self.error = "Error geocoding end location: \(endError.localizedDescription)"
                     return
                 }
-                
-                guard let endLocation = endPlacemarks?.first?.location else {
+                guard let placemark = placemarks?.first, let coordinate = placemark.location?.coordinate else {
+                    print("No coordinates found for end location: \(trip.endLocation)")
                     self.isLoading = false
-                    self.error = "Could not find coordinates for end location"
                     return
                 }
+                self.dropLocation = Location(name: trip.endLocation, coordinate: coordinate)
                 
-                self.endCoordinate = endLocation.coordinate
-                
-                // Now that we have both coordinates, fetch the route
+                // Fetch route after both locations are geocoded
                 self.fetchRoute()
             }
         }
     }
     
-    func fetchRoute() {
-        guard let startCoordinate = startCoordinate, let endCoordinate = endCoordinate else {
-            error = "Missing coordinates for route calculation"
+    private func fetchRoute() {
+        guard let pickup = pickupLocation, let drop = dropLocation else {
             isLoading = false
             return
         }
         
         let request = MKDirections.Request()
-        request.source = MKMapItem(placemark: MKPlacemark(coordinate: startCoordinate))
-        request.destination = MKMapItem(placemark: MKPlacemark(coordinate: endCoordinate))
+        let pickupPlacemark = MKPlacemark(coordinate: pickup.coordinate)
+        let dropPlacemark = MKPlacemark(coordinate: drop.coordinate)
+        request.source = MKMapItem(placemark: pickupPlacemark)
+        request.destination = MKMapItem(placemark: dropPlacemark)
         request.transportType = .automobile
         
         let directions = MKDirections(request: request)
         directions.calculate { [weak self] response, error in
             guard let self = self else { return }
             self.isLoading = false
-            
             if let error = error {
-                self.error = "Error calculating route: \(error.localizedDescription)"
+                print("Error calculating route: \(error.localizedDescription)")
                 return
             }
-            
             self.route = response?.routes.first
         }
-    }
-    
-    func startTrip() {
-        startTime = Date()
     }
     
     func updateTotalExpenses() {

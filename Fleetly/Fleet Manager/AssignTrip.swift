@@ -4,7 +4,7 @@ import Firebase
 import FirebaseFirestore
 
 // MARK: - Trip Model
-struct Trip: Identifiable, Codable {
+struct Trip: Identifiable, Codable,Hashable {
     let id: String
     let driverId: String
     let vehicleId: String
