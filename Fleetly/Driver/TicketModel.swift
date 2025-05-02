@@ -3,7 +3,7 @@ import FirebaseFirestore
 import FirebaseStorage
 import FirebaseAuth
 
-struct Ticket: Identifiable, Codable {
+struct Ticket: Identifiable, Codable, Equatable {
     @DocumentID var id: String?
     let category: String
     let status: String
@@ -30,6 +30,21 @@ struct Ticket: Identifiable, Codable {
         case photos
         case createdBy
         case tripId
+    }
+    
+    static func == (lhs: Ticket, rhs: Ticket) -> Bool {
+        lhs.id == rhs.id &&
+        lhs.category == rhs.category &&
+        lhs.status == rhs.status &&
+        lhs.vehicleId == rhs.vehicleId &&
+        lhs.vehicleNumber == rhs.vehicleNumber &&
+        lhs.issueType == rhs.issueType &&
+        lhs.description == rhs.description &&
+        lhs.date == rhs.date &&
+        lhs.priority == rhs.priority &&
+        lhs.photos == rhs.photos &&
+        lhs.createdBy == rhs.createdBy &&
+        lhs.tripId == rhs.tripId
     }
 }
 

@@ -123,8 +123,8 @@ struct DashboardHomeView: View {
                         NavigationLink(destination:TicketListView()){
                             StatCardGridView(
                                 icon: "ticket.fill",
-                                title: "Tickets",
-                                value: "0", // Still hardcoded, can be made dynamic later
+                                title: "Active Tickets",
+                                value: "\(dashboardVM.activeTickets)",
                                 color: .orange
                             )
                         }
