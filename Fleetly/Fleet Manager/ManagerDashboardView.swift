@@ -2,6 +2,7 @@ import SwiftUI
 import Charts
 import MapKit
 import PhotosUI
+import Firebase
 
 // Main Tab View
 struct MainTabView: View {
@@ -50,10 +51,27 @@ struct TrackView: View {
     }
 }
 
+class DriverStatsViewModel: ObservableObject {
+    @Published var driverCount: Int = 0
+    private let db = Firestore.firestore()
+
+    func fetchDriverCount() {
+        db.collection("users").getDocuments { (querySnapshot, error) in
+            if let error = error {
+                print("Error fetching driver count: \(error.localizedDescription)")
+                return
+            }
+            self.driverCount = querySnapshot?.documents.count ?? 0
+        }
+    }
+}
+
 struct DashboardHomeView: View {
     @State private var showProfile = false
     @State private var selectedAction: ActionType?
     @StateObject private var dashboardVM = DashboardViewModel() // Add DashboardViewModel
+    @StateObject private var viewModel = TripsViewModel()
+    @StateObject private var driverCountViewModel = DriverStatsViewModel()
 
     enum ActionType: Identifiable {
         case assign, maintain, reports, track
@@ -73,33 +91,41 @@ struct DashboardHomeView: View {
                         GridItem(.flexible())
                     ]
 
-                    LazyVGrid(columns: columns, spacing: 16) {
-                        StatCardGridView(
-                            icon: "car.fill",
-                            title: "Total Vehicles",
-                            value: "\(dashboardVM.totalVehicles)", // Dynamic value
-                            color: .blue
-                        )
+                    LazyVGrid(columns: columns, spacing: 10) {
+                        NavigationLink(destination: LogbookView()){
+                            StatCardGridView(
+                                icon: "book.fill",
+                                title: "Driver Logbook",
+                                value: "\(driverCountViewModel.driverCount)",
+                                color: .blue
+                            )
+                        }
+                        .onAppear{
+                            driverCountViewModel.fetchDriverCount()
+                        }
                         NavigationLink(destination: AllTripsView()) { // Link to Active Trips
                             StatCardGridView(
                                 icon: "location.fill",
-                                title: "Active Trips",
-                                value: "0", // Still hardcoded, can be made dynamic later
-                                color: .green
+                                title: "Total Trips",
+                                value: "\(viewModel.totalTrips)",
+                                color: .teal
                             )
+                        }
+                        .onAppear{
+                            viewModel.fetchTotalTrips()
                         }
                         StatCardGridView(
                             icon: "wrench.fill",
                             title: "Maintenance",
                             value: "\(dashboardVM.maintenanceVehicles)", // Dynamic value
-                            color: .orange
+                            color: .red
                         )
                         NavigationLink(destination:TicketListView()){
                             StatCardGridView(
                                 icon: "ticket.fill",
                                 title: "Tickets",
                                 value: "0", // Still hardcoded, can be made dynamic later
-                                color: .red
+                                color: .orange
                             )
                         }
                     }
@@ -372,6 +398,21 @@ struct AlertRowView: View {
         .background(Color.white)
         .cornerRadius(12)
         .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+    }
+}
+
+class TripsViewModel: ObservableObject {
+    @Published var totalTrips: Int = 0
+    private let db = Firestore.firestore()
+    
+    func fetchTotalTrips() {
+        db.collection("trips").getDocuments { (querySnapshot, error) in
+            if let error = error {
+                print("Error fetching trips: \(error.localizedDescription)")
+                return
+            }
+            self.totalTrips = querySnapshot?.documents.count ?? 0
+        }
     }
 }
 
