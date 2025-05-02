@@ -2,6 +2,7 @@ import SwiftUI
 import PhotosUI
 
 struct ProfileView: View {
+    @StateObject private var authVM = AuthViewModel()
     @State private var firstName = "John"
     @State private var lastName = "Doe"
     @State private var email = "john.doe@email.com"
@@ -84,8 +85,14 @@ struct ProfileView: View {
                 // Sign Out Section
                 Section {
                     Button(action: {
-                        // Handle sign out logic here
-                        print("Signed out")
+                        authVM.logout()
+                        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                           let window = windowScene.windows.first {
+                            let loginView = LoginView(authVM: authVM)
+                            let hostingController = UIHostingController(rootView: loginView)
+                            window.rootViewController = hostingController
+                            window.makeKeyAndVisible()
+                        }
                     }) {
                         Text("Sign Out")
                             .frame(maxWidth: .infinity)
