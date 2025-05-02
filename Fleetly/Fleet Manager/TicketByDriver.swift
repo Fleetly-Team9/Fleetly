@@ -84,19 +84,19 @@ struct TicketListView: View {
                             }
                             
                             if let status = selectedStatus {
-                                FilterChip(text: status, color: .blue) {
+                                FleetFilterChip(text: status, color: .blue) {
                                     selectedStatus = nil
                                 }
                             }
                             
                             if let priority = selectedPriority {
-                                FilterChip(text: priority, color: .orange) {
+                                FleetFilterChip(text: priority, color: .orange) {
                                     selectedPriority = nil
                                 }
                             }
                             
                             if let category = selectedCategory {
-                                FilterChip(text: category, color: .green) {
+                                FleetFilterChip(text: category, color: .green) {
                                     selectedCategory = nil
                                 }
                             }
@@ -105,7 +105,7 @@ struct TicketListView: View {
                         .padding(.vertical, 8)
                     }
                     .background(Color(.systemBackground))
-                }
+                        }
                 
                 TicketListContent(
                     isLoading: isLoading,
@@ -157,26 +157,26 @@ struct TicketListView: View {
         let db = Firestore.firestore()
         let uniqueDriverIds = Set(ticketManager.tickets.map { $0.createdBy })
         
-        print("Fetching names for driver IDs: \(uniqueDriverIds)")
+     
         
         for driverId in uniqueDriverIds {
             db.collection("users").document(driverId).getDocument { document, error in
                 if let error = error {
-                    print("Error fetching driver name for ID \(driverId): \(error.localizedDescription)")
+                  
                     return
                 }
                 
                 guard let document = document, document.exists else {
-                    print("No document found for driver ID: \(driverId)")
+                  
                     return
                 }
                 
                 guard let data = document.data() else {
-                    print("No data found for driver ID: \(driverId)")
+                   
                     return
                 }
                 
-                print("Raw data for driver \(driverId): \(data)")
+              
                 
                 // Try different possible field names for first and last name
                 let firstName = data["firstName"] as? String ?? data["first_name"] as? String ?? data["name"] as? String
@@ -184,7 +184,7 @@ struct TicketListView: View {
                 
                 if let firstName = firstName {
                     let fullName = lastName != nil ? "\(firstName) \(lastName!)" : firstName
-                    print("Found name for driver \(driverId): \(fullName)")
+                   
                     DispatchQueue.main.async {
                         self.driverNames[driverId] = fullName
                     }
@@ -267,7 +267,7 @@ struct TicketRow: View {
             // Header
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(ticket.title)
+                Text(ticket.title)
                         .font(.headline)
                     Text("By: \(ticket.driverName)")
                         .font(.subheadline)
@@ -328,6 +328,7 @@ struct DetailTicketView: View {
     @StateObject private var ticketManager = TicketManager()
     @State private var showingStatusUpdateAlert = false
     @State private var newStatus: String = ""
+    @State private var showingMaintenanceSheet = false
     
     var formattedDate: String {
         let formatter = DateFormatter()
@@ -461,6 +462,26 @@ struct DetailTicketView: View {
                                     .foregroundStyle(.green)
                                     .clipShape(RoundedRectangle(cornerRadius: 12))
                                 }
+                                
+                                // Schedule Maintenance Button
+                                if ticket.category.lowercased() == "vehicle issue" {
+                                    Button(action: {
+                                        showingMaintenanceSheet = true
+                                    }) {
+                                        HStack {
+                                            Image(systemName: "wrench.and.screwdriver.fill")
+                                                .symbolRenderingMode(.hierarchical)
+                                                .font(.headline)
+                                            Text("Schedule Maintenance")
+                                                .font(.headline)
+                                        }
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 16)
+                                        .background(Color.orange.opacity(0.1))
+                                        .foregroundStyle(.orange)
+                                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    }
+                                }
                             }
                         }
                         .padding(.top, 20)
@@ -485,6 +506,16 @@ struct DetailTicketView: View {
             } message: {
                 Text("Are you sure you want to change the status to '\(newStatus)'?")
             }
+            .sheet(isPresented: $showingMaintenanceSheet) {
+                NavigationStack {
+                    MaintenanceScheduleView(
+                        vehicleNumber: ticket.vehicleNumber,
+                        ticketId: ticket.id ?? "",
+                        ticketPriority: ticket.priority,
+                        ticketDescription: ticket.description
+                    )
+                }
+            }
         }
     }
     
@@ -506,8 +537,231 @@ struct DetailTicketView: View {
     }
 }
 
+// MARK: - Maintenance Schedule View
+struct MaintenanceScheduleView: View {
+    let vehicleNumber: String
+    let ticketId: String
+    let ticketPriority: String
+    let ticketDescription: String
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var viewModel = AssignTaskViewModel()
+    @State private var selectedPersonnel: String = ""
+    @State private var selectedPersonnelId: String = ""
+    @State private var completionDate = Date()
+    @State private var priority: String
+    @State private var showPersonnelSheet = false
+    @State private var showValidationAlert = false
+    @State private var validationMessage = ""
+    @State private var showingConfirmation = false
+    @State private var vehicleId: String = ""
+    
+    let priorities = ["High", "Medium", "Low"]
+    
+    init(vehicleNumber: String, ticketId: String, ticketPriority: String, ticketDescription: String) {
+        self.vehicleNumber = vehicleNumber
+        self.ticketId = ticketId
+        self.ticketPriority = ticketPriority
+        self.ticketDescription = ticketDescription
+        _priority = State(initialValue: ticketPriority)
+    }
+    
+    private var minimumDate: Date {
+        return Date()
+    }
+    
+    private func validateFields() -> Bool {
+        if selectedPersonnel.isEmpty {
+            validationMessage = "Please select maintenance personnel"
+            return false
+        }
+        if vehicleId.isEmpty {
+            validationMessage = "Could not find vehicle ID"
+            return false
+        }
+        return true
+    }
+    
+    private func fetchVehicleId() {
+        let db = Firestore.firestore()
+        db.collection("vehicles")
+            .whereField("licensePlate", isEqualTo: vehicleNumber)
+            .getDocuments { (querySnapshot, error) in
+                if let error = error {
+                    print("Error fetching vehicle: \(error.localizedDescription)")
+                    return
+                }
+                
+                if let document = querySnapshot?.documents.first {
+                    self.vehicleId = document.documentID
+                }
+            }
+    }
+    
+    private func updateTicketStatus() {
+        let db = Firestore.firestore()
+        db.collection("tickets").document(ticketId).updateData([
+            "status": "In Progress",
+            "priority": priority,
+            "updatedAt": FieldValue.serverTimestamp()
+        ]) { error in
+            if let error = error {
+                print("Error updating ticket status: \(error.localizedDescription)")
+            } else {
+                print("Ticket status updated successfully")
+            }
+        }
+    }
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                LinearGradient(gradient: Gradient(colors: [Color(.systemGray6).opacity(0.8), Color(.systemBackground)]), startPoint: .top, endPoint: .bottom)
+                    .edgesIgnoringSafeArea(.all)
+                
+                VStack(spacing: 10) {
+                    Form {
+                        Section(header: Text("Task Details").font(.caption).foregroundColor(.gray)) {
+                            HStack {
+                                Text("Vehicle")
+                                Spacer()
+                                Text(vehicleNumber)
+                    .foregroundColor(.primary)
+                            }
+                            
+                            Picker("Priority", selection: $priority) {
+                                ForEach(priorities, id: \.self) { priority in
+                                    Text(priority).tag(priority)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            
+                            DatePicker("Expected Completion Date", selection: $completionDate, in: minimumDate..., displayedComponents: [.date])
+                                .datePickerStyle(.compact)
+                            
+                            HStack {
+                                Text("Maintenance Personnel")
+                                Spacer()
+                                Button(action: { showPersonnelSheet = true }) {
+                                    Text(selectedPersonnel.isEmpty ? "Select Personnel" : selectedPersonnel)
+                                        .foregroundColor(selectedPersonnel.isEmpty ? .gray : .blue)
+                                }
+                            }
+                        }
+                        
+                        Section(header: Text("Issue Description").font(.caption).foregroundColor(.gray)) {
+                            Text(ticketDescription)
+                                .font(.subheadline)
+                            .foregroundColor(.primary)
+                        }
+                    }
+                    .frame(maxHeight: .infinity)
+                    
+                    Button(action: {
+                        if validateFields() {
+                            showingConfirmation = true
+                        } else {
+                            showValidationAlert = true
+                        }
+                    }) {
+                        Text("Schedule")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 20)
+                    
+                    Spacer()
+                }
+            }
+            .navigationTitle("Schedule Maintenance")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
+            .sheet(isPresented: $showPersonnelSheet) {
+                PersonnelListView(selectedPersonnel: $selectedPersonnel, selectedPersonnelId: $selectedPersonnelId)
+            }
+            .alert("Validation Error", isPresented: $showValidationAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(validationMessage)
+            }
+            .sheet(isPresented: $showingConfirmation) {
+                NavigationStack {
+                    VStack(spacing: 24) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 60))
+                            .foregroundColor(.green)
+                        
+                        Text("Confirm Assignment")
+                            .font(.title2.bold())
+                        
+                        HStack(spacing: 20) {
+                            Button {
+                                showingConfirmation = false
+                            } label: {
+                                Text("Cancel")
+                                    .font(.headline)
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(Color(.systemGray6))
+                            .foregroundColor(.primary)
+                                    .cornerRadius(12)
+                            }
+                            
+                            Button {
+                                showingConfirmation = false
+                                viewModel.assignTask(
+                                    vehicleId: vehicleId,
+                                    issue: ticketDescription,
+                                    completionDate: completionDate,
+                                    priority: priority,
+                                    assignedToId: selectedPersonnelId
+                                ) { success in
+                                    if success {
+                                        updateTicketStatus()
+                                        dismiss()
+                                    }
+                                }
+                            } label: {
+                                Text("Confirm")
+                                    .font(.headline)
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(Color.blue)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(12)
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+                    .padding()
+                    .presentationDetents([.height(250)])
+                    .presentationDragIndicator(.visible)
+                }
+            }
+            .overlay {
+                if viewModel.isLoading {
+                    ProgressView()
+                    }
+                }
+            .onAppear {
+                fetchVehicleId()
+            }
+        }
+    }
+}
+
 // MARK: - Filter Views
-struct FilterChip: View {
+struct FleetFilterChip: View {
     let text: String
     let color: Color
     let onRemove: () -> Void
@@ -546,7 +800,7 @@ struct FilterVieww: View {
             Form {
                 Section {
                     ForEach(statuses, id: \.self) { status in
-                        FilterRow(
+                        FleetFilterRow(
                             title: status,
                             isSelected: selectedStatus == status,
                             action: {
@@ -560,7 +814,7 @@ struct FilterVieww: View {
                 
                 Section {
                     ForEach(priorities, id: \.self) { priority in
-                        FilterRow(
+                        FleetFilterRow(
                             title: priority,
                             isSelected: selectedPriority == priority,
                             action: {
@@ -574,7 +828,7 @@ struct FilterVieww: View {
                 
                 Section {
                     ForEach(availableCategories, id: \.self) { category in
-                        FilterRow(
+                        FleetFilterRow(
                             title: category,
                             isSelected: selectedCategory == category,
                             action: {
@@ -613,7 +867,7 @@ struct FilterVieww: View {
     }
 }
 
-struct FilterRow: View {
+struct FleetFilterRow: View {
     let title: String
     let isSelected: Bool
     let action: () -> Void
@@ -622,7 +876,7 @@ struct FilterRow: View {
         Button(action: action) {
             HStack {
                 Text(title)
-                Spacer()
+            Spacer()
                 if isSelected {
                     Image(systemName: "checkmark")
                         .foregroundStyle(.blue)
