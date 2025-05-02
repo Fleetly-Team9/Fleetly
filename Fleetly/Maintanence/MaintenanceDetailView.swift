@@ -1,11 +1,3 @@
-//
-//  MaintenanceDetailView.swift
-//  Maintenance
-//
-//  Created by Gunjan Mishra on 26/04/25.
-//
-
-
 import SwiftUI
 
 struct MaintenanceDetailView: View {
@@ -60,6 +52,13 @@ struct MaintenanceDetailView: View {
                         .padding()
                         .background(Color(hex: "E6E6E6"))
                         .cornerRadius(8)
+                        .onChange(of: laborCost) { newValue in
+                            if let cost = Double(newValue) {
+                                order.laborCost = cost
+                            } else {
+                                order.laborCost = nil
+                            }
+                        }
                 }
                 .padding()
 
