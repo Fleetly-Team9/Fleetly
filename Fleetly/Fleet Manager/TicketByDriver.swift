@@ -1,8 +1,10 @@
 import SwiftUI
+import FirebaseFirestore
+import FirebaseAuth
 
 // Model for a Driver Ticket
 struct DriverTicket: Identifiable {
-    let id = UUID()
+    let id: String
     let title: String
     let vehicle: String
     let issue: String
@@ -14,36 +16,67 @@ struct DriverTicket: Identifiable {
 // Main View for the Ticket List
 struct TicketListView: View {
     @StateObject private var viewModel = AssignTaskViewModel()
+    @StateObject private var ticketManager = TicketManager()
     @State private var isShowingAssignTaskSheet = false
     @State private var selectedTicket: DriverTicket?
-
-    let tickets: [DriverTicket] = [
-        DriverTicket(title: "BODY DAMAGE", vehicle: "KA01AS123", issue: "Body Damage", date: "02.05.2025", status: "In Progress", priority: "HIGH"),
-        DriverTicket(title: "BODY DAMAGE", vehicle: "KA01AB123", issue: "Body Damage", date: "02.05.2025", status: "In Progress", priority: "HIGH"),
-        DriverTicket(title: "BODY DAMAGE", vehicle: "KA01AS123", issue: "Body Damage", date: "02.05.2025", status: "In Progress", priority: "MEDIUM"),
-        DriverTicket(title: "BODY DAMAGE", vehicle: "KA01AD123", issue: "Body Damage", date: "02.05.2025", status: "In Progress", priority: "LOW")
-    ]
+    @State private var isLoading = true
+    
+    var driverTickets: [DriverTicket] {
+        ticketManager.tickets.map { ticket in
+            DriverTicket(
+                id: ticket.id ?? UUID().uuidString,
+                title: ticket.category.uppercased(),
+                vehicle: ticket.vehicleNumber,
+                issue: ticket.issueType,
+                date: ticket.date.formattedString(),
+                status: ticket.status,
+                priority: ticket.priority.uppercased()
+            )
+        }
+    }
 
     var body: some View {
         NavigationView {
-            List {
-                ForEach(tickets) { ticket in
-                    TicketRow(
-                        ticket: ticket,
-                        isShowingAssignTaskSheet: $isShowingAssignTaskSheet,
-                        selectedTicket: $selectedTicket
-                    )
-                    .listRowSeparator(.hidden)
-                    .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
-                    .listRowBackground(Color.clear)
+            ZStack {
+                if isLoading {
+                    ProgressView()
+                        .scaleEffect(1.5)
+                } else {
+                    List {
+                        ForEach(driverTickets) { ticket in
+                            TicketRow(
+                                ticket: ticket,
+                                isShowingAssignTaskSheet: $isShowingAssignTaskSheet,
+                                selectedTicket: $selectedTicket
+                            )
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+                            .listRowBackground(Color.clear)
+                        }
+                    }
+                    .listStyle(PlainListStyle())
+                    .overlay {
+                        if driverTickets.isEmpty {
+                            ContentUnavailableView(
+                                "No Tickets Available",
+                                systemImage: "ticket",
+                                description: Text("There are no tickets at the moment.")
+                            )
+                        }
+                    }
                 }
             }
-            .listStyle(PlainListStyle())
             .navigationTitle("My Tickets")
             .background(Color(.systemGroupedBackground))
             .sheet(isPresented: $isShowingAssignTaskSheet) {
                 if let selectedTicket = selectedTicket {
                     AssignTaskView()
+                }
+            }
+            .onAppear {
+                // Simulate loading time to ensure data is fetched
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    isLoading = false
                 }
             }
         }
@@ -142,10 +175,6 @@ struct TicketRow: View {
         }
     }
 }
-
-
-
-
 
 // Preview Provider
 struct TicketListView_Previews: PreviewProvider {
