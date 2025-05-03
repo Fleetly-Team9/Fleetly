@@ -6,7 +6,7 @@
 // MARK:- Calendar.swift
 import SwiftUI
 
-struct CalendarView: View {
+/*struct CalendarView: View {
     @ObservedObject var viewModel: PastRidesViewModel
     @Environment(\.colorScheme) var colorScheme
     let weekDays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"]
@@ -95,5 +95,96 @@ struct CalendarView: View {
             }
             .padding(.horizontal, 8)
         }
+    }
+}
+
+*/
+
+import SwiftUI
+
+struct CalendarView: View {
+    @ObservedObject var viewModel: PastRidesViewModel
+    @Environment(\.colorScheme) var colorScheme
+
+    private let calendar = Calendar.current
+    private let weekdays = ["S", "M", "T", "W", "T", "F", "S"]
+
+    var body: some View {
+        VStack {
+            // Month navigation
+            HStack {
+                Button(action: {
+                    viewModel.previousMonth()
+                    print("Navigated to previous month: \(viewModel.monthString(from: viewModel.currentMonth))")
+                }) {
+                    Image(systemName: "chevron.left")
+                        .foregroundColor(.blue)
+                }
+
+                Spacer()
+
+                Text(viewModel.monthString(from: viewModel.currentMonth))
+                    .font(.headline)
+
+                Spacer()
+
+                Button(action: {
+                    viewModel.nextMonth()
+                    print("Navigated to next month: \(viewModel.monthString(from: viewModel.currentMonth))")
+                }) {
+                    Image(systemName: "chevron.right")
+                        .foregroundColor(.blue)
+                }
+            }
+            .padding(.horizontal)
+
+            // Weekday headers
+            HStack {
+                ForEach(weekdays, id: \.self) { day in
+                    Text(day)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.gray)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .padding(.vertical, 5)
+
+            // Days grid
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 10) {
+                ForEach(viewModel.daysInMonth().flatMap { $0 }, id: \.self) { date in
+                    if let date = date {
+                        ZStack {
+                            Circle()
+                                .fill(viewModel.selectedDate == date ? Color.blue : Color.clear)
+                                .frame(width: 36, height: 36)
+
+                            Text("\(calendar.component(.day, from: date))")
+                                .font(.system(size: 16))
+                                .foregroundColor(dateIsToday(date) ? .red : (viewModel.isDateInCurrentMonth(date) ? .primary : .gray))
+                                .frame(width: 36, height: 36)
+
+                            if viewModel.dayHasRides(date) {
+                                Circle()
+                                    .fill(Color.green)
+                                    .frame(width: 8, height: 8)
+                                    .offset(x: 12, y: 12)
+                            }
+                        }
+                        .onTapGesture {
+                            print("Tapped date: \(date)")
+                            viewModel.updateSelectedDate(date)
+                        }
+                    } else {
+                        Color.clear
+                            .frame(width: 36, height: 36)
+                    }
+                }
+            }
+        }
+        .padding()
+    }
+
+    private func dateIsToday(_ date: Date) -> Bool {
+        calendar.isDate(date, inSameDayAs: Date())
     }
 }

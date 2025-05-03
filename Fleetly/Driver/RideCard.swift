@@ -136,9 +136,9 @@ import SwiftUI
 }
 */
 
-/*import SwiftUI
+import SwiftUI
 
-struct RideCard: View {
+/*struct RideCard: View {
     let ride: Ride
     @Environment(\.colorScheme) var colorScheme
     
@@ -246,49 +246,6 @@ struct RideCard: View {
     }
 }
 
-#Preview {
-    RideCard(ride: Ride(
-        id: "53C8D310-7A9B-425F-AF60-8F2017CFF780",
-        passengers: 2,
-        startLocation: "Chennai",
-        startTime: Date(),
-        status: "completed",
-        time: "19:23",
-        vehicleId: "KA01AB4321",
-        vehicleType: "Swift Dzire",
-        preInspection: nil,
-        postInspection: Inspection(
-            remarks: Inspection.Remarks(brakes: "No issues", tyrePressure: "No issues"),
-            defects: Inspection.Defects(
-                airbags: false,
-                brakes: true,
-                clutch: false,
-                horns: false,
-                indicators: false,
-                oil: false,
-                physicalDamage: false,
-                tyrePressure: true
-            ),
-            driverID: "x3uoj5o6q4YzQMY2chvKHpA2iFd2",
-            imageURLs: ["url1", "url2", "url3", "url4"],
-            needsMaintence: false,
-            overallCheckStatus: "Verified",
-            photoURL: "url",
-            timestamp: Date().addingTimeInterval(3600),
-            tripID: "53C8D310-7A9B-425F-AF60-8F2017CFF780",
-            vehicleID: "63EA0562-A54A-4BC9-BEA3-2DF229DB43D9",
-            mileage: 45.0
-        ),
-        tripCharges: TripCharges(
-            endClicked: "2025-05-03T09:15:11Z",
-            goClicked: "2025-05-03T09:15:08Z",
-            incidental: 990,
-            misc: 0,
-            fuelLog: 979,
-            tollFees: 11
-        )
-    ))
-}
 */
 
 import SwiftUI
@@ -352,7 +309,7 @@ struct RideCard: View {
                     Text(timeFormatter.string(from: ride.endTime))
                         .font(.headline)
                         .foregroundColor(valueTextColor)
-                    Text(ride.endLocation ?? "Not available")
+                    Text(ride.endLocation.isEmpty ? "Not available" : ride.endLocation)
                         .font(.subheadline)
                         .foregroundColor(.gray)
                 }
@@ -387,12 +344,16 @@ struct RideCard: View {
     }
 }
 
+
 #Preview {
     RideCard(ride: Ride(
         id: "53C8D310-7A9B-425F-AF60-8F2017CFF780",
+        driverId: "x3uoj5o6q4YzQMY2chvKHpA2iFd2",
         passengers: 2,
         startLocation: "Chennai",
+        endLocation: "Mysuru",
         startTime: Date(),
+        endTime: Date().addingTimeInterval(3600),
         status: "completed",
         time: "19:23",
         vehicleId: "KA01AB4321",

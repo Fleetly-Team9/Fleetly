@@ -439,7 +439,9 @@ class FirebaseManager {
                             
                             // Update the trip status to "completed"
                             let tripDocRef = self.tripsCollection().document(tripId)
-                            tripDocRef.updateData(["status": "completed"]) { error in
+                            tripDocRef.updateData(["status": "completed",
+                                                   "endTime" : Timestamp(date:Date())
+                                                  ]) { error in
                                 if let error = error {
                                     completion(.failure(error))
                                 } else {
