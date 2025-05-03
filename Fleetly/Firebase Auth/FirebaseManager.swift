@@ -44,6 +44,7 @@ struct InspectionRecord: Codable {
     let photoURL: String
     let tripID: String
     let vehicleID: String
+    let mileage: Double? // Added mileage field
     
     enum CodingKeys: String, CodingKey {
         case driverID = "driverID"
@@ -56,6 +57,7 @@ struct InspectionRecord: Codable {
         case photoURL
         case tripID
         case vehicleID
+        case mileage // Added to CodingKeys
     }
 }
 
@@ -334,7 +336,8 @@ class FirebaseManager {
                     needsMaintence: needsMaintence,
                     photoURL: photoURL,
                     tripID: tripId,
-                    vehicleID: vehicleID
+                    vehicleID: vehicleID,
+                    mileage: nil
                 )
                 
                 let preinspectionDocRef = self.preinspectionCollection(for: tripId).document(vehicleNumber)
@@ -369,6 +372,7 @@ class FirebaseManager {
             tyrePressureCheck: Bool,
             brakesCheck: Bool,
             indicatorsCheck: Bool,
+            mileage: Double?,
             overallCheckStatus: String,
             images: [UIImage],
             vehicleNumber: String,
@@ -421,17 +425,26 @@ class FirebaseManager {
                         needsMaintence: needsMaintence,
                         photoURL: photoURL,
                         tripID: tripId,
-                        vehicleID: vehicleID
+                        vehicleID: vehicleID,
+                        mileage: mileage
                     )
-                    
                     let postinspectionDocRef = self.postinspectionCollection(for: tripId).document(vehicleNumber)
                     
                     do {
                         try postinspectionDocRef.setData(from: inspectionRecord) { error in
                             if let error = error {
                                 completion(.failure(error))
-                            } else {
-                                completion(.success(()))
+                                return
+                            }
+                            
+                            // Update the trip status to "completed"
+                            let tripDocRef = self.tripsCollection().document(tripId)
+                            tripDocRef.updateData(["status": "completed"]) { error in
+                                if let error = error {
+                                    completion(.failure(error))
+                                } else {
+                                    completion(.success(()))
+                                }
                             }
                         }
                     } catch {
