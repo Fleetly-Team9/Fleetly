@@ -1,490 +1,373 @@
 import SwiftUI
 import UIKit
-import Firebase
-import FirebaseFirestore
-
-// ViewModel to fetch tasks and inventory from Firestore
-class HomeViewModel: ObservableObject {
-    @Published var workOrders: [WorkOrder] = []
-    @Published var inventoryItems: [InventoryItem] = []
-    @Published var isLoading = false
-    @Published var isInventoryLoading = false
-    @Published var errorMessage: String?
-    @Published var inventoryErrorMessage: String?
-    
-    private let db = Firestore.firestore()
-    private var taskListener: ListenerRegistration?
-    private var inventoryListener: ListenerRegistration?
-    
-    init() {
-        fetchWorkOrders()
-        fetchInventory()
-    }
-    
-    deinit {
-        taskListener?.remove()
-        inventoryListener?.remove()
-    }
-    
-    func fetchWorkOrders() {
-        isLoading = true
-        taskListener = db.collection("maintenance_tasks")
-            .whereField("assignedToId", isEqualTo: "maintenance_user_id") // Replace with actual user ID
-            .whereField("status", in: ["pending", "in_progress"])
-            .addSnapshotListener { [weak self] snapshot, error in
-                guard let self = self else { return }
-                self.isLoading = false
-                
-                if let error = error {
-                    self.errorMessage = "Error fetching tasks: \(error.localizedDescription)"
-                    return
-                }
-                
-                guard let documents = snapshot?.documents else {
-                    self.errorMessage = "No tasks found"
-                    return
-                }
-                
-                Task {
-                    var orders: [WorkOrder] = []
-                    for document in documents {
-                        do {
-                            let task = try document.data(as: MaintenanceTask.self)
-                            let vehicleNumber = await self.fetchVehicleNumber(for: task.vehicleId)
-                            let workOrder = self.mapToWorkOrder(task: task, vehicleNumber: vehicleNumber)
-                            orders.append(workOrder)
-                        } catch {
-                            self.errorMessage = "Error decoding task: \(error.localizedDescription)"
-                        }
-                    }
-                    self.workOrders = orders.sorted { $0.priority > $1.priority }
-                }
-            }
-    }
-    
-    func fetchInventory() {
-        isInventoryLoading = true
-        inventoryListener = db.collection("inventory")
-            .addSnapshotListener { [weak self] snapshot, error in
-                guard let self = self else { return }
-                self.isInventoryLoading = false
-                
-                if let error = error {
-                    self.inventoryErrorMessage = "Error fetching inventory: \(error.localizedDescription)"
-                    return
-                }
-                
-                guard let documents = snapshot?.documents else {
-                    self.inventoryErrorMessage = "No inventory items found"
-                    return
-                }
-                
-                self.inventoryItems = documents.compactMap { document in
-                    guard let name = document.data()["name"] as? String,
-                          let units = document.data()["units"] as? Int else {
-                        return nil
-                    }
-                    return InventoryItem(id: document.documentID, name: name, units: units)
-                }
-            }
-    }
-    
-    func updateTaskStatus(taskId: String, newStatus: String, completion: @escaping (Bool) -> Void) {
-        let status: MaintenanceTask.TaskStatus
-        switch newStatus.lowercased() {
-        case "in progress":
-            status = .inProgress
-        case "completed":
-            status = .completed
-        case "to be done":
-            status = .pending
-        default:
-            status = .pending
-        }
-        
-        db.collection("maintenance_tasks").document(taskId).updateData(["status": status.rawValue]) { error in
-            if let error = error {
-                self.errorMessage = "Error updating status: \(error.localizedDescription)"
-                completion(false)
-            } else {
-                completion(true)
-            }
-        }
-    }
-    
-    private func fetchVehicleNumber(for vehicleId: String) async -> String {
-        do {
-            let document = try await db.collection("vehicles").document(vehicleId).getDocument()
-            if let data = document.data(),
-               let licensePlate = data["licensePlate"] as? String {
-                return licensePlate
-            }
-        } catch {
-            self.errorMessage = "Error fetching vehicle: \(error.localizedDescription)"
-        }
-        return "Unknown Vehicle"
-    }
-    
-    private func mapToWorkOrder(task: MaintenanceTask, vehicleNumber: String) -> WorkOrder {
-        let priorityValue: Int
-        switch task.priority.lowercased() {
-        case "high": priorityValue = 2
-        case "medium": priorityValue = 1
-        case "low": priorityValue = 0
-        default: priorityValue = 0
-        }
-        
-        return WorkOrder(
-            id: task.id,
-            vehicleNumber: vehicleNumber,
-            issue: task.issue,
-            status: task.status.rawValue.capitalized,
-            expectedDelivery: task.completionDate,
-            priority: priorityValue,
-            issues: [task.issue],
-            parts: [],
-            laborCost: nil
-        )
-    }
-}
 
 struct HomeView: View {
-    @StateObject private var viewModel = HomeViewModel()
-    @State private var currentWorkOrderIndex: Int = 0
-    
+    @State private var workOrders: [WorkOrder] = [
+        WorkOrder(id: "23", vehicleNumber: "KA01AB4321", issue: "Brake Pad Replacement", status: "To be Done", expectedDelivery: "6:00 PM", priority: 2, issues: ["Worn brake pads"]),
+        WorkOrder(id: "24", vehicleNumber: "KA02CD9876", issue: "Oil Change", status: "To be Done", expectedDelivery: "7:00 PM", priority: 1, issues: ["Low oil"]),
+        WorkOrder(id: "25", vehicleNumber: "KA03EF5432", issue: "Tire Rotation", status: "To be Done", expectedDelivery: "8:00 PM", priority: 0, issues: ["Uneven wear"])
+    ]
+    @State private var showCardAnimation = false
+
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
-                VStack(alignment: .center, spacing: 30) {
+                VStack(alignment: .leading, spacing: 24) {
                     // Header
-                    VStack(alignment: .leading, spacing: 5) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Welcome \(getUserName())!")
-                                    .font(.system(.largeTitle, design: .rounded).weight(.bold))
-                                    .foregroundColor(.primary)
-                                Text("Here's your schedule for today!")
-                                    .font(.system(.title3, design: .rounded))
-                                    .foregroundColor(.secondary)
-                            }
-                            Spacer()
-                            NavigationLink(destination: ProfileView()) {
-                                Image(systemName: "person.circle")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 30, height: 30)
-                                    .foregroundColor(.black)
-                            }
+                    HStack {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Welcome, \(getUserName())!")
+                                .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                                .foregroundStyle(.primary)
+                            Text("Your tasks for today")
+                                .font(.system(.subheadline, design: .rounded, weight: .medium))
+                                .foregroundStyle(.secondary)
                         }
-                        .padding(.horizontal, 20)
+                        Spacer()
+                        NavigationLink(destination: ProfileView()) {
+                            Image(systemName: "person.circle.fill")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 40, height: 40)
+                                .foregroundStyle(.white)
+                                .background(
+                                    Circle()
+                                        .fill(.blue)
+                                        .frame(width: 44, height: 44)
+                                        .shadow(radius: 4)
+                                )
+                        }
                     }
-                    .frame(maxWidth: .infinity)
-                    
-                    // Assigned Work
-                    VStack(alignment: .leading, spacing: 20) {
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+
+                    // Overview Section
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Overview")
+                            .font(.system(.title3, design: .rounded, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .padding(.horizontal, 16)
+
+                        HStack(spacing: 16) {
+                            OverviewStat(icon: "car.fill", title: "Total Vehicles", value: "19", color: .blue)
+                            OverviewStat(icon: "wrench.and.screwdriver.fill", title: "Pending Tasks", value: "\(workOrders.count)", color: .orange)
+                        }
+                        .padding(.horizontal, 16)
+                    }
+
+                    // Assigned Work Section
+                    VStack(alignment: .leading, spacing: 16) {
                         Text("Assigned Work")
-                            .font(.system(.title2, design: .rounded).weight(.semibold))
-                            .foregroundColor(.primary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        
-                        if viewModel.isLoading {
-                            ProgressView()
+                            .font(.system(.title3, design: .rounded, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .padding(.horizontal, 16)
+
+                        if workOrders.isEmpty {
+                            Text("No Tasks Assigned")
+                                .font(.system(.body, design: .rounded))
+                                .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity)
                                 .padding()
-                        } else if let errorMessage = viewModel.errorMessage {
-                            Text(errorMessage)
-                                .font(.system(.title3, design: .rounded).weight(.medium))
-                                .foregroundColor(.red)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.cardBackground)
-                                .cornerRadius(16)
-                                .shadow(color: Color.black.opacity(0.1), radius: 6, x: 0, y: 3)
-                        } else if currentWorkOrderIndex < viewModel.workOrders.count {
-                            WorkOrderCard(
-                                workOrder: $viewModel.workOrders[currentWorkOrderIndex],
-                                onStatusChange: { newStatus, workOrderId in
-                                    viewModel.updateTaskStatus(taskId: workOrderId, newStatus: newStatus) { success in
-                                        if success {
-                                            if newStatus == "Completed" {
-                                                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                                                    if currentWorkOrderIndex < viewModel.workOrders.count - 1 {
-                                                        currentWorkOrderIndex += 1
-                                                    }
-                                                }
-                                            }
-                                        }
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(.background)
+                                        .overlay(.ultraThinMaterial)
+                                        .shadow(radius: 2)
+                                )
+                                .padding(.horizontal, 16)
+                        } else {
+                            ForEach($workOrders, id: \.id) { $workOrder in
+                                WorkOrderCard(
+                                    workOrder: $workOrder,
+                                    onStatusChange: { newStatus in
+                                        print("Status changed to: \(newStatus) for Work Order #\(workOrder.id)")
+                                        workOrder.status = newStatus
                                     }
-                                }
-                            )
-                        } else {
-                            Text("No Work Orders Left")
-                                .font(.system(.title3, design: .rounded).weight(.medium))
-                                .foregroundColor(.gray)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.cardBackground)
-                                .cornerRadius(16)
-                                .shadow(color: Color.black.opacity(0.1), radius: 6, x: 0, y: 3)
-                                .padding(.horizontal, 0)
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                    .frame(maxWidth: .infinity)
-                    
-                    // Inventory
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("Inventory")
-                                .font(.system(.title2, design: .rounded).weight(.semibold))
-                                .foregroundColor(.darkGray)
-                            Spacer()
-                            NavigationLink("View All", destination: InventoryManagementView()) // Removed 'items' parameter
-                                .font(.system(.subheadline, design: .rounded).weight(.medium))
-                                .foregroundColor(.customBlue)
-                        }
-                        .padding(.horizontal, 20)
-                        
-                        if viewModel.isInventoryLoading {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                        } else if let errorMessage = viewModel.inventoryErrorMessage {
-                            Text(errorMessage)
-                                .font(.system(.subheadline, design: .rounded))
-                                .foregroundColor(.red)
-                                .padding(.horizontal, 20)
-                        } else {
-                            HStack(spacing: 16) {
-                                ForEach(viewModel.inventoryItems.prefix(4)) { item in
-                                    InventoryIcon(item: item)
-                                        .background(Color.backgroundGray)
-                                        .cornerRadius(12)
-                                        .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
-                                }
+                                )
+                                .padding(.horizontal, 16)
+                                .opacity(showCardAnimation ? 1 : 0)
+                                .offset(y: showCardAnimation ? 0 : 20)
+                                .animation(.easeOut(duration: 0.5).delay(Double(workOrders.firstIndex(where: { $0.id == workOrder.id }) ?? 0) * 0.1), value: showCardAnimation)
                             }
-                            .frame(width: 353, height: 120)
-                            .padding(.horizontal, 20)
                         }
                     }
-                    .frame(maxWidth: .infinity)
-                    
-                    // Alerts
-                    VStack(alignment: .leading, spacing: 20) {
+
+                    // Alerts Section
+                    VStack(alignment: .leading, spacing: 16) {
                         Text("Alerts")
-                            .font(.system(.title2, design: .rounded).weight(.semibold))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 20)
-                        
+                            .font(.system(.title3, design: .rounded, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .padding(.horizontal, 16)
+
                         AlertItem(text: "Vehicle 23 needs maintenance")
                         AlertItem(text: "Vehicle 2 is due for service in 3 days")
                     }
-                    .frame(maxWidth: .infinity)
                 }
                 .padding(.vertical, 20)
-                .frame(maxWidth: .infinity)
             }
-            .background(Color.white.ignoresSafeArea())
+            .background(Color(.systemBackground).ignoresSafeArea())
             .navigationTitle("")
             .navigationBarHidden(true)
+            .onAppear {
+                withAnimation {
+                    showCardAnimation = true
+                }
+            }
         }
     }
-    
+
     private func getUserName() -> String {
-        return "manash"
+        return "Manash"
+    }
+}
+
+struct OverviewStat: View {
+    let icon: String
+    let title: String
+    let value: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .foregroundStyle(.white)
+                .font(.system(size: 28, weight: .medium))
+                .frame(width: 40, height: 40)
+                .background(
+                    Circle()
+                        .fill(color.opacity(0.8))
+                        .shadow(radius: 2)
+                )
+            VStack(alignment: .leading, spacing: 4) {
+                Text(value)
+                    .font(.system(.title, design: .rounded, weight: .bold))
+                    .foregroundStyle(.primary)
+                Text(title)
+                    .font(.system(.subheadline, design: .rounded, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding()
+        .frame(width: (UIScreen.main.bounds.width - 48) / 2, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.background)
+                .overlay(
+                    LinearGradient(
+                        colors: [color.opacity(0.05), color.opacity(0.1)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .shadow(radius: 4, y: 2)
+        )
     }
 }
 
 struct WorkOrderCard: View {
     @Binding var workOrder: WorkOrder
-    var onStatusChange: (String, String) -> Void
-    
+    var onStatusChange: (String) -> Void
+
     @State private var dragOffset: CGFloat = 0
-    @State private var isDragging: Bool = false
-    
-    private let sliderWidth: CGFloat = UIScreen.main.bounds.width - 60
-    private let swipeThreshold: CGFloat = 120
-    
+    @State private var showAnimation: Bool = false
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Header: ID and Vehicle Number
+        VStack(alignment: .leading, spacing: 16) {
+            // Header
             HStack {
                 Text("Work Order #\(workOrder.id)")
-                    .font(.system(.title3, design: .rounded).weight(.bold))
-                    .foregroundColor(.darkGray)
+                    .font(.system(.headline, design: .rounded, weight: .semibold))
+                    .foregroundStyle(.primary)
                 Spacer()
                 Text(workOrder.vehicleNumber)
-                    .font(.system(.subheadline, design: .rounded).weight(.medium))
-                    .foregroundColor(.gray)
+                    .font(.system(.subheadline, design: .rounded, weight: .medium))
+                    .foregroundStyle(.secondary)
             }
-            
-            // Body: Issue, Delivery, Issues
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
+
+            Divider()
+                .background(Color.secondary.opacity(0.2))
+
+            // Body
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
                     Image(systemName: "wrench.and.screwdriver.fill")
-                        .foregroundColor(.customBlue)
-                        .imageScale(.small)
+                        .foregroundStyle(.blue)
+                        .imageScale(.medium)
                     Text(workOrder.issue)
                         .font(.system(.body, design: .rounded))
-                        .foregroundColor(.darkGray)
+                        .foregroundStyle(.primary)
                 }
                 if let delivery = workOrder.expectedDelivery {
-                    HStack {
+                    HStack(spacing: 10) {
                         Image(systemName: "clock")
-                            .foregroundColor(.gray)
-                            .imageScale(.small)
+                            .foregroundStyle(.secondary)
+                            .imageScale(.medium)
                         Text("Due: \(delivery)")
-                            .font(.system(.caption, design: .rounded))
-                            .foregroundColor(.gray)
+                            .font(.system(.subheadline, design: .rounded))
+                            .foregroundStyle(.secondary)
                     }
                 }
-                if !workOrder.issues.isEmpty {
-                    HStack {
-                        Image(systemName: "exclamationmark.triangle")
-                            .foregroundColor(.red)
-                            .imageScale(.small)
-                        Text("Issues: \(workOrder.issues.joined(separator: ", "))")
-                            .font(.system(.caption, design: .rounded))
-                            .foregroundColor(.red)
+                let components = !workOrder.issues.isEmpty ? workOrder.issues : workOrder.parts
+                if !components.isEmpty {
+                    HStack(spacing: 10) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.red)
+                            .imageScale(.medium)
+                        Text("Issues: \(components.joined(separator: ", "))")
+                            .font(.system(.subheadline, design: .rounded))
+                            .foregroundStyle(.red)
                     }
                 }
             }
-            
+
             // Status and Priority
-            HStack(spacing: 10) {
-                // Status Badge
-                HStack(spacing: 4) {
+            HStack(spacing: 12) {
+                HStack(spacing: 6) {
                     Image(systemName: statusIcon(workOrder.status))
-                        .foregroundColor(statusColor(workOrder.status))
+                        .foregroundStyle(statusColor(workOrder.status))
                         .imageScale(.small)
                     Text(workOrder.status)
-                        .font(.system(.caption, design: .rounded).weight(.medium))
-                        .foregroundColor(statusColor(workOrder.status))
+                        .font(.system(.subheadline, design: .rounded, weight: .medium))
+                        .foregroundStyle(statusColor(workOrder.status))
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(statusColor(workOrder.status).opacity(0.15))
-                .cornerRadius(6)
-                
-                // Priority Badge
-                HStack(spacing: 4) {
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(statusColor(workOrder.status).opacity(0.2))
+                .clipShape(Capsule())
+
+                HStack(spacing: 6) {
                     Image(systemName: priorityIcon(workOrder.priority))
-                        .foregroundColor(priorityColor(workOrder.priority))
+                        .foregroundStyle(priorityColor(workOrder.priority))
                         .imageScale(.small)
                     Text(priorityText(workOrder.priority))
-                        .font(.system(.caption, design: .rounded).weight(.medium))
-                        .foregroundColor(priorityColor(workOrder.priority))
+                        .font(.system(.subheadline, design: .rounded, weight: .medium))
+                        .foregroundStyle(priorityColor(workOrder.priority))
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(priorityColor(workOrder.priority).opacity(0.15))
-                .cornerRadius(6)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(priorityColor(workOrder.priority).opacity(0.2))
+                .clipShape(Capsule())
             }
-            
+
             // Action
-            if workOrder.status.lowercased() == "to be done" {
-                VStack(spacing: 8) {
+            if workOrder.status == "To be Done" {
+                VStack(spacing: 10) {
                     Text("Slide to Start")
-                        .font(.system(.caption, design: .rounded).weight(.medium))
-                        .foregroundColor(.gray)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                    
+                        .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                        .foregroundStyle(.blue)
+
                     ZStack(alignment: .leading) {
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.lightGray)
-                            .frame(height: 48)
-                        
+                            .fill(Color(.systemGray5))
+                            .frame(height: 50)
+
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(LinearGradient(gradient: Gradient(colors: [Color.gradientStart, Color.gradientEnd]), startPoint: .leading, endPoint: .trailing))
-                            .frame(width: max(0, min(dragOffset, sliderWidth)), height: 48)
-                        
+                            .fill(.blue.opacity(0.3))
+                            .frame(width: dragOffset, height: 50)
+
+                        // Slider Knob
                         ZStack {
                             Circle()
-                                .fill(Color.white)
-                                .frame(width: 40, height: 40)
-                                .shadow(color: Color.black.opacity(0.2), radius: 3, x: 0, y: 2)
+                                .fill(.white)
+                                .frame(width: 42, height: 42)
+                                .shadow(radius: 2)
                             Image(systemName: "wrench.fill")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 24, height: 24)
-                                .foregroundColor(dragOffset >= swipeThreshold ? .todayGreen : .darkGray)
+                                .foregroundStyle(showAnimation ? .blue : .gray)
+                                .imageScale(.large)
+                                .scaleEffect(showAnimation ? 1.1 : 1.0)
                         }
                         .offset(x: dragOffset)
                         .gesture(
                             DragGesture()
                                 .onChanged { value in
-                                    isDragging = true
-                                    dragOffset = max(0, min(value.translation.width, sliderWidth))
-                                    if dragOffset >= swipeThreshold {
-                                        let impact = UIImpactFeedbackGenerator(style: .medium)
-                                        impact.impactOccurred()
-                                    }
+                                    let maxWidth = UIScreen.main.bounds.width - 80
+                                    dragOffset = min(max(value.translation.width, 0), maxWidth)
+                                    showAnimation = dragOffset >= maxWidth * 0.5
+                                    print("Drag offset: \(dragOffset), Max width: \(maxWidth)")
                                 }
-                                .onEnded { _ in
-                                    if dragOffset >= swipeThreshold {
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                                            workOrder.status = "In Progress"
-                                            onStatusChange("In Progress", workOrder.id)
+                                .onEnded { value in
+                                    let maxWidth = UIScreen.main.bounds.width - 80
+                                    if dragOffset >= maxWidth * 0.5 {
+                                        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                                            onStatusChange("In Progress")
                                             dragOffset = 0
-                                            isDragging = false
+                                            showAnimation = false
                                         }
                                     } else {
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                                        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                                             dragOffset = 0
-                                            isDragging = false
+                                            showAnimation = false
                                         }
                                     }
                                 }
                         )
                     }
-                    .frame(height: 48)
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
                 }
-            } else if workOrder.status.lowercased() == "in progress" {
+            } else if workOrder.status == "In Progress" {
                 Button(action: {
-                    withAnimation {
-                        workOrder.status = "Completed"
-                        onStatusChange("Completed", workOrder.id)
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        onStatusChange("Completed")
                     }
                 }) {
                     HStack {
                         Image(systemName: "checkmark.circle.fill")
-                            .imageScale(.medium)
+                            .imageScale(.large)
                         Text("Mark as Completed")
-                            .font(.system(.headline, design: .rounded).weight(.medium))
+                            .font(.system(.subheadline, design: .rounded, weight: .semibold))
                     }
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(LinearGradient(gradient: Gradient(colors: [Color.gradientStart, Color.gradientEnd]), startPoint: .leading, endPoint: .trailing))
-                    .cornerRadius(10)
+                    .padding(.vertical, 14)
+                    .background(
+                        LinearGradient(
+                            colors: [.blue, .purple],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
-                .buttonStyle(PlainButtonStyle())
-            } else if workOrder.status.lowercased() == "completed" {
+                .buttonStyle(.plain)
+            } else if workOrder.status == "Completed" {
                 HStack {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.todayGreen)
-                        .imageScale(.medium)
-                    Text("Work Order Completed")
-                        .font(.system(.headline, design: .rounded).weight(.medium))
-                        .foregroundColor(.todayGreen)
+                        .foregroundStyle(.green)
+                        .imageScale(.large)
+                        .scaleEffect(showAnimation ? 1.2 : 1.0)
+                    Text("Finished")
+                        .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                        .foregroundStyle(.green)
+                    Spacer()
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(Color.todayGreen.opacity(0.1))
-                .cornerRadius(10)
+                .padding(.vertical, 14)
+                .padding(.horizontal, 16)
+                .background(Color.green.opacity(0.25))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .onAppear {
+                    showAnimation = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        showAnimation = false
+                    }
+                }
             }
         }
-        .padding(16)
-        .background(Color.cardBackground)
-        .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.1), radius: 6, x: 0, y: 3)
-        .id(workOrder.id)
-        .onAppear {
-            dragOffset = 0
-            isDragging = false
-        }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(.background)
+                .overlay(
+                    LinearGradient(
+                        colors: [.gray.opacity(0.05), .gray.opacity(0.1)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .shadow(radius: 6, y: 3)
+        )
     }
-    
+
     private func priorityText(_ priority: Int) -> String {
         switch priority {
         case 0: return "Low"
@@ -493,25 +376,25 @@ struct WorkOrderCard: View {
         default: return "Low"
         }
     }
-    
+
     private func priorityColor(_ priority: Int) -> Color {
         switch priority {
-        case 0: return .todayGreen
+        case 0: return .green
         case 1: return .orange
         case 2: return .red
-        default: return .todayGreen
+        default: return .green
         }
     }
-    
+
     private func statusColor(_ status: String) -> Color {
         switch status.lowercased() {
-        case "completed": return .todayGreen
+        case "completed": return .green
         case "in progress": return .orange
         case "to be done": return .red
-        default: return .gray
+        default: return .secondary
         }
     }
-    
+
     private func statusIcon(_ status: String) -> String {
         switch status.lowercased() {
         case "completed": return "checkmark.circle.fill"
@@ -520,7 +403,7 @@ struct WorkOrderCard: View {
         default: return "questionmark.circle"
         }
     }
-    
+
     private func priorityIcon(_ priority: Int) -> String {
         switch priority {
         case 0: return "arrow.down.circle"
