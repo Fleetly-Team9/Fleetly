@@ -856,9 +856,9 @@ struct Ride: Identifiable, Codable {
     var preInspectionImage: [String]? {
         preInspection?.imageURLs
     }
-
+    
     var postInspectionImage: [String]? {
-        preInspection?.imageURLs
+        postInspection?.imageURLs // Fixed to use postInspection instead of preInspection
     }
 
     var fuelExpense: Double {
@@ -876,18 +876,23 @@ struct Ride: Identifiable, Codable {
     var charges: Double {
         fuelExpense + tollExpense + miscExpense
     }
+    
+
+    
 
     var tripDuration: String {
-        let interval = endTime.timeIntervalSince(startTime)
-        let hours = Int(interval) / 3600
-        let minutes = (Int(interval) % 3600) / 60
-        return "\(hours)h \(minutes)m"
-    }
+            let interval = max(0, endTime.timeIntervalSince(startTime))
+            let hours = Int(interval) / 3600
+            let minutes = (Int(interval) % 3600) / 60
+            return "\(hours)h \(minutes)m"
+        }
 
     enum MaintenanceStatus: String, Codable {
         case verified = "Verified"
         case ticketRaised = "Ticket Raised"
     }
+    
+    
 
     enum CodingKeys: String, CodingKey {
         case id

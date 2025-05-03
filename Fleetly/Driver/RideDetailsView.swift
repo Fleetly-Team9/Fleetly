@@ -572,16 +572,41 @@ private struct InspectionView: View {
                 .padding(.leading)
                 .padding(.top, 12)
                 .padding(.bottom, 5)
-            
             if let imageURLs = imageURLs, !imageURLs.isEmpty {
                 HStack(spacing: 10) {
                     ForEach(imageURLs.prefix(4), id: \.self) { url in
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.gray.opacity(0.2))
-                            .frame(height: 80)
-                        // In a real app, load the image using a library like SDWebImageSwiftUI
+                        AsyncImage(url: URL(string: url)) { phase in
+                            switch phase {
+                            case .empty:
+                                // Placeholder while loading
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.gray.opacity(0.2))
+                                    .frame(width: 80, height: 80)
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 80, height: 80)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                            case .failure:
+                                // Fallback if the image fails to load
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.red.opacity(0.2))
+                                    .frame(width: 80, height: 80)
+                                    .overlay(
+                                        Image(systemName: "exclamationmark.triangle")
+                                            .foregroundColor(.red)
+                                    )
+                            @unknown default:
+                                // Fallback for unknown states
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.gray.opacity(0.2))
+                                    .frame(width: 80, height: 80)
+                            }
+                        }
                     }
                 }
+                .padding(.horizontal)
             } else {
                 Text("No images available")
                     .foregroundColor(.gray)

@@ -188,24 +188,15 @@ struct PastRideContentView: View {
                     } else if let error = viewModel.errorMessage {
                         VStack(spacing: 16) {
                             Text(error)
-                                .foregroundColor(.red)
+                                .foregroundColor(.gray)
                                 .multilineTextAlignment(.center)
                                 .padding(.top, 40)
-                            Button(action: {
-                                viewModel.fetchCompletedRides()
-                            }) {
-                                Text("Retry")
-                                    .foregroundColor(.blue)
-                                    .padding()
-                                    .background(Color(UIColor.systemGray5))
-                                    .cornerRadius(8)
-                            }
                         }
                         .padding(.horizontal)
                     } else {
                         VStack(spacing: 16) {
                             if viewModel.rides.isEmpty {
-                                Text("No rides on this date")
+                                Text("No rides on this day")
                                     .foregroundColor(.gray)
                                     .padding(.top, 40)
                             } else {
