@@ -21,6 +21,8 @@ struct SignupView: View {
     @State private var isLoading = false
     @State private var showOTPVerification = false
     @State private var showWaitingApproval = false
+    @State private var isUploadingAadhar = false
+    @State private var isUploadingLicense = false
     
     let genders = ["Male", "Female"]
     
@@ -202,7 +204,7 @@ struct SignupView: View {
                                         matching: .images,
                                         photoLibrary: .shared()
                                     ) {
-                                        Label(aadharPhotoItem != nil ? "Aadhar Uploaded" : "Aadhar Proof", systemImage: "doc.text.fill")
+                                        Label(aadharPhotoItem != nil ? "Aadhar Uploaded" : "Aadhar Proof", systemImage: "doc.badge.plus")
                                             .font(.body)
                                             .padding(12)
                                             .frame(maxWidth: .infinity)
@@ -210,7 +212,23 @@ struct SignupView: View {
                                             .clipShape(RoundedRectangle(cornerRadius: 12))
                                             .foregroundColor(aadharPhotoItem != nil ? .green : .blue)
                                     }
-                                   
+                                    .onChange(of: aadharPhotoItem) { _ in
+                                        isUploadingAadhar = true
+                                        Task {
+                                            try? await Task.sleep(nanoseconds: 1_000_000_000)
+                                            isUploadingAadhar = false
+                                        }
+                                    }
+                                    
+                                    if isUploadingAadhar {
+                                        HStack {
+                                            ProgressView()
+                                                .progressViewStyle(CircularProgressViewStyle())
+                                            Text("Loading Aadhar...")
+                                                .foregroundColor(.gray)
+                                        }
+                                        .padding(.vertical, 5)
+                                    }
                                 }
                                 
                                 VStack(alignment: .leading) {
@@ -227,7 +245,23 @@ struct SignupView: View {
                                             .clipShape(RoundedRectangle(cornerRadius: 12))
                                             .foregroundColor(licensePhotoItem != nil ? .green : .blue)
                                     }
+                                    .onChange(of: licensePhotoItem) { _ in
+                                        isUploadingLicense = true
+                                        Task {
+                                            try? await Task.sleep(nanoseconds: 1_000_000_000)
+                                            isUploadingLicense = false
+                                        }
+                                    }
                                     
+                                    if isUploadingLicense {
+                                        HStack {
+                                            ProgressView()
+                                                .progressViewStyle(CircularProgressViewStyle())
+                                            Text("Loading License...")
+                                                .foregroundColor(.gray)
+                                        }
+                                        .padding(.vertical, 5)
+                                    }
                                 }
                             }
                         }

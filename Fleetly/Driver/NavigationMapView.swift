@@ -317,6 +317,9 @@ struct NavigationMapView: View {
                 switch result {
                 case .success:
                     print("Successfully saved trip charges to Firebase")
+                    DispatchQueue.main.async {
+                        closeAllModals()
+                    }
                 case .failure(let error):
                     print("Error saving trip charges: \(error)")
                 }

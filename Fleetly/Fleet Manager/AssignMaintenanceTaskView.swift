@@ -169,7 +169,7 @@ class AssignTaskViewModel: ObservableObject {
             } else {
                 completion(true)
             }
-        }
+            }
     }
     
     func assignTask(vehicleId: String, issue: String, completionDate: Date, priority: String, assignedToId: String, completion: @escaping (Bool) -> Void) {

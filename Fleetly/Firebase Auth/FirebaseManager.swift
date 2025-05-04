@@ -110,8 +110,30 @@ class FirebaseManager {
         var uploadError: Error?
         
         for (index, image) in images.enumerated() {
-            guard let imageData = image.jpegData(compressionQuality: 0.8) else {
-                completion(.failure(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to convert image to JPEG"])))
+            // Compress and resize the image
+            let maxDimension: CGFloat = 1200 // Maximum dimension for the image
+            let compressionQuality: CGFloat = 0.7 // Compression quality (0.0 to 1.0)
+            
+            // Calculate new size while maintaining aspect ratio
+            let originalSize = image.size
+            let widthRatio = maxDimension / originalSize.width
+            let heightRatio = maxDimension / originalSize.height
+            let ratio = min(widthRatio, heightRatio)
+            
+            let newSize = CGSize(
+                width: originalSize.width * ratio,
+                height: originalSize.height * ratio
+            )
+            
+            // Create compressed image
+            UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
+            image.draw(in: CGRect(origin: .zero, size: newSize))
+            let resizedImage = UIGraphicsGetImageFromCurrentImageContext()
+            UIGraphicsEndImageContext()
+            
+            guard let compressedImage = resizedImage,
+                  let imageData = compressedImage.jpegData(compressionQuality: compressionQuality) else {
+                completion(.failure(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to compress image"])))
                 return
             }
             
