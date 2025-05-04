@@ -1,9 +1,27 @@
 import SwiftUI
 import PhotosUI
 
+// Add a clear implementation of ProfileImageManager
+class ProfileImageManager: ObservableObject {
+    @Published var profileImage: UIImage?
+    
+    // Add methods to save and load the image from UserDefaults or local storage
+    func saveImage(_ image: UIImage) {
+        self.profileImage = image
+        // Here you could implement persistence to save the image to disk
+        // saveImageToDocuments(image)
+    }
+    
+    func removeImage() {
+        self.profileImage = nil
+        // Here you could implement code to remove the image from storage
+        // removeImageFromDocuments()
+    }
+}
+
 struct ProfileView: View {
-    @StateObject private var authVM = AuthViewModel()
-    @EnvironmentObject private var profileImageManager: ProfileImageManager
+    @StateObject private var authVM = ProfileAuthViewModel()
+    @StateObject private var profileImageManager = ProfileImageManager()
     @State private var isPhotoPickerPresented = false
     @State private var showResetPasswordAlert = false
     @Environment(\.dismiss) var dismiss
@@ -49,7 +67,7 @@ struct ProfileView: View {
                     if profileImageManager.profileImage != nil {
                         Button(action: {
                             withAnimation {
-                                profileImageManager.profileImage = nil
+                                profileImageManager.removeImage()
                             }
                         }) {
                             Text("Remove Photo")
@@ -145,7 +163,7 @@ struct ProfileView: View {
                         authVM.logout()
                         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
                            let window = windowScene.windows.first {
-                            let loginView = LoginView(authVM: authVM)
+                            let loginView = LoginVieww(authVM: authVM)
                             let hostingController = UIHostingController(rootView: loginView)
                             window.rootViewController = hostingController
                             window.makeKeyAndVisible()
@@ -179,16 +197,16 @@ struct ProfileView: View {
                 }
             }
             .sheet(isPresented: $isPhotoPickerPresented) {
-                PhotoPicker1(selectedImage: $profileImageManager.profileImage, isPresented: $isPhotoPickerPresented)
+                ProfilePhotoPicker(profileImageManager: profileImageManager, isPresented: $isPhotoPickerPresented)
             }
         }
         .presentationDetents([.large])
-        // Removed .presentationDragIndicator(.hidden) to allow default drag indicator behavior
     }
 }
 
-struct PhotoPicker1: UIViewControllerRepresentable {
-    @Binding var selectedImage: UIImage?
+// Renamed to avoid conflict with existing PhotoPicker
+struct ProfilePhotoPicker: UIViewControllerRepresentable {
+    var profileImageManager: ProfileImageManager
     @Binding var isPresented: Bool
     
     func makeUIViewController(context: Context) -> PHPickerViewController {
@@ -206,34 +224,50 @@ struct PhotoPicker1: UIViewControllerRepresentable {
     }
     
     class Coordinator: NSObject, PHPickerViewControllerDelegate {
-        let parent: PhotoPicker1
+        let parent: ProfilePhotoPicker
         
-        init(_ parent: PhotoPicker1) {
+        init(_ parent: ProfilePhotoPicker) {
             self.parent = parent
         }
         
         func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+            parent.isPresented = false
+            
             guard let result = results.first else {
-                self.parent.isPresented = false
                 return
             }
             
-            result.itemProvider.loadObject(ofClass: UIImage.self) { object, error in
+            result.itemProvider.loadObject(ofClass: UIImage.self) { [weak self] object, error in
                 if let image = object as? UIImage {
                     DispatchQueue.main.async {
-                        self.parent.selectedImage = image
-                        self.parent.isPresented = false
+                        // Directly use the profileImageManager passed to the picker
+                        self?.parent.profileImageManager.saveImage(image)
                     }
                 }
             }
-            self.parent.isPresented = false
         }
+    }
+}
+
+// Renamed to avoid ambiguity with any existing AuthViewModel
+class ProfileAuthViewModel: ObservableObject {
+    func logout() {
+        // Implement logout functionality
+        print("User logged out")
+    }
+}
+
+// Placeholder for LoginView
+struct LoginVieww: View {
+    var authVM: ProfileAuthViewModel
+    
+    var body: some View {
+        Text("Login View")
     }
 }
 
 struct ProfileView_Previews: PreviewProvider {
     static var previews: some View {
         ProfileView()
-            .environmentObject(ProfileImageManager())
     }
 }
