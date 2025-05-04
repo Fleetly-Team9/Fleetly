@@ -541,7 +541,7 @@ struct DashboardHomeView: View {
                         case .assign:
                             AssignView()
                         case .maintain:
-                            MaintenanceView()
+                            AssignTaskView()
                         case .reports:
                             ReportsView()
                         case .track:
