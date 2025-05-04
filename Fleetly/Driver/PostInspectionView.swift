@@ -29,6 +29,10 @@ struct PostInspectionView: View {
     @State private var navigateToTicketView = false
     @State private var showTicketConfirmation = false
     @State private var expandedImageIndex: Int? = nil
+    @State private var showAddTicketSheet = false
+    @State private var ticketDescription = ""
+    @State private var ticketPriority = "Medium"
+    @State private var ticketType = "Maintenance"
   
     @ObservedObject var authVM: AuthViewModel
     let dropoffLocation: String
@@ -37,7 +41,9 @@ struct PostInspectionView: View {
     let vehicleID: String
     
     private let db = Firestore.firestore()
-    private let overallCheckOptions = ["Ticket raised", "Verified"]
+    private let overallCheckOptions = ["Raise Ticket", "Verified"]
+    private let priorityOptions = ["Low", "Medium", "High"]
+    private let typeOptions = ["Maintenance", "Repair", "Inspection"]
     
     private var currentDateString: String {
         let formatter = DateFormatter()
@@ -191,7 +197,7 @@ struct PostInspectionView: View {
                         Spacer()
                         ZStack {
                             HStack(spacing: 0) {
-                                TextField("km", text: mileageText)
+                                TextField("km/l", text: mileageText)
                                     .textFieldStyle(RoundedBorderTextFieldStyle())
                                     .font(.caption)
                                     .frame(width: 100)
@@ -199,7 +205,7 @@ struct PostInspectionView: View {
                                     .multilineTextAlignment(.leading)
                                     .padding(.trailing, -1)
                                 
-                                Text("KM")
+                                Text("KM/L")
                                     .font(.caption)
                                     .foregroundColor(.gray)
                                     .padding(.horizontal, 8)
@@ -429,11 +435,37 @@ struct PostInspectionView: View {
                 .transition(.opacity)
             }
         }
-        .sheet(isPresented: $navigateToTicketView) {
-            TicketsView()
-                .edgesIgnoringSafeArea(.all)
-                .transition(.move(edge: .bottom))
-                .animation(.easeInOut(duration: 0.3), value: navigateToTicketView)
+        .sheet(isPresented: $showAddTicketSheet) {
+            NavigationView {
+                Form {
+                    Section(header: Text("Ticket Details")) {
+                        TextField("Description", text: $ticketDescription, axis: .vertical)
+                            .lineLimit(3...6)
+                        
+                        Picker("Priority", selection: $ticketPriority) {
+                            ForEach(priorityOptions, id: \.self) { priority in
+                                Text(priority).tag(priority)
+                            }
+                        }
+                        
+                        Picker("Type", selection: $ticketType) {
+                            ForEach(typeOptions, id: \.self) { type in
+                                Text(type).tag(type)
+                            }
+                        }
+                    }
+                }
+                .navigationTitle("Add Ticket")
+                .navigationBarItems(
+                    leading: Button("Cancel") {
+                        showAddTicketSheet = false
+                    },
+                    trailing: Button("Submit") {
+                        submitTicket()
+                        showAddTicketSheet = false
+                    }
+                )
+            }
         }
     }
     
@@ -449,22 +481,11 @@ struct PostInspectionView: View {
         // Immediately update UI state before Firebase operation
         let targetStatus = overallCheckStatus
         
-        // For ticket raising, immediately set the navigation flag
-        if targetStatus == "Ticket raised" {
-            self.navigateToTicketView = true
-        } else {
-            // Update trip status to completed
-            db.collection("trips").document(tripID).updateData([
-                "status": "completed",
-                "completedAt": Date(),
-                "completedBy": driverId,
-                "endMileage": mileage
-            ]) { error in
-                if let error = error {
-                    print("Error updating trip status: \(error.localizedDescription)")
-                    self.errorMessage = "Failed to update trip status: \(error.localizedDescription)"
-                }
-            }
+        // For ticket raising, show the add ticket sheet
+        if targetStatus == "Raise Ticket" {
+            self.showAddTicketSheet = true
+            isSubmitting = false
+            return
         }
         
         FirebaseManager.shared.recordPostInspection(
@@ -500,6 +521,48 @@ struct PostInspectionView: View {
                 }
             }
         )
+    }
+    
+    private func submitTicket() {
+        guard let driverId = authVM.user?.id else { return }
+        
+        let ticket = [
+            "description": ticketDescription,
+            "priority": ticketPriority,
+            "type": ticketType,
+            "status": "Open",
+            "createdBy": driverId,
+            "vehicleId": vehicleID,
+            "vehicleNumber": vehicleNumber,
+            "createdAt": Date(),
+            "tripId": tripID
+        ] as [String: Any]
+        
+        db.collection("tickets").addDocument(data: ticket) { error in
+            if let error = error {
+                self.errorMessage = "Error creating ticket: \(error.localizedDescription)"
+            } else {
+                // Update trip status to completed with issue
+                self.db.collection("trips").document(self.tripID).updateData([
+                    "status": "completed",
+                    "completedAt": Date(),
+                    "completedBy": driverId,
+                    "endMileage": self.mileage,
+                    "hasIssue": true
+                ]) { error in
+                    if let error = error {
+                        print("Error updating trip status: \(error.localizedDescription)")
+                        self.errorMessage = "Failed to update trip status: \(error.localizedDescription)"
+                    } else {
+                        // Dismiss both the ticket sheet and the post-inspection view
+                        DispatchQueue.main.async {
+                            self.showAddTicketSheet = false
+                            self.inspectionCompleted = true
+                        }
+                    }
+                }
+            }
+        }
     }
     
     private func imageThumbView(for image: UIImage, index: Int) -> some View {

@@ -341,7 +341,7 @@ class FirebaseManager {
                 switch overallCheckStatus {
                 case "Verified":
                     needsMaintence = false
-                case "Ticket raised":
+                case "Raise Ticket":
                     needsMaintence = true
                 default:
                     needsMaintence = false // Default to false for unexpected values
@@ -430,7 +430,7 @@ class FirebaseManager {
                     switch overallCheckStatus {
                     case "Verified":
                         needsMaintence = false
-                    case "Ticket raised":
+                    case "Raise Ticket":
                         needsMaintence = true
                     default:
                         needsMaintence = false

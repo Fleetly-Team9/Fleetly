@@ -26,7 +26,7 @@ struct Ride: Identifiable {
     
     enum MaintenanceStatus: String {
         case verified = "Verified"
-        case ticketRaised = "Ticket Raised"
+        case ticketRaised = "Raise Ticket"
     }
     
     // Calculate trip duration in hours and minutes
