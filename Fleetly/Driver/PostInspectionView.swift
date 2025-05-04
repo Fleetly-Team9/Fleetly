@@ -22,6 +22,9 @@ struct PostInspectionView: View {
     @State private var errorMessage: String?
     @State private var inspectionCompleted = false
     @State private var mileage: Double? = nil // Changed to Double?
+    @State private var isUploadingImages = false
+    @State private var actualVehicleNumber: String = ""
+    @State private var isSubmitting = false
   
     @ObservedObject var authVM: AuthViewModel
     let dropoffLocation: String
@@ -50,6 +53,18 @@ struct PostInspectionView: View {
         formatter.dateFormat = "hh:mm a"
         formatter.locale = Locale(identifier: "en_US")
         return formatter.string(from: Date())
+    }
+    
+    private func fetchVehicleNumber() {
+        db.collection("vehicles").document(vehicleID).getDocument { document, error in
+            if let document = document,
+               let data = document.data(),
+               let licensePlate = data["licensePlate"] as? String {
+                DispatchQueue.main.async {
+                    self.actualVehicleNumber = licensePlate
+                }
+            }
+        }
     }
     
     private func fetchTrip(completion: @escaping (Result<Trip, Error>) -> Void) {
@@ -126,7 +141,7 @@ struct PostInspectionView: View {
                     HStack {
                         Text("Vehicle Number")
                         Spacer()
-                        Text(vehicleNumber)
+                        Text(actualVehicleNumber.isEmpty ? "Loading..." : actualVehicleNumber)
                     }
                     HStack {
                         Text("Pickup Location")
@@ -258,6 +273,7 @@ struct PostInspectionView: View {
                     }
                     .onChange(of: selectedItems) { newItems in
                         Task {
+                            isUploadingImages = true
                             selectedImages.removeAll()
                             for item in newItems {
                                 if let data = try? await item.loadTransferable(type: Data.self),
@@ -265,7 +281,18 @@ struct PostInspectionView: View {
                                     selectedImages.append(uiImage)
                                 }
                             }
+                            isUploadingImages = false
                         }
+                    }
+                    
+                    if isUploadingImages {
+                        HStack {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle())
+                            Text("Loading images...")
+                                .foregroundColor(.gray)
+                        }
+                        .padding(.vertical, 10)
                     }
                     
                     if !selectedImages.isEmpty {
@@ -315,6 +342,7 @@ struct PostInspectionView: View {
                     return
                 }
                 
+                isSubmitting = true
                 let date = currentDateForFirestore
                 
                 FirebaseManager.shared.recordPostInspection(
@@ -344,21 +372,29 @@ struct PostInspectionView: View {
                         case .failure(let error):
                             errorMessage = "Error recording post-inspection: \(error.localizedDescription)"
                             print(errorMessage ?? "Unknown error")
+                            isSubmitting = false
                         }
                     }
                 )
             }) {
-                Text("Complete Inspection")
-                    .font(.system(size: 18, weight: .semibold, design: .default))
-                    .foregroundStyle(Color.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
+                HStack {
+                    if isSubmitting {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .padding(.trailing, 8)
+                    }
+                    Text(isSubmitting ? "Recording Inspection..." : "Complete Inspection")
+                        .font(.system(size: 18, weight: .semibold, design: .default))
+                        .foregroundStyle(Color.white)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
             }
             .buttonStyle(.borderedProminent)
             .tint(.blue)
             .padding(.horizontal)
             .padding(.top, 10)
-            .disabled(selectedImages.count != 4)
+            .disabled(selectedImages.count != 4 || isSubmitting)
         }
         .navigationTitle(Text("Post Inspection"))
         .alert(isPresented: Binding<Bool>(
@@ -377,6 +413,7 @@ struct PostInspectionView: View {
             }
         }
         .onAppear {
+            fetchVehicleNumber()
             fetchTrip { result in
                 switch result {
                 case .success(let trip):
