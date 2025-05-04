@@ -9,8 +9,8 @@ struct NavigationMapView: View {
     // tripID: String
     let vehicleID: String
     let vehicleNumber: String
- 
-    let authVM: AuthViewModel // Pass authVM explicitly instead of using EnvironmentObject
+   let authVM: AuthViewModel // Pass authVM explicitly instead of using EnvironmentObject
+   let onComplete: () -> Void // Add onComplete closure
     
     @StateObject private var navigationVM = NavigationViewModel()
     @State private var region = MKCoordinateRegion(
@@ -74,7 +74,8 @@ struct NavigationMapView: View {
                         dropoffLocation: trip.endLocation,
                         vehicleNumber: vehicleNumber,
                         tripID: trip.id,
-                        vehicleID: trip.vehicleId
+                        vehicleID: trip.vehicleId,
+                        onComplete: onComplete
                     )
                     .toolbar(.hidden, for: .tabBar),
                     isActive: $navigateToPostInspection

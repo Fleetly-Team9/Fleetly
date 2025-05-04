@@ -27,7 +27,7 @@ struct PreInspectionView: View {
     let vehicleNumber: String
     let tripID: String
     let vehicleID: String
-   
+    let onComplete: () -> Void // Add onComplete closure
     
     private let db = Firestore.firestore()
     private let overallCheckOptions = ["Ticket raised", "Verified"]
@@ -71,7 +71,7 @@ struct PreInspectionView: View {
     }
     
     var body: some View {
-        //NavigationView {
+        NavigationView {
             VStack(spacing: 0) {
                 Form {
                     Section(header: Text("Trip Details")) {
@@ -311,55 +311,57 @@ struct PreInspectionView: View {
              }
              }
              }*/
-        //}
-        .alert(isPresented: Binding<Bool>(
-            get: { errorMessage != nil },
-            set: { if !$0 { errorMessage = nil } }
-        )) {
-            Alert(
-                title: Text("Error"),
-                message: Text(errorMessage ?? "Unknown error"),
-                dismissButton: .default(Text("OK"))
-            )
-        }
-        .onAppear {
-            fetchTrip { result in
-                switch result {
-                case .success(let trip):
-                    self.fetchedTrip = trip
-                case .failure(let error):
-                    self.errorMessage = "Failed to fetch trip: \(error.localizedDescription)"
-                    print(self.errorMessage ?? "Unknown error")
+            //}
+            .alert(isPresented: Binding<Bool>(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )) {
+                Alert(
+                    title: Text("Error"),
+                    message: Text(errorMessage ?? "Unknown error"),
+                    dismissButton: .default(Text("OK"))
+                )
+            }
+            .onAppear {
+                fetchTrip { result in
+                    switch result {
+                    case .success(let trip):
+                        self.fetchedTrip = trip
+                    case .failure(let error):
+                        self.errorMessage = "Failed to fetch trip: \(error.localizedDescription)"
+                        print(self.errorMessage ?? "Unknown error")
+                    }
                 }
             }
-        }
-        .background(
-            NavigationLink(
-                destination: NavigationMapView(
-                    trip: fetchedTrip ?? Trip(
-                        id: tripID,
-                        driverId: authVM.user?.id ?? "",
-                        vehicleId: vehicleID,
-                        startLocation: "Unknown",
-                        endLocation: dropoffLocation,
-                        date: currentDateForFirestore,
-                        time: currentTimeString,
-                        startTime: Date(),
-                        status: .assigned,
-                        vehicleType: "Unknown",
-                        passengers: nil,
-                        loadWeight: nil
+            .background(
+                NavigationLink(
+                    destination: NavigationMapView(
+                        trip: fetchedTrip ?? Trip(
+                            id: tripID,
+                            driverId: authVM.user?.id ?? "",
+                            vehicleId: vehicleID,
+                            startLocation: "Unknown",
+                            endLocation: dropoffLocation,
+                            date: currentDateForFirestore,
+                            time: currentTimeString,
+                            startTime: Date(),
+                            status: .assigned,
+                            vehicleType: "Unknown",
+                            passengers: nil,
+                            loadWeight: nil
+                        ),
+                        vehicleID: vehicleID,
+                        vehicleNumber: vehicleNumber,
+                        
+                        authVM: authVM,
+                        onComplete:onComplete
                     ),
-                    vehicleID: vehicleID,
-                    vehicleNumber: vehicleNumber,
-            
-                    authVM: authVM
-                ),
-                isActive: $navigateToMapView
-            ) {
-                EmptyView()
-            }
-        )
+                    isActive: $navigateToMapView
+                ) {
+                    EmptyView()
+                }
+            )
+        }
     }
 }
 

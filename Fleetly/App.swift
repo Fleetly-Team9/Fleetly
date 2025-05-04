@@ -13,7 +13,7 @@ struct FMSApp: App {
     
     var body: some Scene {
         WindowGroup {
-            //NavigationView {
+           // NavigationView {
                 if authVM.isLoading {
                     // Show branded loading screen
                     ZStack {
@@ -41,7 +41,7 @@ struct FMSApp: App {
                     LoginView(authVM: authVM)
                 }
                 //}
-            //}
+           // }
         }
     }
 }
