@@ -3,87 +3,144 @@ import PhotosUI
 
 struct ProfileView: View {
     @StateObject private var authVM = AuthViewModel()
-    @State private var firstName = "John"
-    @State private var lastName = "Doe"
-    @State private var email = "john.doe@email.com"
-    @State private var age = "30"
-    @State private var gender = "Male"
-    @State private var isEditing = false
-    @State private var selectedImage: UIImage? = nil
+    @EnvironmentObject private var profileImageManager: ProfileImageManager
     @State private var isPhotoPickerPresented = false
-    
+    @State private var showResetPasswordAlert = false
+    @Environment(\.dismiss) var dismiss
+
+    // Static profile details (not editable)
+    private let firstName = "John"
+    private let lastName = "Doe"
+    private let phoneNumber = "9603839868"
+    private let email = "john.doe@email.com"
+
     var body: some View {
-        VStack(spacing: 0) {
-            // Profile Image with Photo Picker
-            if let image = selectedImage {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 120, height: 120)
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(Color.gray.opacity(0.3), lineWidth: 1))
-                    .shadow(radius: 5)
-                    .padding(.vertical, 20)
-                    .onTapGesture {
-                        isPhotoPickerPresented = true
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 20) {
+                    // Profile Photo
+                    ZStack(alignment: .bottomTrailing) {
+                        if let image = profileImageManager.profileImage {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 120, height: 120)
+                                .clipShape(Circle())
+                        } else {
+                            Image(systemName: "person.circle.fill")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 120, height: 120)
+                                .clipShape(Circle())
+                                .foregroundColor(.gray)
+                        }
+                        Button(action: {
+                            isPhotoPickerPresented = true
+                        }) {
+                            Image(systemName: "camera.fill")
+                                .foregroundColor(.white)
+                                .frame(width: 30, height: 30)
+                                .background(Circle().fill(Color.blue))
+                        }
                     }
-            } else {
-                Image(systemName: "person.circle.fill")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 120, height: 120)
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(Color.gray.opacity(0.3), lineWidth: 1))
-                    .shadow(radius: 5)
-                    .padding(.vertical, 20)
-                    .onTapGesture {
-                        isPhotoPickerPresented = true
+                    .padding(.top, 10)
+
+                    // Remove Photo Button
+                    if profileImageManager.profileImage != nil {
+                        Button(action: {
+                            withAnimation {
+                                profileImageManager.profileImage = nil
+                            }
+                        }) {
+                            Text("Remove Photo")
+                                .font(.system(.subheadline, design: .default, weight: .medium))
+                                .foregroundColor(Color.pink)
+                        }
+                        .padding(.bottom, 10)
                     }
-            }
-            
-            // Name and Email
-            VStack(spacing: 4) {
-                Text("\(firstName) \(lastName)")
-                    .font(.system(.title2, design: .rounded).weight(.bold))
-                    .foregroundColor(Color(hex: "444444"))
-                Text(email)
-                    .font(.system(.subheadline, design: .rounded))
-                    .foregroundColor(.gray)
-            }
-            .padding(.bottom, 10)
-            
-            // Form for Details
-            Form {
-                // Personal Details Section
-                Section(header: Text("Personal Details")
-                    .font(.headline)
-                    .foregroundColor(Color(hex: "444444"))) {
-                    TextField("First Name", text: $firstName)
-                        .disabled(!isEditing)
-                        .foregroundColor(isEditing ? .primary : .secondary)
-                    TextField("Last Name", text: $lastName)
-                        .disabled(!isEditing)
-                        .foregroundColor(isEditing ? .primary : .secondary)
-                    TextField("Email", text: $email)
-                        .disabled(!isEditing)
-                        .foregroundColor(isEditing ? .primary : .secondary)
-                        .keyboardType(.emailAddress)
-                        .autocapitalization(.none)
-                    TextField("Age", text: $age)
-                        .disabled(!isEditing)
-                        .foregroundColor(isEditing ? .primary : .secondary)
-                        .keyboardType(.numberPad)
-                    Picker("Gender", selection: $gender) {
-                        Text("Male").tag("Male")
-                        Text("Female").tag("Female")
-                        Text("Other").tag("Other")
+
+                    // Profile Details Section
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("PROFILE DETAILS")
+                            .font(.system(.caption, design: .default, weight: .bold))
+                            .foregroundColor(.gray)
+                            .padding(.bottom, 5)
+
+                        HStack {
+                            Text("First Name")
+                                .font(.system(.body, design: .default))
+                                .foregroundColor(.gray)
+                            Spacer()
+                            Text(firstName)
+                                .font(.system(.body, design: .default))
+                                .foregroundColor(.primary)
+                        }
+                        .padding(.vertical, 8)
+
+                        HStack {
+                            Text("Last Name")
+                                .font(.system(.body, design: .default))
+                                .foregroundColor(.gray)
+                            Spacer()
+                            Text(lastName)
+                                .font(.system(.body, design: .default))
+                                .foregroundColor(.primary)
+                        }
+                        .padding(.vertical, 8)
+
+                        HStack {
+                            Text("Phone Number")
+                                .font(.system(.body, design: .default))
+                                .foregroundColor(.gray)
+                            Spacer()
+                            Text(phoneNumber)
+                                .font(.system(.body, design: .default))
+                                .foregroundColor(.primary)
+                        }
+                        .padding(.vertical, 8)
+
+                        HStack {
+                            Text("Email ID")
+                                .font(.system(.body, design: .default))
+                                .foregroundColor(.gray)
+                            Spacer()
+                            Text(email)
+                                .font(.system(.body, design: .default))
+                                .foregroundColor(.primary)
+                        }
+                        .padding(.vertical, 8)
                     }
-                    .pickerStyle(MenuPickerStyle())
-                    .disabled(!isEditing)
-                }
-                
-                // Sign Out Section
-                Section {
+                    .padding(.horizontal, 15)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color.white)
+                            .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+                    )
+
+                    // Reset Password Button
+                    Button(action: {
+                        showResetPasswordAlert = true
+                    }) {
+                        Text("Reset Password")
+                            .font(.system(.body, design: .default, weight: .medium))
+                            .foregroundColor(.blue)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 15)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color.gray.opacity(0.05))
+                            )
+                    }
+                    .alert(isPresented: $showResetPasswordAlert) {
+                        Alert(
+                            title: Text("Password Reset"),
+                            message: Text("Password reset email sent to \(email)"),
+                            dismissButton: .default(Text("OK"))
+                        )
+                    }
+
+                    // Sign Out Button
                     Button(action: {
                         authVM.logout()
                         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
@@ -95,35 +152,38 @@ struct ProfileView: View {
                         }
                     }) {
                         Text("Sign Out")
+                            .font(.system(.body, design: .default, weight: .medium))
+                            .foregroundColor(.red)
                             .frame(maxWidth: .infinity)
-                            .foregroundColor(.white)
-                            .padding()
-                            .background(Color.red)
-                            .cornerRadius(10)
+                            .padding(.vertical, 15)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color.gray.opacity(0.05))
+                            )
                     }
-                    .listRowBackground(Color.clear)
+                    .padding(.bottom, 20)
+                }
+                .padding(.horizontal, 15)
+                .padding(.top, 8)
+            }
+            .background(Color(.systemBackground))
+            .navigationTitle("Maintenance Profile")
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarBackButtonHidden(true)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .foregroundColor(.blue)
                 }
             }
-            .scrollContentBackground(.hidden)
-        }
-        .navigationTitle("Maintenance Profile")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button(isEditing ? "Done" : "Edit") {
-                    if isEditing {
-                        isEditing = false // Save and exit editing
-                    } else {
-                        isEditing = true // Start editing
-                    }
-                }
-                .foregroundColor(isEditing ? .blue : .blue)
+            .sheet(isPresented: $isPhotoPickerPresented) {
+                PhotoPicker1(selectedImage: $profileImageManager.profileImage, isPresented: $isPhotoPickerPresented)
             }
         }
-        .background(Color(hex: "F3F3F3").ignoresSafeArea())
-        .sheet(isPresented: $isPhotoPickerPresented) {
-            PhotoPicker1(selectedImage: $selectedImage, isPresented: $isPhotoPickerPresented)
-        }
+        .presentationDetents([.large])
+        // Removed .presentationDragIndicator(.hidden) to allow default drag indicator behavior
     }
 }
 
@@ -173,8 +233,7 @@ struct PhotoPicker1: UIViewControllerRepresentable {
 
 struct ProfileView_Previews: PreviewProvider {
     static var previews: some View {
-        NavigationView {
-            ProfileView()
-        }
+        ProfileView()
+            .environmentObject(ProfileImageManager())
     }
 }

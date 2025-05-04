@@ -183,28 +183,20 @@ struct ScheduleView: View {
                                                     .stroke(Color.gray.opacity(0.3), lineWidth: 0.5)
                                             )
                                         }
-                                        Menu {
-                                            Button("High", action: { binding?.wrappedValue.priority = 2 })
-                                            Button("Medium", action: { binding?.wrappedValue.priority = 1 })
-                                            Button("Low", action: { binding?.wrappedValue.priority = 0 })
-                                        } label: {
-                                            HStack(spacing: 2) {
-                                                Text(priorityText(for: order.priority))
-                                                    .font(.system(size: 14, design: .rounded).weight(.medium))
-                                                    .foregroundColor(priorityColor(for: order.priority))
-                                                Image(systemName: "chevron.down")
-                                                    .font(.system(size: 10))
-                                                    .foregroundColor(.gray)
-                                            }
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 3)
-                                            .background(priorityBackgroundColor(for: order.priority))
-                                            .cornerRadius(6)
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 6)
-                                                    .stroke(Color.gray.opacity(0.3), lineWidth: 0.5)
-                                            )
+                                        // Priority Tag (Static, No Dropdown)
+                                        HStack(spacing: 2) {
+                                            Text(priorityText(for: order.priority))
+                                                .font(.system(size: 14, design: .rounded).weight(.medium))
+                                                .foregroundColor(priorityColor(for: order.priority))
                                         }
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 3)
+                                        .background(priorityBackgroundColor(for: order.priority))
+                                        .cornerRadius(6)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .stroke(Color.gray.opacity(0.3), lineWidth: 0.5)
+                                        )
                                     }
                                     Text(order.vehicleNumber)
                                         .font(.system(.body, design: .rounded).weight(.medium))
