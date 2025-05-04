@@ -337,9 +337,9 @@ struct AssignView: View {
     @State private var showingError = false
     @State private var isAssigning = false
     @State private var showingConfirmation = false
-
+    
     @State private var timePickerRange: ClosedRange<Date> = Date()...Date().addingTimeInterval(86400 * 365) // defaults to now...+1 year
-
+    
     @State private var showDateWarning: Bool = false
     @State private var dateWarningMessage: String = ""
     
@@ -355,140 +355,140 @@ struct AssignView: View {
             
             List {
                 Section(header: Text("Journey Details").font(.system(.title3, design: .rounded, weight: .bold))){
-                
-                // FROM Location Row (OUTSIDE Section)
-                HStack(spacing: 12) {
-                    Image(systemName: "location.fill")
-                        .foregroundColor(.green)
-                        .frame(width: 24, height: 24)
-
-                    ClearableTextField(text: $fromLocation, placeholder: "From Location")
-                        .focused($fromFieldFocused)
-                        .onChange(of: fromLocation) { newValue in
-                            viewModel.searchForLocations(newValue, isFrom: true)
-                        }
-                        .textContentType(.location)
-                        .accessibilityHint("Enter the starting location for your journey")
-                }
-                .padding(.vertical, 8)
-                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                .listRowBackground(Color(.systemBackground))
+                    
+                    // FROM Location Row (OUTSIDE Section)
+                    HStack(spacing: 12) {
+                        Image(systemName: "location.fill")
+                            .foregroundColor(.green)
+                            .frame(width: 24, height: 24)
+                        
+                        ClearableTextField(text: $fromLocation, placeholder: "From Location")
+                            .focused($fromFieldFocused)
+                            .onChange(of: fromLocation) { newValue in
+                                viewModel.searchForLocations(newValue, isFrom: true)
+                            }
+                            .textContentType(.location)
+                            .accessibilityHint("Enter the starting location for your journey")
+                    }
+                    .padding(.vertical, 8)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                    .listRowBackground(Color(.systemBackground))
                     
                     
                     if !viewModel.fromSearchResults.isEmpty {
-                                            VStack(alignment: .leading, spacing: 0) {
-                                                ForEach(viewModel.fromSearchResults, id: \.self) { result in
-                                                    Button(action: {
-                                                        viewModel.selectLocation(result, isPickup: true)
-                                                        fromLocation = "\(result.title), \(result.subtitle)"
-                                                        viewModel.fromSearchResults = []
-                                                        fromFieldFocused = false
-                                                    }) {
-                                                        HStack(spacing: 12) {
-                                                            Image(systemName: "mappin.and.ellipse")
-                                                                .foregroundColor(.blue)
-                                                                .frame(width: 24, height: 24)
-                                                                .padding(.trailing, 4)
-                                                            
-                                                            VStack(alignment: .leading) {
-                                                                Text(result.title)
-                                                                    .font(.system(size: 16, weight: .medium))
-                                                                    .foregroundColor(.primary)
-                                                                if !result.subtitle.isEmpty {
-                                                                    Text(result.subtitle)
-                                                                        .font(.system(size: 14))
-                                                                        .foregroundColor(.secondary)
-                                                                }
-                                                            }
-                                                            
-                                                            Spacer()
-                                                        }
-                                                        .padding(.vertical, 12)
-                                                        .padding(.horizontal, 16)
-                                                        .background(Color(.systemBackground))
-                                                    }
-                                                    .buttonStyle(PlainButtonStyle())
-                                                    .accessibilityLabel("Select \(result.title), \(result.subtitle)")
-                                                    
-                                                    Divider()
-                                                        .padding(.leading, 44)
-                                                }
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(viewModel.fromSearchResults, id: \.self) { result in
+                                Button(action: {
+                                    viewModel.selectLocation(result, isPickup: true)
+                                    fromLocation = "\(result.title), \(result.subtitle)"
+                                    viewModel.fromSearchResults = []
+                                    fromFieldFocused = false
+                                }) {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "mappin.and.ellipse")
+                                            .foregroundColor(.blue)
+                                            .frame(width: 24, height: 24)
+                                            .padding(.trailing, 4)
+                                        
+                                        VStack(alignment: .leading) {
+                                            Text(result.title)
+                                                .font(.system(size: 16, weight: .medium))
+                                                .foregroundColor(.primary)
+                                            if !result.subtitle.isEmpty {
+                                                Text(result.subtitle)
+                                                    .font(.system(size: 14))
+                                                    .foregroundColor(.secondary)
                                             }
-                                            
                                         }
-
-                // TO Location Row (OUTSIDE Section)
-                HStack(spacing: 12) {
-                    Image(systemName: "location.fill")
-                        .foregroundColor(.red)
-                        .frame(width: 24, height: 24)
-
-                    ClearableTextField(text: $toLocation, placeholder: "To Location")
-                        .focused($toFieldFocused)
-                        .onChange(of: toLocation) { newValue in
-                            viewModel.searchForLocations(newValue, isFrom: false)
+                                        
+                                        Spacer()
+                                    }
+                                    .padding(.vertical, 12)
+                                    .padding(.horizontal, 16)
+                                    .background(Color(.systemBackground))
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                .accessibilityLabel("Select \(result.title), \(result.subtitle)")
+                                
+                                Divider()
+                                    .padding(.leading, 44)
+                            }
                         }
-                        .textContentType(.location)
-                        .accessibilityHint("Enter the destination for your journey")
-                }
-                .padding(.vertical, 8)
-                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                .listRowBackground(Color(.systemBackground))
+                        
+                    }
+                    
+                    // TO Location Row (OUTSIDE Section)
+                    HStack(spacing: 12) {
+                        Image(systemName: "location.fill")
+                            .foregroundColor(.red)
+                            .frame(width: 24, height: 24)
+                        
+                        ClearableTextField(text: $toLocation, placeholder: "To Location")
+                            .focused($toFieldFocused)
+                            .onChange(of: toLocation) { newValue in
+                                viewModel.searchForLocations(newValue, isFrom: false)
+                            }
+                            .textContentType(.location)
+                            .accessibilityHint("Enter the destination for your journey")
+                    }
+                    .padding(.vertical, 8)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                    .listRowBackground(Color(.systemBackground))
                     
                     
                     
                     if !viewModel.toSearchResults.isEmpty {
-                                            VStack(alignment: .leading, spacing: 0) {
-                                                ForEach(viewModel.toSearchResults, id: \.self) { result in
-                                                    Button(action: {
-                                                        viewModel.selectLocation(result, isPickup: false)
-                                                        toLocation = "\(result.title), \(result.subtitle)"
-                                                        viewModel.toSearchResults = []
-                                                        toFieldFocused = false
-                                                    }) {
-                                                        HStack(spacing: 12) {
-                                                            Image(systemName: "mappin.and.ellipse")
-                                                                .foregroundColor(.green)
-                                                                .frame(width: 24, height: 24)
-                                                                .padding(.trailing, 4)
-                                                            
-                                                            VStack(alignment: .leading) {
-                                                                Text(result.title)
-                                                                    .font(.system(size: 16, weight: .medium))
-                                                                    .foregroundColor(.primary)
-                                                                if !result.subtitle.isEmpty {
-                                                                    Text(result.subtitle)
-                                                                        .font(.system(size: 14))
-                                                                        .foregroundColor(.secondary)
-                                                                }
-                                                            }
-                                                            
-                                                            Spacer()
-                                                        }
-                                                        .padding(.vertical, 12)
-                                                        .padding(.horizontal, 16)
-                                                        .background(Color(.systemBackground))
-                                                    }
-                                                    .buttonStyle(PlainButtonStyle())
-                                                    .accessibilityLabel("Select \(result.title), \(result.subtitle)")
-                                                    
-                                                    Divider()
-                                                        .padding(.leading, 44)
-                                                }
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(viewModel.toSearchResults, id: \.self) { result in
+                                Button(action: {
+                                    viewModel.selectLocation(result, isPickup: false)
+                                    toLocation = "\(result.title), \(result.subtitle)"
+                                    viewModel.toSearchResults = []
+                                    toFieldFocused = false
+                                }) {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "mappin.and.ellipse")
+                                            .foregroundColor(.green)
+                                            .frame(width: 24, height: 24)
+                                            .padding(.trailing, 4)
+                                        
+                                        VStack(alignment: .leading) {
+                                            Text(result.title)
+                                                .font(.system(size: 16, weight: .medium))
+                                                .foregroundColor(.primary)
+                                            if !result.subtitle.isEmpty {
+                                                Text(result.subtitle)
+                                                    .font(.system(size: 14))
+                                                    .foregroundColor(.secondary)
                                             }
-                                             
-                                            
                                         }
-                
-                
-                
-                
+                                        
+                                        Spacer()
+                                    }
+                                    .padding(.vertical, 12)
+                                    .padding(.horizontal, 16)
+                                    .background(Color(.systemBackground))
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                .accessibilityLabel("Select \(result.title), \(result.subtitle)")
+                                
+                                Divider()
+                                    .padding(.leading, 44)
+                            }
+                        }
+                        
+                        
+                    }
+                    
+                    
+                    
+                    
                     // Date of Journey
                     HStack(spacing: 12) {
                         Image(systemName: "calendar")
                             .foregroundColor(.purple)
                             .frame(width: 24, height: 24)
-
+                        
                         DatePicker(
                             "Date of Journey",
                             selection: $journeyDate,
@@ -504,13 +504,13 @@ struct AssignView: View {
                     }
                     .padding(.vertical, 4)
                     .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-
+                    
                     // Time of Journey
                     HStack(spacing: 12) {
                         Image(systemName: "clock")
                             .foregroundColor(.orange)
                             .frame(width: 24, height: 24)
-
+                        
                         DatePicker(
                             "Time of Journey",
                             selection: $journeyTime,
@@ -536,8 +536,8 @@ struct AssignView: View {
                     .padding(.vertical, 4)
                 }
                 
-
-
+                
+                
                 
                 
                 
@@ -559,12 +559,12 @@ struct AssignView: View {
                             Image(systemName: "person.2.fill")
                                 .foregroundColor(.purple)
                                 .frame(width: 24, height: 24)
-
+                            
                             Stepper(value: $passengers, in: 1...10) {
                                 Text("Passengers: \(passengers)")
                             }
                         }
-
+                        
                     }
                 } else {
                     Section(header: Text("Load Details").font(.headline)) {
@@ -572,18 +572,18 @@ struct AssignView: View {
                             Image(systemName: "scalemass")
                                 .foregroundColor(.teal)
                                 .frame(width: 24, height: 24)
-
+                            
                             TextField("Weight", value: $loadWeight, format: .number)
                                 .keyboardType(.decimalPad)
                                 .textFieldStyle(.roundedBorder)
-
+                            
                             Text("kg")
                                 .foregroundColor(.secondary)
                         }
-
+                        
                     }
                 }
-            
+                
                 
                 Section(header: Text("Assignments").font(.headline)) {
                     // Vehicle Selection Card
@@ -597,12 +597,12 @@ struct AssignView: View {
                                     .font(.system(size: 20, weight: .medium))
                                     .foregroundColor(.blue)
                             }
-
+                            
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Vehicle")
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
-
+                                
                                 if let vehicle = selectedVehicle {
                                     Text("\(vehicle.make) \(vehicle.model)")
                                         .font(.headline)
@@ -616,9 +616,9 @@ struct AssignView: View {
                                         .foregroundColor(.primary)
                                 }
                             }
-
+                            
                             Spacer()
-
+                            
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(.gray)
@@ -628,11 +628,11 @@ struct AssignView: View {
                         .background(Color(.systemBackground))
                         .cornerRadius(12)
                         .shadow(color: Color.black.opacity(0.03), radius: 2, x: 0, y: 1)
-
+                        
                     }
                     .buttonStyle(PlainButtonStyle())
                     .cornerRadius(20)
-
+                    
                     // Driver Selection Card
                     Button(action: { showDriverSheet = true }) {
                         HStack(alignment: .center, spacing: 16) {
@@ -644,12 +644,12 @@ struct AssignView: View {
                                     .font(.system(size: 20, weight: .medium))
                                     .foregroundColor(.green)
                             }
-
+                            
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Driver")
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
-
+                                
                                 if let driver = selectedDriver {
                                     Text(driver.name)
                                         .font(.headline)
@@ -663,9 +663,9 @@ struct AssignView: View {
                                         .foregroundColor(.primary)
                                 }
                             }
-
+                            
                             Spacer()
-
+                            
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(.gray)
@@ -755,7 +755,7 @@ struct AssignView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
                     .presentationDetents([.medium, .large])
             }
-
+            
             .sheet(isPresented: $showDriverSheet) {
                 DriverListView(selectedDriver: $selectedDriver, drivers: assignViewModel.drivers, viewModel: assignViewModel)
                     .background(
@@ -776,7 +776,7 @@ struct AssignView: View {
             let now = Date()
             let roundedNow = calendar.date(bySetting: .second, value: 0, of: now) ?? now
             timePickerRange = roundedNow...roundedNow.addingTimeInterval(86400)
-
+            
             if journeyTime < roundedNow {
                 journeyTime = roundedNow
             }
@@ -786,24 +786,24 @@ struct AssignView: View {
             timePickerRange = startOfDay...endOfDay
         }
     }
-
+    
     
     
     private func combinedDateTime() -> Date {
         let calendar = Calendar.current
         let dateComponents = calendar.dateComponents([.year, .month, .day], from: journeyDate)
         let timeComponents = calendar.dateComponents([.hour, .minute], from: journeyTime)
-
+        
         var combinedComponents = DateComponents()
         combinedComponents.year = dateComponents.year
         combinedComponents.month = dateComponents.month
         combinedComponents.day = dateComponents.day
         combinedComponents.hour = timeComponents.hour
         combinedComponents.minute = timeComponents.minute
-
+        
         return calendar.date(from: combinedComponents) ?? Date()
     }
-
+    
     // Validate combined date + time
     private func validateDateTime() {
         let combined = combinedDateTime()
@@ -824,27 +824,19 @@ struct AssignView: View {
         
         isAssigning = true
         
-        // Format date and time in ISO 8601
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withFullDate]
+        // Format date in local timezone
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        dateFormatter.timeZone = TimeZone.current
         let dateString = dateFormatter.string(from: journeyDate)
         
+        // Format time
         let timeFormatter = DateFormatter()
         timeFormatter.dateFormat = "HH:mm"
         let timeString = timeFormatter.string(from: journeyTime)
         
-        // Combine date and time for startTime
-        let calendar = Calendar.current
-        let dateComponents = calendar.dateComponents([.year, .month, .day], from: journeyDate)
-        let timeComponents = calendar.dateComponents([.hour, .minute], from: journeyTime)
-        
-        guard let startTime = calendar.date(bySettingHour: timeComponents.hour ?? 0,
-                                          minute: timeComponents.minute ?? 0,
-                                          second: 0,
-                                          of: journeyDate) else {
-            isAssigning = false
-            return
-        }
+        // Combine date and time (already handled in your combinedDateTime function)
+        let startTime = combinedDateTime()
         
         assignViewModel.createTrip(
             driverId: driver.id,
@@ -867,7 +859,6 @@ struct AssignView: View {
         }
     }
 }
-
 // MARK: - VehicleListView
 struct TaskVehicleListView: View {
     @Binding var selectedVehicle: Vehicle?

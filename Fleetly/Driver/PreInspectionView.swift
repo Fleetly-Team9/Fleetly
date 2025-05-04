@@ -18,7 +18,7 @@ struct PreInspectionView: View {
     @State private var indicatorsCheck = false
     @State private var selectedImages: [UIImage] = []
     @State private var selectedItems: [PhotosPickerItem] = []
-    @State private var overallCheckStatus: String = "Ticket raised"
+    @State private var overallCheckStatus: String = "Raise Ticket"
     @State private var navigateToMapView = false
     @State private var navigateToTicketView = false
     @State private var fetchedTrip: Trip?
@@ -28,6 +28,10 @@ struct PreInspectionView: View {
     @State private var isUploadingImages = false
     @State private var actualVehicleNumber: String = ""
     @State private var isSubmitting = false
+    @State private var showAddTicketSheet = false
+    @State private var ticketDescription = ""
+    @State private var ticketPriority = "Medium"
+    @State private var ticketType = "Maintenance"
     
     @ObservedObject var authVM: AuthViewModel
     let dropoffLocation: String
@@ -37,7 +41,9 @@ struct PreInspectionView: View {
    
     
     private let db = Firestore.firestore()
-    private let overallCheckOptions = ["Ticket raised", "Verified"]
+    private let overallCheckOptions = ["Raise Ticket", "Verified"]
+    private let priorityOptions = ["Low", "Medium", "High"]
+    private let typeOptions = ["Maintenance", "Repair", "Inspection"]
     
     private var currentDateString: String {
         let formatter = DateFormatter()
@@ -348,11 +354,37 @@ struct PreInspectionView: View {
                 EmptyView()
             }
         )
-        .sheet(isPresented: $navigateToTicketView) {
-            TicketsView()
-                .edgesIgnoringSafeArea(.all)
-                .transition(.move(edge: .bottom))
-                .animation(.easeInOut(duration: 0.3), value: navigateToTicketView)
+        .sheet(isPresented: $showAddTicketSheet) {
+            NavigationView {
+                Form {
+                    Section(header: Text("Ticket Details")) {
+                        TextField("Description", text: $ticketDescription, axis: .vertical)
+                            .lineLimit(3...6)
+                        
+                        Picker("Priority", selection: $ticketPriority) {
+                            ForEach(priorityOptions, id: \.self) { priority in
+                                Text(priority).tag(priority)
+                            }
+                        }
+                        
+                        Picker("Type", selection: $ticketType) {
+                            ForEach(typeOptions, id: \.self) { type in
+                                Text(type).tag(type)
+                            }
+                        }
+                    }
+                }
+                .navigationTitle("Add Ticket")
+                .navigationBarItems(
+                    leading: Button("Cancel") {
+                        showAddTicketSheet = false
+                    },
+                    trailing: Button("Submit") {
+                        submitTicket()
+                        showAddTicketSheet = false
+                    }
+                )
+            }
         }
         .overlay {
             if let index = expandedImageIndex {
@@ -398,22 +430,11 @@ struct PreInspectionView: View {
         // Immediately update UI state before Firebase operation
         let targetStatus = overallCheckStatus
         
-        // For ticket raising, immediately set the navigation flag and update trip status
-        if targetStatus == "Ticket raised" {
-            self.navigateToTicketView = true
-            
-            // Update trip status to cancelled
-            db.collection("trips").document(tripID).updateData([
-                "status": "cancelled",
-                "cancelledAt": Date(),
-                "cancelledBy": driverId,
-                "cancellationReason": "Vehicle inspection failed"
-            ]) { error in
-                if let error = error {
-                    print("Error updating trip status: \(error.localizedDescription)")
-                    self.errorMessage = "Failed to update trip status: \(error.localizedDescription)"
-                }
-            }
+        // For ticket raising, show the add ticket sheet
+        if targetStatus == "Raise Ticket" {
+            self.showAddTicketSheet = true
+            isSubmitting = false
+            return
         }
         
         FirebaseManager.shared.recordInspection(
@@ -460,6 +481,41 @@ struct PreInspectionView: View {
                 }
             }
         )
+    }
+    
+    private func submitTicket() {
+        guard let driverId = authVM.user?.id else { return }
+        
+        let ticket = [
+            "description": ticketDescription,
+            "priority": ticketPriority,
+            "type": ticketType,
+            "status": "Open",
+            "createdBy": driverId,
+            "vehicleId": vehicleID,
+            "vehicleNumber": vehicleNumber,
+            "createdAt": Date(),
+            "tripId": tripID
+        ] as [String: Any]
+        
+        db.collection("tickets").addDocument(data: ticket) { error in
+            if let error = error {
+                self.errorMessage = "Error creating ticket: \(error.localizedDescription)"
+            } else {
+                // Update trip status to cancelled
+                self.db.collection("trips").document(self.tripID).updateData([
+                    "status": "cancelled",
+                    "cancelledAt": Date(),
+                    "cancelledBy": driverId,
+                    "cancellationReason": "Vehicle inspection failed"
+                ]) { error in
+                    if let error = error {
+                        print("Error updating trip status: \(error.localizedDescription)")
+                        self.errorMessage = "Failed to update trip status: \(error.localizedDescription)"
+                    }
+                }
+            }
+        }
     }
     
     private func imageThumbView(for image: UIImage, index: Int) -> some View {

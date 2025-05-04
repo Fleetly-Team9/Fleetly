@@ -30,7 +30,7 @@ import FirebaseFirestore
     
     enum MaintenanceStatus: String, Codable {
         case verified = "Verified"
-        case ticketRaised = "Ticket Raised"
+        case ticketRaised = "Raise Ticket"
     }
     
     var tripDuration: String {
@@ -158,7 +158,7 @@ struct Ride: Identifiable, Codable {
     }
 
     var maintenanceStatus: MaintenanceStatus {
-        MaintenanceStatus(rawValue: postInspection?.overallCheckStatus ?? "Ticket Raised") ?? .ticketRaised
+        MaintenanceStatus(rawValue: postInspection?.overallCheckStatus ?? "Raise Ticket") ?? .ticketRaised
     }
 
     var vehicleNumber: String {
@@ -202,7 +202,7 @@ struct Ride: Identifiable, Codable {
 
     enum MaintenanceStatus: String, Codable {
         case verified = "Verified"
-        case ticketRaised = "Ticket Raised"
+        case ticketRaised = "Raise Ticket"
     }
 
     enum CodingKeys: String, CodingKey {
@@ -329,7 +329,7 @@ struct Ride: Identifiable, Codable {
     }
 
     var maintenanceStatus: MaintenanceStatus {
-        MaintenanceStatus(rawValue: postInspection?.overallCheckStatus ?? "Ticket Raised") ?? .ticketRaised
+        MaintenanceStatus(rawValue: postInspection?.overallCheckStatus ?? "Raise Ticket") ?? .ticketRaised
     }
 
     var vehicleNumber: String {
@@ -373,7 +373,7 @@ struct Ride: Identifiable, Codable {
 
     enum MaintenanceStatus: String, Codable {
         case verified = "Verified"
-        case ticketRaised = "Ticket Raised"
+        case ticketRaised = "Raise Ticket"
     }
 
     enum CodingKeys: String, CodingKey {
@@ -498,7 +498,7 @@ struct Ride: Identifiable, Codable {
     }
 
     var maintenanceStatus: MaintenanceStatus {
-        MaintenanceStatus(rawValue: postInspection?.overallCheckStatus ?? "Ticket Raised") ?? .ticketRaised
+        MaintenanceStatus(rawValue: postInspection?.overallCheckStatus ?? "Raise Ticket") ?? .ticketRaised
     }
 
     var vehicleNumber: String {
@@ -543,7 +543,7 @@ struct Ride: Identifiable, Codable {
 
     enum MaintenanceStatus: String, Codable {
         case verified = "Verified"
-        case ticketRaised = "Ticket Raised"
+        case ticketRaised = "Raise Ticket"
     }
 
     enum CodingKeys: String, CodingKey {
@@ -669,7 +669,7 @@ struct Ride: Identifiable, Codable {
     }
 
     var maintenanceStatus: MaintenanceStatus {
-        MaintenanceStatus(rawValue: postInspection?.overallCheckStatus ?? "Ticket Raised") ?? .ticketRaised
+        MaintenanceStatus(rawValue: postInspection?.overallCheckStatus ?? "Raise Ticket") ?? .ticketRaised
     }
 
     var vehicleNumber: String {
@@ -713,7 +713,7 @@ struct Ride: Identifiable, Codable {
 
     enum MaintenanceStatus: String, Codable {
         case verified = "Verified"
-        case ticketRaised = "Ticket Raised"
+        case ticketRaised = "Raise Ticket"
     }
 
     enum CodingKeys: String, CodingKey {
@@ -842,7 +842,7 @@ struct Ride: Identifiable, Codable {
     }
 
     var maintenanceStatus: MaintenanceStatus {
-        MaintenanceStatus(rawValue: postInspection?.overallCheckStatus ?? "Ticket Raised") ?? .ticketRaised
+        MaintenanceStatus(rawValue: postInspection?.overallCheckStatus ?? "Raise Ticket") ?? .ticketRaised
     }
 
     var vehicleNumber: String {
@@ -889,7 +889,7 @@ struct Ride: Identifiable, Codable {
 
     enum MaintenanceStatus: String, Codable {
         case verified = "Verified"
-        case ticketRaised = "Ticket Raised"
+        case ticketRaised = "Raise Ticket"
     }
     
     
