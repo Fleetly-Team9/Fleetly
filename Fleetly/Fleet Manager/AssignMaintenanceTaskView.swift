@@ -1,17 +1,19 @@
 import SwiftUI
 import Firebase
 import FirebaseFirestore
+import Foundation
 
 // MARK: - Task Model
+
 struct MaintenanceTask: Identifiable, Codable {
     let id: String
     let vehicleId: String
     let issue: String
-    let completionDate: String // Changed to String for simpler date format
+    let completionDate: String
     let priority: String
-    let assignedToId: String // Changed to store personnel ID
-    let status: TaskStatus
-    let createdAt: String // Changed to String for simpler date format
+    let assignedToId: String
+    var status: TaskStatus // Changed to var to allow mutation
+    let createdAt: String
     
     enum TaskStatus: String, Codable {
         case pending = "pending"
