@@ -19,7 +19,7 @@ struct ContentView: View {
                 }
                 .tag(0)
 
-            InventoryManagementView(items: $inventoryItems)
+            InventoryManagementView()
                 .tabItem {
                     Label("Inventory", systemImage: "cart.fill")
                 }
