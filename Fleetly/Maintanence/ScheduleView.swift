@@ -1,9 +1,6 @@
 import SwiftUI
-import Firebase
-import FirebaseFirestore
 
 struct ScheduleView: View {
-    @StateObject private var viewModel = ScheduleViewModel()
     @State private var selectedDate = Date()
     @State private var currentMonthOffset = 0
     let today = Date()
@@ -28,6 +25,45 @@ struct ScheduleView: View {
 
     var firstDayOfMonth: Int {
         calendar.component(.weekday, from: startOfMonth) - 1 // 0 (Sunday) to 6 (Saturday)
+    }
+
+    @State private var workOrdersByDate: [String: [WorkOrder]] = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd-MM-yyyy"
+        let today = Date()
+        let calendar = Calendar.current
+
+        func dateStr(_ offset: Int) -> String {
+            let date = calendar.date(byAdding: .day, value: offset, to: today)!
+            return formatter.string(from: date)
+        }
+
+        return [
+            dateStr(0): [
+                WorkOrder(id: "1001", vehicleNumber: "KA01AB4321", issue: "Brake Check", status: "To be Done", expectedDelivery: "6:00 PM", priority: 1, issues: ["Brake Check"]),
+                WorkOrder(id: "1002", vehicleNumber: "KA05CD1234", issue: "Engine Overhaul", status: "In Progress", expectedDelivery: "8:00 PM", priority: 2, issues: ["Engine Overhaul"])
+            ],
+            dateStr(-1): [
+                WorkOrder(id: "999", vehicleNumber: "KA09EF5678", issue: "Oil Change", status: "Completed", expectedDelivery: nil, priority: 0, issues: ["Oil Change"]),
+                WorkOrder(id: "998", vehicleNumber: "KA04GH8765", issue: "Suspension Repair", status: "To be Done", expectedDelivery: "5:00 PM", priority: 1, issues: ["Suspension Repair"])
+            ],
+            dateStr(-2): [
+                WorkOrder(id: "997", vehicleNumber: "KA03YZ9087", issue: "AC Gas Refill", status: "Completed", expectedDelivery: nil, priority: 0, issues: ["AC Gas Refill"])
+            ],
+            dateStr(1): [
+                WorkOrder(id: "1003", vehicleNumber: "KA02GH8910", issue: "Battery Replacement", status: "To be Done", expectedDelivery: "7:00 PM", priority: 2, issues: ["Battery Replacement"]),
+                WorkOrder(id: "1004", vehicleNumber: "KA03IJ1122", issue: "Wheel Alignment", status: "To be Done", expectedDelivery: "6:30 PM", priority: 1, issues: ["Wheel Alignment"])
+            ],
+            dateStr(2): [
+                WorkOrder(id: "1006", vehicleNumber: "KA06OP2211", issue: "Fuel Injector Cleaning", status: "In Progress", expectedDelivery: "10:00 AM", priority: 0, issues: ["Fuel Injector Cleaning"])
+            ]
+        ]
+    }()
+
+    var selectedWorkOrders: [WorkOrder] {
+        let key = formatter.string(from: selectedDate)
+        let orders = workOrdersByDate[key] ?? []
+        return orders.sorted { priorityOrder($0.priority) < priorityOrder($1.priority) }
     }
 
     var body: some View {
@@ -77,10 +113,7 @@ struct ScheduleView: View {
                             } else {
                                 let day = index - firstDayOfMonth + 1
                                 let date = calendar.date(byAdding: .day, value: day - 1, to: startOfMonth)!
-                                Button(action: {
-                                    selectedDate = date
-                                    viewModel.fetchWorkOrders(for: date)
-                                }) {
+                                Button(action: { selectedDate = date }) {
                                     Text("\(day)")
                                         .frame(width: 30, height: 30)
                                         .background(
@@ -108,119 +141,112 @@ struct ScheduleView: View {
 
                 // Work Order Details
                 VStack(spacing: 10) {
-                    if viewModel.isLoading {
-                        ProgressView()
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                    } else if let errorMessage = viewModel.errorMessage {
-                        Text(errorMessage)
-                            .font(.system(.body, design: .rounded))
-                            .foregroundColor(.red)
-                            .padding()
-                    } else if viewModel.selectedWorkOrders.isEmpty {
+                    if selectedWorkOrders.isEmpty {
                         Text("No maintenance tasks on this date")
                             .font(.system(.body, design: .rounded))
                             .foregroundColor(Color(hex: "444444"))
                             .padding()
                     } else {
-                        ForEach(viewModel.selectedWorkOrders.indices, id: \.self) { index in
-                            let order = viewModel.selectedWorkOrders[index]
-                            let isCompleted = order.status.lowercased() == "completed"
-                            VStack(alignment: .leading, spacing: 5) {
-                                HStack {
-                                    Text(formatter.string(from: selectedDate))
-                                        .font(.system(.caption, design: .rounded))
-                                    Spacer()
-                                    Menu {
-                                        Button("To be Done", action: { viewModel.updateTaskStatus(taskId: order.id, newStatus: "To be Done") })
-                                        Button("In Progress", action: { viewModel.updateTaskStatus(taskId: order.id, newStatus: "In Progress") })
-                                        Button("Completed", action: { viewModel.updateTaskStatus(taskId: order.id, newStatus: "Completed") })
-                                    } label: {
-                                        HStack(spacing: 2) {
-                                            Text(order.status)
-                                                .font(.system(size: 14, design: .rounded).weight(.medium))
-                                                .foregroundColor(statusColor(for: order.status))
-                                            if isCompleted {
-                                                Image(systemName: "checkmark")
-                                                    .font(.system(size: 10))
+                        ForEach(selectedWorkOrders, id: \.id) { order in
+                            if let index = indexOfWorkOrder(order) {
+                                let binding = bindingForWorkOrder(at: index)
+                                let isCompleted = order.status.lowercased() == "completed"
+                                VStack(alignment: .leading, spacing: 5) {
+                                    HStack {
+                                        Text(formatter.string(from: selectedDate))
+                                            .font(.system(.caption, design: .rounded))
+                                        Spacer()
+                                        Menu {
+                                            Button("To be Done", action: { binding?.wrappedValue.status = "To be Done" })
+                                            Button("In Progress", action: { binding?.wrappedValue.status = "In Progress" })
+                                            Button("Completed", action: { binding?.wrappedValue.status = "Completed" })
+                                        } label: {
+                                            HStack(spacing: 2) {
+                                                Text(order.status)
+                                                    .font(.system(size: 14, design: .rounded).weight(.medium))
                                                     .foregroundColor(statusColor(for: order.status))
+                                                if isCompleted {
+                                                    Image(systemName: "checkmark")
+                                                        .font(.system(size: 10))
+                                                        .foregroundColor(statusColor(for: order.status))
+                                                }
+                                                Image(systemName: "chevron.down")
+                                                    .font(.system(size: 10))
+                                                    .foregroundColor(.gray)
                                             }
-                                            Image(systemName: "chevron.down")
-                                                .font(.system(size: 10))
-                                                .foregroundColor(.gray)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 3)
+                                            .background(statusBackgroundColor(for: order.status))
+                                            .cornerRadius(6)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 6)
+                                                    .stroke(Color.gray.opacity(0.3), lineWidth: 0.5)
+                                            )
                                         }
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 3)
-                                        .background(statusBackgroundColor(for: order.status))
-                                        .cornerRadius(6)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 6)
-                                                .stroke(Color.gray.opacity(0.3), lineWidth: 0.5)
-                                        )
-                                    }
-                                    Menu {
-                                        Button("High", action: { viewModel.updateTaskPriority(taskId: order.id, newPriority: "High") })
-                                        Button("Medium", action: { viewModel.updateTaskPriority(taskId: order.id, newPriority: "Medium") })
-                                        Button("Low", action: { viewModel.updateTaskPriority(taskId: order.id, newPriority: "Low") })
-                                    } label: {
-                                        HStack(spacing: 2) {
-                                            Text(priorityText(for: order.priority))
-                                                .font(.system(size: 14, design: .rounded).weight(.medium))
-                                                .foregroundColor(priorityColor(for: order.priority))
-                                            Image(systemName: "chevron.down")
-                                                .font(.system(size: 10))
-                                                .foregroundColor(.gray)
+                                        Menu {
+                                            Button("High", action: { binding?.wrappedValue.priority = 2 })
+                                            Button("Medium", action: { binding?.wrappedValue.priority = 1 })
+                                            Button("Low", action: { binding?.wrappedValue.priority = 0 })
+                                        } label: {
+                                            HStack(spacing: 2) {
+                                                Text(priorityText(for: order.priority))
+                                                    .font(.system(size: 14, design: .rounded).weight(.medium))
+                                                    .foregroundColor(priorityColor(for: order.priority))
+                                                Image(systemName: "chevron.down")
+                                                    .font(.system(size: 10))
+                                                    .foregroundColor(.gray)
+                                            }
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 3)
+                                            .background(priorityBackgroundColor(for: order.priority))
+                                            .cornerRadius(6)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 6)
+                                                    .stroke(Color.gray.opacity(0.3), lineWidth: 0.5)
+                                            )
                                         }
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 3)
-                                        .background(priorityBackgroundColor(for: order.priority))
-                                        .cornerRadius(6)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 6)
-                                                .stroke(Color.gray.opacity(0.3), lineWidth: 0.5)
-                                        )
                                     }
-                                }
-                                Text(order.vehicleNumber)
-                                    .font(.system(.body, design: .rounded).weight(.medium))
-                                    .overlay(
-                                        isCompleted ?
-                                        GeometryReader { geometry in
-                                            Path { path in
-                                                let width = geometry.size.width
-                                                let height = geometry.size.height
-                                                path.move(to: CGPoint(x: 0, y: height / 2))
-                                                path.addLine(to: CGPoint(x: width, y: height / 2))
-                                            }
-                                            .stroke(Color.gray, lineWidth: 1)
-                                        } : nil
-                                    )
-                                Text(order.issue)
-                                    .font(.system(.body, design: .rounded))
-                                    .foregroundColor(.gray)
-                                    .overlay(
-                                        isCompleted ?
-                                        GeometryReader { geometry in
-                                            Path { path in
-                                                let width = geometry.size.width
-                                                let height = geometry.size.height
-                                                path.move(to: CGPoint(x: 0, y: height / 2))
-                                                path.addLine(to: CGPoint(x: width, y: height / 2))
-                                            }
-                                            .stroke(Color.gray, lineWidth: 1)
-                                        } : nil
-                                    )
-                                if let delivery = order.expectedDelivery {
-                                    Text("Expected Completion: \(delivery)")
-                                        .font(.system(.caption, design: .rounded))
+                                    Text(order.vehicleNumber)
+                                        .font(.system(.body, design: .rounded).weight(.medium))
+                                        .overlay(
+                                            isCompleted ?
+                                            GeometryReader { geometry in
+                                                Path { path in
+                                                    let width = geometry.size.width
+                                                    let height = geometry.size.height
+                                                    path.move(to: CGPoint(x: 0, y: height / 2))
+                                                    path.addLine(to: CGPoint(x: width, y: height / 2))
+                                                }
+                                                .stroke(Color.gray, lineWidth: 1)
+                                            } : nil
+                                        )
+                                    Text(order.issue)
+                                        .font(.system(.body, design: .rounded))
                                         .foregroundColor(.gray)
+                                        .overlay(
+                                            isCompleted ?
+                                            GeometryReader { geometry in
+                                                Path { path in
+                                                    let width = geometry.size.width
+                                                    let height = geometry.size.height
+                                                    path.move(to: CGPoint(x: 0, y: height / 2))
+                                                    path.addLine(to: CGPoint(x: width, y: height / 2))
+                                                }
+                                                .stroke(Color.gray, lineWidth: 1)
+                                            } : nil
+                                        )
+                                    if let delivery = order.expectedDelivery {
+                                        Text("Expected Completion: \(delivery)")
+                                            .font(.system(.caption, design: .rounded))
+                                            .foregroundColor(.gray)
+                                    }
                                 }
+                                .padding()
+                                .background(Color.white)
+                                .cornerRadius(12)
+                                .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
+                                .opacity(isCompleted ? 0.7 : 1.0)
                             }
-                            .padding()
-                            .background(Color.white)
-                            .cornerRadius(12)
-                            .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
-                            .opacity(isCompleted ? 0.7 : 1.0)
                         }
                     }
                 }
@@ -231,9 +257,29 @@ struct ScheduleView: View {
             .frame(maxWidth: .infinity)
             .background(Color(hex: "F3F3F3").ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
-            .onAppear {
-                viewModel.fetchWorkOrders(for: selectedDate)
-            }
+        }
+    }
+
+    private func indexOfWorkOrder(_ order: WorkOrder) -> Int? {
+        let key = formatter.string(from: selectedDate)
+        return workOrdersByDate[key]?.firstIndex { $0.id == order.id }
+    }
+
+    private func bindingForWorkOrder(at index: Int) -> Binding<WorkOrder>? {
+        let key = formatter.string(from: selectedDate)
+        guard var orders = workOrdersByDate[key], index < orders.count else { return nil }
+        return Binding(
+            get: { workOrdersByDate[key]?[index] ?? orders[index] },
+            set: { newValue in workOrdersByDate[key]?[index] = newValue }
+        )
+    }
+
+    private func priorityOrder(_ priority: Int) -> Int {
+        switch priority {
+        case 2: return 0 // High
+        case 1: return 1 // Medium
+        case 0: return 2 // Low
+        default: return 3
         }
     }
 
@@ -280,127 +326,6 @@ struct ScheduleView: View {
         case 2: return Color.red.opacity(0.2) // High
         default: return Color.gray.opacity(0.2)
         }
-    }
-}
-
-class ScheduleViewModel: ObservableObject {
-    @Published var selectedWorkOrders: [WorkOrder] = []
-    @Published var isLoading = false
-    @Published var errorMessage: String?
-    
-    private let db = Firestore.firestore()
-    private var listener: ListenerRegistration?
-    
-    deinit {
-        listener?.remove()
-    }
-    
-    func fetchWorkOrders(for date: Date) {
-        isLoading = true
-        listener?.remove() // Remove previous listener to avoid duplicates
-        
-        let formatter = DateFormatter()
-        formatter.dateFormat = "dd-MM-yyyy"
-        let dateString = formatter.string(from: date)
-        
-        listener = db.collection("maintenance_tasks")
-            .whereField("assignedToId", isEqualTo: "maintenance_user_id") // Replace with actual user ID
-            .addSnapshotListener { [weak self] snapshot, error in
-                guard let self = self else { return }
-                self.isLoading = false
-                
-                if let error = error {
-                    self.errorMessage = "Error fetching tasks: \(error.localizedDescription)"
-                    return
-                }
-                
-                guard let documents = snapshot?.documents else {
-                    self.errorMessage = "No tasks found"
-                    return
-                }
-                
-                Task {
-                    var orders: [WorkOrder] = []
-                    for document in documents {
-                        do {
-                            let task = try document.data(as: MaintenanceTask.self)
-                            let vehicleNumber = await self.fetchVehicleNumber(for: task.vehicleId)
-                            let workOrder = self.mapToWorkOrder(task: task, vehicleNumber: vehicleNumber)
-                            // Filter tasks for the selected date
-                            if let taskDate = workOrder.completionDateAsDate,
-                               Calendar.current.isDate(taskDate, inSameDayAs: date) {
-                                orders.append(workOrder)
-                            }
-                        } catch {
-                            self.errorMessage = "Error decoding task: \(error.localizedDescription)"
-                        }
-                    }
-                    self.selectedWorkOrders = orders.sorted { $0.priority > $1.priority }
-                }
-            }
-    }
-    
-    func updateTaskStatus(taskId: String, newStatus: String) {
-        let status: MaintenanceTask.TaskStatus
-        switch newStatus.lowercased() {
-        case "in progress":
-            status = .inProgress
-        case "completed":
-            status = .completed
-        case "to be done":
-            status = .pending
-        default:
-            status = .pending
-        }
-        
-        db.collection("maintenance_tasks").document(taskId).updateData(["status": status.rawValue]) { error in
-            if let error = error {
-                self.errorMessage = "Error updating status: \(error.localizedDescription)"
-            }
-        }
-    }
-    
-    func updateTaskPriority(taskId: String, newPriority: String) {
-        db.collection("maintenance_tasks").document(taskId).updateData(["priority": newPriority]) { error in
-            if let error = error {
-                self.errorMessage = "Error updating priority: \(error.localizedDescription)"
-            }
-        }
-    }
-    
-    private func fetchVehicleNumber(for vehicleId: String) async -> String {
-        do {
-            let document = try await db.collection("vehicles").document(vehicleId).getDocument()
-            if let data = document.data(),
-               let licensePlate = data["licensePlate"] as? String {
-                return licensePlate
-            }
-        } catch {
-            self.errorMessage = "Error fetching vehicle: \(error.localizedDescription)"
-        }
-        return "Unknown Vehicle"
-    }
-    
-    private func mapToWorkOrder(task: MaintenanceTask, vehicleNumber: String) -> WorkOrder {
-        let priorityValue: Int
-        switch task.priority.lowercased() {
-        case "high": priorityValue = 2
-        case "medium": priorityValue = 1
-        case "low": priorityValue = 0
-        default: priorityValue = 0
-        }
-        
-        return WorkOrder(
-            id: task.id,
-            vehicleNumber: vehicleNumber,
-            issue: task.issue,
-            status: task.status.rawValue.capitalized,
-            expectedDelivery: task.completionDate,
-            priority: priorityValue,
-            issues: [task.issue],
-            parts: [],
-            laborCost: nil
-        )
     }
 }
 
