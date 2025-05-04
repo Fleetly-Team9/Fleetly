@@ -20,7 +20,7 @@ class ProfileImageManager: ObservableObject {
 }
 
 struct ProfileView: View {
-    @StateObject private var authVM = ProfileAuthViewModel()
+    @StateObject private var authVM = AuthViewModel()
     @StateObject private var profileImageManager = ProfileImageManager()
     @State private var isPhotoPickerPresented = false
     @State private var showResetPasswordAlert = false
@@ -163,7 +163,7 @@ struct ProfileView: View {
                         authVM.logout()
                         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
                            let window = windowScene.windows.first {
-                            let loginView = LoginVieww(authVM: authVM)
+                            let loginView = LoginView(authVM: authVM)
                             let hostingController = UIHostingController(rootView: loginView)
                             window.rootViewController = hostingController
                             window.makeKeyAndVisible()
@@ -249,22 +249,6 @@ struct ProfilePhotoPicker: UIViewControllerRepresentable {
     }
 }
 
-// Renamed to avoid ambiguity with any existing AuthViewModel
-class ProfileAuthViewModel: ObservableObject {
-    func logout() {
-        // Implement logout functionality
-        print("User logged out")
-    }
-}
-
-// Placeholder for LoginView
-struct LoginVieww: View {
-    var authVM: ProfileAuthViewModel
-    
-    var body: some View {
-        Text("Login View")
-    }
-}
 
 struct ProfileView_Previews: PreviewProvider {
     static var previews: some View {
