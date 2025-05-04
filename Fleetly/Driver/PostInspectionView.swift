@@ -5,6 +5,7 @@ import FirebaseFirestore
 
 struct PostInspectionView: View {
     @Environment(\.presentationMode) var presentationMode
+    @Environment(\.colorScheme) var colorScheme
     @State private var tyrePressureRemarks: String = ""
     @State private var brakeRemarks: String = ""
     @State private var oilCheck = false
@@ -17,14 +18,17 @@ struct PostInspectionView: View {
     @State private var indicatorsCheck = false
     @State private var selectedImages: [UIImage] = []
     @State private var selectedItems: [PhotosPickerItem] = []
-    @State private var overallCheckStatus: String = "Ticket raised"
+    @State private var overallCheckStatus: String = "Verified"
     @State private var fetchedTrip: Trip?
     @State private var errorMessage: String?
     @State private var inspectionCompleted = false
-    @State private var mileage: Double? = nil // Changed to Double?
+    @State private var mileage: Double? = nil
     @State private var isUploadingImages = false
     @State private var actualVehicleNumber: String = ""
     @State private var isSubmitting = false
+    @State private var navigateToTicketView = false
+    @State private var showTicketConfirmation = false
+    @State private var expandedImageIndex: Int? = nil
   
     @ObservedObject var authVM: AuthViewModel
     let dropoffLocation: String
@@ -261,7 +265,7 @@ struct PostInspectionView: View {
                     .padding(.vertical, 8)
                 }
                 
-                Section {
+                Section(header: Text("Upload Images (4 Required)")) {
                     PhotosPicker(
                         selection: $selectedItems,
                         maxSelectionCount: 5,
@@ -296,38 +300,35 @@ struct PostInspectionView: View {
                     }
                     
                     if !selectedImages.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 10) {
-                                ForEach(selectedImages, id: \.self) { image in
-                                    Image(uiImage: image)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 100, height: 100)
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .stroke(Color.gray, lineWidth: 1)
-                                        )
+                        // 2x2 Grid Layout for Images
+                        VStack(spacing: 8) {
+                            HStack(spacing: 8) {
+                                ForEach(0..<min(2, selectedImages.count), id: \.self) { index in
+                                    imageThumbView(for: selectedImages[index], index: index)
                                 }
                             }
-                            .padding(.vertical, 10)
+                            
+                            if selectedImages.count > 2 {
+                                HStack(spacing: 8) {
+                                    ForEach(2..<min(4, selectedImages.count), id: \.self) { index in
+                                        imageThumbView(for: selectedImages[index], index: index)
+                                    }
+                                }
+                            }
                         }
+                        .padding(.vertical, 8)
                     }
                 }
                 
                 Section {
                     HStack {
                         Text("Overall Check")
-                        if overallCheckStatus == "Verified" {
-                            Image(systemName: "checkmark")
-                                .foregroundColor(.green)
-                                .padding(.leading, 5)
-                        }
                         Spacer()
                         Picker("", selection: $overallCheckStatus) {
                             ForEach(overallCheckOptions, id: \.self) { option in
                                 Text(option)
                                     .tag(option)
+                                    .foregroundStyle(option == "Verified" ? Color.green : Color.red)
                             }
                         }
                         .pickerStyle(.menu)
@@ -337,45 +338,11 @@ struct PostInspectionView: View {
             }
             
             Button(action: {
-                guard let driverId = authVM.user?.id else {
-                    print("Driver ID is nil")
-                    return
+                if overallCheckStatus == "Verified" {
+                    submitInspectionAndProceed()
+                } else {
+                    showTicketConfirmation = true
                 }
-                
-                isSubmitting = true
-                let date = currentDateForFirestore
-                
-                FirebaseManager.shared.recordPostInspection(
-                    driverId: driverId,
-                    tyrePressureRemarks: tyrePressureRemarks,
-                    brakeRemarks: brakeRemarks,
-                    oilCheck: oilCheck,
-                    hornCheck: hornCheck,
-                    clutchCheck: clutchCheck,
-                    airbagsCheck: airbagsCheck,
-                    physicalDamageCheck: physicalDamageCheck,
-                    tyrePressureCheck: tyrePressureCheck,
-                    brakesCheck: brakesCheck,
-                    indicatorsCheck: indicatorsCheck,
-                    mileage: mileage,
-                    overallCheckStatus: overallCheckStatus,
-                    images: selectedImages,
-                    vehicleNumber: vehicleNumber,
-                    date: date,
-                    tripId: tripID,
-                    vehicleID: vehicleID,
-                    completion: { result in
-                        switch result {
-                        case .success:
-                            print("Post-inspection recorded successfully")
-                            inspectionCompleted = true
-                        case .failure(let error):
-                            errorMessage = "Error recording post-inspection: \(error.localizedDescription)"
-                            print(errorMessage ?? "Unknown error")
-                            isSubmitting = false
-                        }
-                    }
-                )
             }) {
                 HStack {
                     if isSubmitting {
@@ -383,7 +350,7 @@ struct PostInspectionView: View {
                             .progressViewStyle(CircularProgressViewStyle(tint: .white))
                             .padding(.trailing, 8)
                     }
-                    Text(isSubmitting ? "Recording Inspection..." : "Complete Inspection")
+                    Text(isSubmitting ? "Recording Inspection..." : (overallCheckStatus == "Verified" ? "Complete Inspection" : "Wanna Raise a Ticket?"))
                         .font(.system(size: 18, weight: .semibold, design: .default))
                         .foregroundStyle(Color.white)
                 }
@@ -391,12 +358,20 @@ struct PostInspectionView: View {
                 .padding(.vertical, 10)
             }
             .buttonStyle(.borderedProminent)
-            .tint(.blue)
+            .tint(overallCheckStatus == "Verified" ? .blue : .red)
             .padding(.horizontal)
             .padding(.top, 10)
             .disabled(selectedImages.count != 4 || isSubmitting)
         }
         .navigationTitle(Text("Post Inspection"))
+        .alert("Raise a Ticket", isPresented: $showTicketConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Yes, I'm Sure", role: .destructive) {
+                submitInspectionAndProceed()
+            }
+        } message: {
+            Text("Are you sure you want to raise a ticket for this vehicle? This will mark the vehicle as having an issue that needs attention.")
+        }
         .alert(isPresented: Binding<Bool>(
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }
@@ -424,6 +399,122 @@ struct PostInspectionView: View {
                 }
             }
         }
+        .overlay {
+            if let index = expandedImageIndex {
+                ZStack {
+                    Color.black.opacity(0.85)
+                        .edgesIgnoringSafeArea(.all)
+                        .onTapGesture {
+                            expandedImageIndex = nil
+                        }
+                    
+                    VStack {
+                        Image(uiImage: selectedImages[index])
+                            .resizable()
+                            .scaledToFit()
+                            .padding()
+                            .cornerRadius(12)
+                        
+                        Button(action: {
+                            expandedImageIndex = nil
+                        }) {
+                            Text("Close")
+                                .foregroundColor(.white)
+                                .padding()
+                                .background(Color.blue.opacity(0.8))
+                                .cornerRadius(10)
+                        }
+                    }
+                }
+                .transition(.opacity)
+            }
+        }
+        .sheet(isPresented: $navigateToTicketView) {
+            TicketsView()
+                .edgesIgnoringSafeArea(.all)
+                .transition(.move(edge: .bottom))
+                .animation(.easeInOut(duration: 0.3), value: navigateToTicketView)
+        }
+    }
+    
+    private func submitInspectionAndProceed() {
+        guard let driverId = authVM.user?.id else {
+            print("Driver ID is nil")
+            return
+        }
+        
+        isSubmitting = true
+        let date = currentDateForFirestore
+        
+        // Immediately update UI state before Firebase operation
+        let targetStatus = overallCheckStatus
+        
+        // For ticket raising, immediately set the navigation flag
+        if targetStatus == "Ticket raised" {
+            self.navigateToTicketView = true
+        } else {
+            // Update trip status to completed
+            db.collection("trips").document(tripID).updateData([
+                "status": "completed",
+                "completedAt": Date(),
+                "completedBy": driverId,
+                "endMileage": mileage
+            ]) { error in
+                if let error = error {
+                    print("Error updating trip status: \(error.localizedDescription)")
+                    self.errorMessage = "Failed to update trip status: \(error.localizedDescription)"
+                }
+            }
+        }
+        
+        FirebaseManager.shared.recordPostInspection(
+            driverId: driverId,
+            tyrePressureRemarks: tyrePressureRemarks,
+            brakeRemarks: brakeRemarks,
+            oilCheck: oilCheck,
+            hornCheck: hornCheck,
+            clutchCheck: clutchCheck,
+            airbagsCheck: airbagsCheck,
+            physicalDamageCheck: physicalDamageCheck,
+            tyrePressureCheck: tyrePressureCheck,
+            brakesCheck: brakesCheck,
+            indicatorsCheck: indicatorsCheck,
+            mileage: mileage,
+            overallCheckStatus: overallCheckStatus,
+            images: selectedImages,
+            vehicleNumber: vehicleNumber,
+            date: date,
+            tripId: tripID,
+            vehicleID: vehicleID,
+            completion: { result in
+                switch result {
+                case .success:
+                    print("Post-inspection recorded successfully")
+                    if targetStatus == "Verified" {
+                        inspectionCompleted = true
+                    }
+                case .failure(let error):
+                    errorMessage = "Error recording post-inspection: \(error.localizedDescription)"
+                    print(errorMessage ?? "Unknown error")
+                    isSubmitting = false
+                }
+            }
+        )
+    }
+    
+    private func imageThumbView(for image: UIImage, index: Int) -> some View {
+        Image(uiImage: image)
+            .resizable()
+            .scaledToFill()
+            .frame(width: 150, height: 150)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(colorScheme == .dark ? Color.white.opacity(0.5) : Color.gray, lineWidth: 1)
+            )
+            .onTapGesture {
+                expandedImageIndex = index
+            }
     }
 }
 
