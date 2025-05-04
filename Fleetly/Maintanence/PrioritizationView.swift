@@ -1,6 +1,4 @@
 import SwiftUI
-import Firebase
-import FirebaseFirestore
 
 struct PrioritizationView: View {
     @Binding var workOrders: [WorkOrder]
@@ -8,7 +6,6 @@ struct PrioritizationView: View {
     @State private var selectedOrder: WorkOrder?
     @State private var selectedPriority: String = "Low"
     let priorityOptions = ["High", "Medium", "Low"]
-    private let db = Firestore.firestore()
 
     var body: some View {
         NavigationView {
@@ -104,9 +101,7 @@ struct PrioritizationView: View {
                             Button("Apply") {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                     if let index = workOrders.firstIndex(where: { $0.id == order.id }) {
-                                        let newPriorityValue = priorityValue(selectedPriority)
-                                        workOrders[index].priority = newPriorityValue
-                                        updateTaskPriority(taskId: order.id, newPriority: selectedPriority)
+                                        workOrders[index].priority = priorityValue(selectedPriority)
                                     }
                                     selectedOrder = nil
                                 }
@@ -164,14 +159,6 @@ struct PrioritizationView: View {
         case "Medium": return 1
         case "Low": return 0
         default: return 0
-        }
-    }
-
-    private func updateTaskPriority(taskId: String, newPriority: String) {
-        db.collection("maintenance_tasks").document(taskId).updateData(["priority": newPriority]) { error in
-            if let error = error {
-                print("Error updating priority: \(error.localizedDescription)")
-            }
         }
     }
 }

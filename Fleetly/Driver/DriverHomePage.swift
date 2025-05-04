@@ -17,7 +17,7 @@ struct MainView: View {
                 }
             TicketsView()
                 .tabItem {
-                    Label("Tickets", systemImage: "ticket")
+                    Label("Tickets", systemImage: "ticket.fill")
                 }
         }
         /*.toolbar {
@@ -35,6 +35,7 @@ struct MainView: View {
         .sheet(isPresented: $showProfile) {
             DriverProfileView(authVM: authVM)
         }
+        .environmentObject(authVM) // Inject AuthViewModel into the environment for all tabs
     }
 }
 

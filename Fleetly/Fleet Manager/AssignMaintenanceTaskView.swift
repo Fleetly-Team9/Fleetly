@@ -25,14 +25,23 @@ struct MaintenanceTask: Identifiable, Codable {
 class AssignTaskViewModel: ObservableObject {
     @Published var vehicles: [Vehicle] = []
     @Published var maintenancePersonnel: [User] = []
+    @Published var maintenanceTasks: [MaintenanceTask] = []
+    @Published var pendingTasks: Int = 0
+    @Published var completedTasks: Int = 0
     @Published var isLoading = false
     @Published var errorMessage: String?
     
     private let db = Firestore.firestore()
+    private var tasksListener: ListenerRegistration?
     
     init() {
         fetchVehicles()
         fetchMaintenancePersonnel()
+        fetchMaintenanceTasks()
+    }
+    
+    deinit {
+        tasksListener?.remove()
     }
     
     func fetchVehicles() {
@@ -106,6 +115,61 @@ class AssignTaskViewModel: ObservableObject {
                     try? document.data(as: User.self)
                 } ?? []
             }
+    }
+    
+    func fetchMaintenanceTasks() {
+        isLoading = true
+        tasksListener = db.collection("maintenance_tasks")
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let self = self else { return }
+                self.isLoading = false
+                
+                if let error = error {
+                    self.errorMessage = "Error fetching tasks: \(error.localizedDescription)"
+                    return
+                }
+                
+                guard let documents = snapshot?.documents else {
+                    self.errorMessage = "No tasks found"
+                    return
+                }
+                
+                self.maintenanceTasks = documents.compactMap { document in
+                    try? document.data(as: MaintenanceTask.self)
+                }
+                
+                // Update task counts
+                self.pendingTasks = self.maintenanceTasks.filter { $0.status == .pending || $0.status == .inProgress }.count
+                self.completedTasks = self.maintenanceTasks.filter { $0.status == .completed }.count
+            }
+    }
+    
+    func updateTaskStatus(taskId: String, newStatus: MaintenanceTask.TaskStatus, completion: @escaping (Bool) -> Void) {
+        db.collection("maintenance_tasks").document(taskId).updateData([
+            "status": newStatus.rawValue,
+            "updatedAt": FieldValue.serverTimestamp()
+        ]) { error in
+            if let error = error {
+                self.errorMessage = "Error updating status: \(error.localizedDescription)"
+                completion(false)
+            } else {
+                completion(true)
+            }
+        }
+    }
+    
+    func updateTaskPriority(taskId: String, newPriority: String, completion: @escaping (Bool) -> Void) {
+        db.collection("maintenance_tasks").document(taskId).updateData([
+            "priority": newPriority,
+            "updatedAt": FieldValue.serverTimestamp()
+        ]) { error in
+            if let error = error {
+                self.errorMessage = "Error updating priority: \(error.localizedDescription)"
+                completion(false)
+            } else {
+                completion(true)
+            }
+        }
     }
     
     func assignTask(vehicleId: String, issue: String, completionDate: Date, priority: String, assignedToId: String, completion: @escaping (Bool) -> Void) {

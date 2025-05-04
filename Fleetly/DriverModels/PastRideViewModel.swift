@@ -1,271 +1,236 @@
-//
-//  PastRideViewModel.swift
-//  FleetlyDriver
-//
-//  Created by Sayal Singh on 25/04/25.
-//
 import Foundation
 import SwiftUI
+import FirebaseFirestore
 
 class PastRidesViewModel: ObservableObject {
     @Published var rides: [Ride] = []
     @Published var selectedDate: Date = Date()
     @Published var currentMonth: Date = Date()
-    
+    @Published var isLoading: Bool = false
+    @Published var errorMessage: String?
+    @Published var canLoadMore: Bool = true
+
+    private let db = Firestore.firestore()
+    private var listener: ListenerRegistration?
+    private var lastDocument: DocumentSnapshot?
+    private let pageSize = 20
+    private var driverId: String
     private let calendar = Calendar.current
-    private let dateFormatter = DateFormatter()
-    
-    init() {
-        loadRides()
+
+    init(driverId: String) {
+        self.driverId = driverId
     }
-    
-    func loadRides() {
-        dateFormatter.dateFormat = "yyyy-MM-dd HH:mm"
-        
-        let sampleRides: [Ride] = [
-            // April 26, 2025
-            Ride(
-                date: dateFormatter.date(from: "2025-04-26 08:00") ?? Date(),
-                startTime: dateFormatter.date(from: "2025-04-26 08:00") ?? Date(),
-                endTime: dateFormatter.date(from: "2025-04-26 09:00") ?? Date(),
-                startLocation: "Chennai",
-                endLocation: "Mysuru",
-                mileage: 66,
-                maintenanceStatus: .verified,
-                vehicleNumber: "KA01AB4321",
-                vehicleModel: "Swift Dzire",
-                preInspectionImage: nil,
-                postInspectionImage: nil,
-                fuelExpense: 200.0,
-                tollExpense: 50.0,
-                miscExpense: 20.0
-            ),
-            Ride(
-                date: dateFormatter.date(from: "2025-04-26 10:00") ?? Date(),
-                startTime: dateFormatter.date(from: "2025-04-26 10:00") ?? Date(),
-                endTime: dateFormatter.date(from: "2025-04-26 13:00") ?? Date(),
-                startLocation: "Chennai",
-                endLocation: "Mysuru",
-                mileage: 70,
-                maintenanceStatus: .ticketRaised,
-                vehicleNumber: "KA02CD5678",
-                vehicleModel: "Toyota Innova",
-                preInspectionImage: nil,
-                postInspectionImage: nil,
-                fuelExpense: 300.0,
-                tollExpense: 80.0,
-                miscExpense: 30.0
-            ),
-            Ride(
-                date: dateFormatter.date(from: "2025-04-26 15:00") ?? Date(),
-                startTime: dateFormatter.date(from: "2025-04-26 15:00") ?? Date(),
-                endTime: dateFormatter.date(from: "2025-04-26 16:30") ?? Date(),
-                startLocation: "Mysuru",
-                endLocation: "Bangalore",
-                mileage: 45,
-                maintenanceStatus: .verified,
-                vehicleNumber: "KA03EF9012",
-                vehicleModel: "Honda City",
-                preInspectionImage: nil,
-                postInspectionImage: nil,
-                fuelExpense: 150.0,
-                tollExpense: 40.0,
-                miscExpense: 10.0
-            ),
-            
-            // April 24, 2025
-            Ride(
-                date: dateFormatter.date(from: "2025-04-24 07:30") ?? Date(),
-                startTime: dateFormatter.date(from: "2025-04-24 07:30") ?? Date(),
-                endTime: dateFormatter.date(from: "2025-04-24 09:00") ?? Date(),
-                startLocation: "Chennai",
-                endLocation: "Pondicherry",
-                mileage: 42,
-                maintenanceStatus: .verified,
-                vehicleNumber: "KA04GH3456",
-                vehicleModel: "Hyundai Verna",
-                preInspectionImage: nil,
-                postInspectionImage: nil,
-                fuelExpense: 120.0,
-                tollExpense: 30.0,
-                miscExpense: 15.0
-            ),
-            Ride(
-                date: dateFormatter.date(from: "2025-04-24 14:30") ?? Date(),
-                startTime: dateFormatter.date(from: "2025-04-24 14:30") ?? Date(),
-                endTime: dateFormatter.date(from: "2025-04-24 16:45") ?? Date(),
-                startLocation: "Pondicherry",
-                endLocation: "Chennai",
-                mileage: 44,
-                maintenanceStatus: .ticketRaised,
-                vehicleNumber: "KA09AB7654",
-                vehicleModel: "Toyota Fortuner",
-                preInspectionImage: nil,
-                postInspectionImage: nil,
-                fuelExpense: 130.0,
-                tollExpense: 35.0,
-                miscExpense: 20.0
-            ),
-            
-            // April 22, 2025
-            Ride(
-                date: dateFormatter.date(from: "2025-04-22 09:00") ?? Date(),
-                startTime: dateFormatter.date(from: "2025-04-22 09:00") ?? Date(),
-                endTime: dateFormatter.date(from: "2025-04-22 11:00") ?? Date(),
-                startLocation: "Mysuru",
-                endLocation: "Bangalore",
-                mileage: 48,
-                maintenanceStatus: .verified,
-                vehicleNumber: "KA05IJ7890",
-                vehicleModel: "Maruti Swift",
-                preInspectionImage: nil,
-                postInspectionImage: nil,
-                fuelExpense: 140.0,
-                tollExpense: 25.0,
-                miscExpense: 10.0
-            ),
-            Ride(
-                date: dateFormatter.date(from: "2025-04-22 16:00") ?? Date(),
-                startTime: dateFormatter.date(from: "2025-04-22 16:00") ?? Date(),
-                endTime: dateFormatter.date(from: "2025-04-22 18:30") ?? Date(),
-                startLocation: "Bangalore",
-                endLocation: "Mysuru",
-                mileage: 52,
-                maintenanceStatus: .ticketRaised,
-                vehicleNumber: "KA08MN4567",
-                vehicleModel: "Mahindra XUV500",
-                preInspectionImage: nil,
-                postInspectionImage: nil,
-                fuelExpense: 160.0,
-                tollExpense: 45.0,
-                miscExpense: 25.0
-            ),
-            
-            // April 20, 2025
-            Ride(
-                date: dateFormatter.date(from: "2025-04-20 12:00") ?? Date(),
-                startTime: dateFormatter.date(from: "2025-04-20 12:00") ?? Date(),
-                endTime: dateFormatter.date(from: "2025-04-20 14:30") ?? Date(),
-                startLocation: "Chennai",
-                endLocation: "Vellore",
-                mileage: 75,
-                maintenanceStatus: .verified,
-                vehicleNumber: "KA06KL1234",
-                vehicleModel: "Tata Nexon",
-                preInspectionImage: nil,
-                postInspectionImage: nil,
-                fuelExpense: 250.0,
-                tollExpense: 60.0,
-                miscExpense: 40.0
-            ),
-            
-            // April 18, 2025
-            Ride(
-                date: dateFormatter.date(from: "2025-04-18 08:30") ?? Date(),
-                startTime: dateFormatter.date(from: "2025-04-18 08:30") ?? Date(),
-                endTime: dateFormatter.date(from: "2025-04-18 10:45") ?? Date(),
-                startLocation: "Bangalore",
-                endLocation: "Hassan",
-                mileage: 62,
-                maintenanceStatus: .ticketRaised,
-                vehicleNumber: "KA07OP8901",
-                vehicleModel: "Mahindra Thar",
-                preInspectionImage: nil,
-                postInspectionImage: nil,
-                fuelExpense: 200.0,
-                tollExpense: 50.0,
-                miscExpense: 30.0
-            ),
-            
-            // April 15, 2025
-            Ride(
-                date: dateFormatter.date(from: "2025-04-15 09:15") ?? Date(),
-                startTime: dateFormatter.date(from: "2025-04-15 09:15") ?? Date(),
-                endTime: dateFormatter.date(from: "2025-04-15 12:30") ?? Date(),
-                startLocation: "Mysuru",
-                endLocation: "Coorg",
-                mileage: 95,
-                maintenanceStatus: .ticketRaised,
-                vehicleNumber: "KA10QR2345",
-                vehicleModel: "Kia Seltos",
-                preInspectionImage: nil,
-                postInspectionImage: nil,
-                fuelExpense: 300.0,
-                tollExpense: 70.0,
-                miscExpense: 50.0
-            )
-        ]
-        
-        rides = sampleRides
+
+    deinit {
+        listener?.remove()
     }
-    
-    func filteredRides(for date: Date) -> [Ride] {
-        return rides.filter {
-            calendar.isDate($0.date, inSameDayAs: date)
+
+    func updateDriverId(_ driverId: String) {
+        guard self.driverId != driverId else { return }
+        self.driverId = driverId
+        lastDocument = nil
+        rides = []
+        fetchCompletedRides()
+    }
+
+    func fetchCompletedRides() {
+        guard !driverId.isEmpty else {
+            errorMessage = "Driver ID is missing"
+            return
+        }
+
+        guard !isLoading else { return }
+        
+        isLoading = true
+        listener?.remove()
+
+        print("Fetching trips for driverId: \(driverId)")
+
+        var query = db.collection("trips")
+            .whereField("status", isEqualTo: "completed")
+            .whereField("driverId", isEqualTo: driverId)
+            .order(by: "endTime", descending: true)
+            .limit(to: pageSize)
+        
+        if let lastDoc = lastDocument {
+            query = query.start(afterDocument: lastDoc)
+        }
+        
+        listener = query.addSnapshotListener { [weak self] snapshot, error in
+            guard let self = self else { return }
+            self.isLoading = false
+            
+            if let error = error {
+                self.errorMessage = "Failed to fetch rides: \(error.localizedDescription)"
+                print("Query error: \(error.localizedDescription)")
+                return
+            }
+            
+            guard let documents = snapshot?.documents else {
+                self.errorMessage = "No rides found"
+                self.canLoadMore = false
+                print("No documents found for query")
+                return
+            }
+            
+            print("Found \(documents.count) documents")
+            self.lastDocument = documents.last
+            
+            var tempRides: [Ride] = documents.compactMap { doc in
+                do {
+                    let ride = try doc.data(as: Ride.self)
+                    print("Decoded ride: \(ride.id ?? "no id") with endTime: \(ride.endTime.description)")
+                    return ride
+                } catch {
+                    self.errorMessage = "Error decoding ride: \(error.localizedDescription)"
+                    print("Decoding error: \(error.localizedDescription)")
+                    return nil
+                }
+            }
+            
+            let group = DispatchGroup()
+            for (index, var ride) in tempRides.enumerated() {
+                guard let tripID = ride.id else { continue }
+                
+                group.enter()
+                db.collection("trips").document(tripID).collection("preinspection").getDocuments { snapshot, error in
+                    defer { group.leave() }
+                    if let error = error {
+                        self.errorMessage = "Failed to fetch preinspection: \(error.localizedDescription)"
+                        print("Preinspection error: \(error.localizedDescription)")
+                        return
+                    }
+                    if let doc = snapshot?.documents.first {
+                        do {
+                            tempRides[index].preInspection = try doc.data(as: Inspection.self)
+                        } catch {
+                            self.errorMessage = "Error decoding preinspection: \(error.localizedDescription)"
+                            print("Preinspection decode error: \(error.localizedDescription)")
+                        }
+                    }
+                }
+                
+                group.enter()
+                db.collection("trips").document(tripID).collection("postinspection").getDocuments { snapshot, error in
+                    defer { group.leave() }
+                    if let error = error {
+                        self.errorMessage = "Failed to fetch postinspection: \(error.localizedDescription)"
+                        print("Postinspection error: \(error.localizedDescription)")
+                        return
+                    }
+                    if let doc = snapshot?.documents.first {
+                        do {
+                            tempRides[index].postInspection = try doc.data(as: Inspection.self)
+                        } catch {
+                            self.errorMessage = "Error decoding postinspection: \(error.localizedDescription)"
+                            print("Postinspection decode error: \(error.localizedDescription)")
+                        }
+                    }
+                }
+                
+                group.enter()
+                db.collection("trips").document(tripID).collection("trip_charges").getDocuments { snapshot, error in
+                    defer { group.leave() }
+                    if let error = error {
+                        self.errorMessage = "Failed to fetch trip charges: \(error.localizedDescription)"
+                        print("Trip charges error: \(error.localizedDescription)")
+                        return
+                    }
+                    if let doc = snapshot?.documents.first {
+                        do {
+                            tempRides[index].tripCharges = try doc.data(as: TripCharges.self)
+                        } catch {
+                            self.errorMessage = "Error decoding trip charges: \(error.localizedDescription)"
+                            print("Trip charges decode error: \(error.localizedDescription)")
+                        }
+                    }
+                }
+            }
+            
+            group.notify(queue: .main) {
+                // Filter rides to match the selectedDate based on endTime
+                let filteredRides = tempRides.filter { ride in
+                    self.calendar.isDate(ride.endTime, inSameDayAs: self.selectedDate)
+                }
+                
+                if self.lastDocument == nil {
+                    self.rides = filteredRides
+                } else {
+                    self.rides.append(contentsOf: filteredRides)
+                }
+                self.canLoadMore = tempRides.count == self.pageSize
+                print("Filtered rides for \(self.selectedDate): \(self.rides.count)")
+                
+                if self.rides.isEmpty {
+                    self.errorMessage = "No rides found on this date"
+                } else {
+                    self.errorMessage = nil
+                }
+            }
         }
     }
-    
+
+    func loadMoreRides() {
+        guard canLoadMore, !isLoading else { return }
+        fetchCompletedRides()
+    }
+
+    func updateSelectedDate(_ date: Date) {
+        print("Updating selected date to: \(date)")
+        selectedDate = date
+        lastDocument = nil
+        rides = []
+        fetchCompletedRides()
+    }
+
+    func dayHasRides(_ date: Date) -> Bool {
+        return rides.contains { ride in
+            return calendar.isDate(ride.endTime, inSameDayAs: date)
+        }
+    }
+
     func monthString(from date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMMM yyyy"
         return formatter.string(from: date)
     }
-    
-    func daysInMonth() -> [[Date?]] {
-        guard let range = calendar.range(of: .day, in: .month, for: currentMonth),
-              let firstDay = calendar.date(from: calendar.dateComponents([.year, .month], from: currentMonth)) else {
-            return []
-        }
-        
-        let numDays = range.count
-        
-        // Find the first weekday
-        let firstWeekday = calendar.component(.weekday, from: firstDay)
-        let weekdayOffset = firstWeekday - 1 // 1-based to 0-based
-        
-        var days: [[Date?]] = []
-        var week: [Date?] = Array(repeating: nil, count: 7)
-        
-        // Fill in the days
-        for day in 1...numDays {
-            guard let date = calendar.date(byAdding: .day, value: day - 1, to: firstDay) else { continue }
-            
-            let index = (weekdayOffset + day - 1) % 7
-            let weekIndex = (weekdayOffset + day - 1) / 7
-            
-            if index == 0 && day > 1 {
-                days.append(week)
-                week = Array(repeating: nil, count: 7)
-            }
-            
-            week[index] = date
-        }
-        
-        // Add the last week
-        days.append(week)
-        
-        return days
-    }
-    
+
     func previousMonth() {
-        if let newMonth = calendar.date(byAdding: .month, value: -1, to: currentMonth) {
-            currentMonth = newMonth
-        }
+        currentMonth = Calendar.current.date(byAdding: .month, value: -1, to: currentMonth) ?? currentMonth
     }
-    
+
     func nextMonth() {
-        if let newMonth = calendar.date(byAdding: .month, value: 1, to: currentMonth) {
-            currentMonth = newMonth
+        currentMonth = Calendar.current.date(byAdding: .month, value: 1, to: currentMonth) ?? currentMonth
+    }
+
+    func daysInMonth() -> [[Date?]] {
+        let calendar = Calendar.current
+        let monthRange = calendar.range(of: .day, in: .month, for: currentMonth)!
+        let firstDayOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: currentMonth))!
+        let firstWeekday = calendar.component(.weekday, from: firstDayOfMonth) - 1
+        let daysCount = monthRange.count
+        var days: [Date?] = Array(repeating: nil, count: firstWeekday)
+
+        for day in 1...daysCount {
+            if let date = calendar.date(byAdding: .day, value: day - 1, to: firstDayOfMonth) {
+                days.append(date)
+            }
         }
+
+        let totalSlots = days.count % 7 == 0 ? days.count : (days.count / 7 + 1) * 7
+        days.append(contentsOf: Array(repeating: nil, count: totalSlots - days.count))
+
+        var weeks: [[Date?]] = []
+        for i in stride(from: 0, to: days.count, by: 7) {
+            weeks.append(Array(days[i..<min(i + 7, days.count)]))
+        }
+        return weeks
     }
-    
-    func isDateInCurrentMonth(_ date: Date?) -> Bool {
-        guard let date = date else { return false }
-        return calendar.isDate(date, equalTo: currentMonth, toGranularity: .month)
-    }
-    
-    func dayHasRides(_ date: Date?) -> Bool {
-        guard let date = date else { return false }
-        return rides.contains { calendar.isDate($0.date, inSameDayAs: date) }
+
+    func isDateInCurrentMonth(_ date: Date) -> Bool {
+        let calendar = Calendar.current
+        let currentMonthComponents = calendar.dateComponents([.year, .month], from: currentMonth)
+        let dateComponents = calendar.dateComponents([.year, .month], from: date)
+        return currentMonthComponents == dateComponents
     }
 }

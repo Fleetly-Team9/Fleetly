@@ -32,8 +32,391 @@ struct MainTabView: View {
 
 
 struct MaintenanceView: View {
+    @StateObject private var viewModel = AssignTaskViewModel()
+    @State private var showingNewTaskSheet = false
+    @State private var selectedTask: MaintenanceTask?
+    @State private var showingTaskDetail = false
+    @State private var showingFilters = false
+    @State private var selectedStatus: MaintenanceTask.TaskStatus?
+    @State private var selectedPriority: String?
+    @State private var selectedVehicle: String?
+    @State private var dateRange: ClosedRange<Date> = Calendar.current.date(byAdding: .month, value: -1, to: Date())!...Date()
+    
+    var filteredTasks: [MaintenanceTask] {
+        var filtered = viewModel.maintenanceTasks
+        
+        if let status = selectedStatus {
+            filtered = filtered.filter { $0.status == status }
+        }
+        
+        if let priority = selectedPriority {
+            filtered = filtered.filter { $0.priority.lowercased() == priority.lowercased() }
+        }
+        
+        if let vehicle = selectedVehicle {
+            filtered = filtered.filter { $0.vehicleId == vehicle }
+        }
+        
+        // Filter by date range
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        
+        filtered = filtered.filter { task in
+            if let taskDate = dateFormatter.date(from: task.completionDate) {
+                return dateRange.contains(taskDate)
+            }
+            return false
+        }
+        
+        return filtered
+    }
+    
     var body: some View {
-        AssignTaskView()
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 16) {
+                    // Stats Overview
+                    HStack(spacing: 16) {
+                        StatCardGridView(
+                            icon: "wrench.fill",
+                            title: "Pending Tasks",
+                            value: "\(viewModel.pendingTasks)",
+                            color: .orange
+                        )
+                        
+                        StatCardGridView(
+                            icon: "checkmark.circle.fill",
+                            title: "Completed",
+                            value: "\(viewModel.completedTasks)",
+                            color: .green
+                        )
+                    }
+                    .padding(.horizontal)
+                    
+                    // Filter Bar
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            if selectedStatus != nil || selectedPriority != nil || selectedVehicle != nil {
+                                Button(action: {
+                                    selectedStatus = nil
+                                    selectedPriority = nil
+                                    selectedVehicle = nil
+                                }) {
+                                    HStack {
+                                        Text("Clear All")
+                                        Image(systemName: "xmark.circle.fill")
+                                    }
+                                    .font(.subheadline)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(Color.gray.opacity(0.1))
+                                    .foregroundColor(.gray)
+                                    .cornerRadius(8)
+                                }
+                            }
+                            
+                            if let status = selectedStatus {
+                                FilterChip(
+                                    title: status.rawValue.capitalized,
+                                    color: .blue
+                                ) {
+                                    selectedStatus = nil
+                                }
+                            }
+                            
+                            if let priority = selectedPriority {
+                                FilterChip(
+                                    title: priority,
+                                    color: priorityColor(priority)
+                                ) {
+                                    selectedPriority = nil
+                                }
+                            }
+                            
+                            if let vehicle = selectedVehicle {
+                                FilterChip(
+                                    title: vehicle,
+                                    color: .purple
+                                ) {
+                                    selectedVehicle = nil
+                                }
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+                    
+                    // Tasks List
+                    LazyVStack(spacing: 12) {
+                        ForEach(filteredTasks) { task in
+                            TaskCardView(task: task)
+                                .onTapGesture {
+                                    selectedTask = task
+                                    showingTaskDetail = true
+                                }
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+                .padding(.vertical)
+            }
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle("Maintenance Tasks")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: { showingNewTaskSheet = true }) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(.blue)
+                    }
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: { showingFilters = true }) {
+                        Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(.blue)
+                    }
+                }
+            }
+            .sheet(isPresented: $showingNewTaskSheet) {
+                AssignTaskView()
+            }
+            .sheet(isPresented: $showingTaskDetail) {
+                if let task = selectedTask {
+                    TaskDetailView(task: task)
+                }
+            }
+            .sheet(isPresented: $showingFilters) {
+                FleetFilterView(
+                    selectedStatus: $selectedStatus,
+                    selectedPriority: $selectedPriority,
+                    selectedVehicle: $selectedVehicle,
+                    dateRange: $dateRange,
+                    vehicles: viewModel.vehicles.map { $0.licensePlate }
+                )
+            }
+        }
+    }
+    
+    private func priorityColor(_ priority: String) -> Color {
+        switch priority.lowercased() {
+        case "high": return .red
+        case "medium": return .orange
+        case "low": return .green
+        default: return .gray
+        }
+    }
+}
+
+struct TaskCardView: View {
+    let task: MaintenanceTask
+    @StateObject private var viewModel = AssignTaskViewModel()
+    @State private var vehicleNumber: String = ""
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(vehicleNumber)
+                        .font(.headline)
+                    Text(task.issue)
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                }
+                
+                Spacer()
+                
+                ManagerStatusBadge(status: task.status)
+            }
+            
+            HStack {
+                ManagerPriorityBadge(priority: task.priority)
+                
+                Spacer()
+                
+                Text("Due: \(task.completionDate)")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+        .onAppear {
+            fetchVehicleNumber()
+        }
+    }
+    
+    private func fetchVehicleNumber() {
+        let db = Firestore.firestore()
+        db.collection("vehicles").document(task.vehicleId).getDocument { document, error in
+            if let document = document,
+               let data = document.data(),
+               let licensePlate = data["licensePlate"] as? String {
+                DispatchQueue.main.async {
+                    self.vehicleNumber = licensePlate
+                }
+            }
+        }
+    }
+}
+
+struct ManagerStatusBadge: View {
+    let status: MaintenanceTask.TaskStatus
+    
+    var body: some View {
+        Text(status.rawValue.capitalized)
+            .font(.caption)
+            .fontWeight(.medium)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(statusColor.opacity(0.2))
+            .foregroundColor(statusColor)
+            .cornerRadius(8)
+    }
+    
+    private var statusColor: Color {
+        switch status {
+        case .pending: return .orange
+        case .inProgress: return .blue
+        case .completed: return .green
+        case .cancelled: return .red
+        }
+    }
+}
+
+struct ManagerPriorityBadge: View {
+    let priority: String
+    
+    var body: some View {
+        Text(priority)
+            .font(.caption)
+            .fontWeight(.medium)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(priorityColor.opacity(0.2))
+            .foregroundColor(priorityColor)
+            .cornerRadius(8)
+    }
+    
+    private var priorityColor: Color {
+        switch priority.lowercased() {
+        case "high": return .red
+        case "medium": return .orange
+        case "low": return .green
+        default: return .gray
+        }
+    }
+}
+
+struct TaskDetailView: View {
+    let task: MaintenanceTask
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var viewModel = AssignTaskViewModel()
+    @State private var showingStatusSheet = false
+    @State private var selectedStatus: MaintenanceTask.TaskStatus?
+    @State private var vehicleNumber: String = ""
+    
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 20) {
+                    // Task Info Card
+                    VStack(alignment: .leading, spacing: 16) {
+                        InfoRow(title: "Vehicle", value: vehicleNumber)
+                        InfoRow(title: "Issue", value: task.issue)
+                        InfoRow(title: "Priority", value: task.priority)
+                        InfoRow(title: "Status", value: task.status.rawValue.capitalized)
+                        InfoRow(title: "Due Date", value: task.completionDate)
+                        InfoRow(title: "Created", value: task.createdAt)
+                    }
+                    .padding()
+                    .background(Color(.systemBackground))
+                    .cornerRadius(12)
+                    .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+                    
+                    // Action Button
+                    Button(action: { showingStatusSheet = true }) {
+                        Label("Update Status", systemImage: "arrow.triangle.2.circlepath")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.blue.opacity(0.1))
+                            .foregroundColor(.blue)
+                            .cornerRadius(10)
+                    }
+                }
+                .padding()
+            }
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle("Task Details")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+            .confirmationDialog("Update Status", isPresented: $showingStatusSheet) {
+                Button("Mark as Pending") {
+                    updateStatus(.pending)
+                }
+                Button("Mark as In Progress") {
+                    updateStatus(.inProgress)
+                }
+                Button("Mark as Completed") {
+                    updateStatus(.completed)
+                }
+                Button("Mark as Cancelled") {
+                    updateStatus(.cancelled)
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Select new status for the task")
+            }
+            .onAppear {
+                fetchVehicleNumber()
+            }
+        }
+    }
+    
+    private func updateStatus(_ newStatus: MaintenanceTask.TaskStatus) {
+        viewModel.updateTaskStatus(taskId: task.id, newStatus: newStatus) { success in
+            if success {
+                dismiss()
+            }
+        }
+    }
+    
+    private func fetchVehicleNumber() {
+        let db = Firestore.firestore()
+        db.collection("vehicles").document(task.vehicleId).getDocument { document, error in
+            if let document = document,
+               let data = document.data(),
+               let licensePlate = data["licensePlate"] as? String {
+                DispatchQueue.main.async {
+                    self.vehicleNumber = licensePlate
+                }
+            }
+        }
+    }
+}
+
+struct InfoRow: View {
+    let title: String
+    let value: String
+    
+    var body: some View {
+        HStack {
+            Text(title)
+                .foregroundColor(.gray)
+            Spacer()
+            Text(value)
+                .foregroundColor(.primary)
+        }
     }
 }
 
@@ -114,17 +497,19 @@ struct DashboardHomeView: View {
                         .onAppear{
                             viewModel.fetchTotalTrips()
                         }
-                        StatCardGridView(
-                            icon: "wrench.fill",
-                            title: "Maintenance",
-                            value: "\(dashboardVM.maintenanceVehicles)", // Dynamic value
-                            color: .red
-                        )
+                        NavigationLink(destination: MaintenanceView()) {
+                            StatCardGridView(
+                                icon: "wrench.fill",
+                                title: "Maintenance",
+                                value: "\(dashboardVM.pendingMaintenanceTasks)",
+                                color: .red
+                            )
+                        }
                         NavigationLink(destination:TicketListView()){
                             StatCardGridView(
                                 icon: "ticket.fill",
                                 title: "Tickets",
-                                value: "0", // Still hardcoded, can be made dynamic later
+                                value: "\(dashboardVM.activeTickets)",
                                 color: .orange
                             )
                         }
@@ -421,3 +806,125 @@ class TripsViewModel: ObservableObject {
 }
 
 //hello
+
+struct FilterChip: View {
+    let title: String
+    let color: Color
+    let onRemove: () -> Void
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(title)
+                .font(.subheadline)
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.caption)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(color.opacity(0.1))
+        .foregroundColor(color)
+        .cornerRadius(8)
+    }
+}
+
+struct FleetFilterView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var selectedStatus: MaintenanceTask.TaskStatus?
+    @Binding var selectedPriority: String?
+    @Binding var selectedVehicle: String?
+    @Binding var dateRange: ClosedRange<Date>
+    let vehicles: [String]
+    
+    let priorities = ["High", "Medium", "Low"]
+    let statuses: [MaintenanceTask.TaskStatus] = [.pending, .inProgress, .completed, .cancelled]
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Status") {
+                    ForEach(statuses, id: \.self) { status in
+                        FilterRow(
+                            title: status.rawValue.capitalized,
+                            isSelected: selectedStatus == status
+                        ) {
+                            selectedStatus = selectedStatus == status ? nil : status
+                        }
+                    }
+                }
+                
+                Section("Priority") {
+                    ForEach(priorities, id: \.self) { priority in
+                        FilterRow(
+                            title: priority,
+                            isSelected: selectedPriority == priority
+                        ) {
+                            selectedPriority = selectedPriority == priority ? nil : priority
+                        }
+                    }
+                }
+                
+                Section("Vehicle") {
+                    ForEach(vehicles, id: \.self) { vehicle in
+                        FilterRow(
+                            title: vehicle,
+                            isSelected: selectedVehicle == vehicle
+                        ) {
+                            selectedVehicle = selectedVehicle == vehicle ? nil : vehicle
+                        }
+                    }
+                }
+                
+                Section("Date Range") {
+                    DatePicker(
+                        "From",
+                        selection: Binding(
+                            get: { dateRange.lowerBound },
+                            set: { dateRange = $0...dateRange.upperBound }
+                        ),
+                        displayedComponents: [.date]
+                    )
+                    
+                    DatePicker(
+                        "To",
+                        selection: Binding(
+                            get: { dateRange.upperBound },
+                            set: { dateRange = dateRange.lowerBound...$0 }
+                        ),
+                        displayedComponents: [.date]
+                    )
+                }
+            }
+            .navigationTitle("Filters")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct FilterRow: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                Text(title)
+                Spacer()
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .foregroundColor(.blue)
+                }
+            }
+        }
+        .foregroundColor(.primary)
+    }
+}
