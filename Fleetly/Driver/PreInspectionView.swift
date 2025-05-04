@@ -348,8 +348,11 @@ struct PreInspectionView: View {
                 EmptyView()
             }
         )
-        .improvedSheetPresentation($navigateToTicketView) {
+        .sheet(isPresented: $navigateToTicketView) {
             TicketsView()
+                .edgesIgnoringSafeArea(.all)
+                .transition(.move(edge: .bottom))
+                .animation(.easeInOut(duration: 0.3), value: navigateToTicketView)
         }
         .overlay {
             if let index = expandedImageIndex {
@@ -472,18 +475,6 @@ struct PreInspectionView: View {
             .onTapGesture {
                 expandedImageIndex = index
             }
-    }
-}
-
-// Extension to improve user experience when presenting sheets
-extension View {
-    func improvedSheetPresentation<Content: View>(_ isPresented: Binding<Bool>, @ViewBuilder content: @escaping () -> Content) -> some View {
-        self.sheet(isPresented: isPresented) {
-            content()
-                .edgesIgnoringSafeArea(.all)
-                .transition(.move(edge: .bottom))
-                .animation(.easeInOut(duration: 0.3), value: isPresented.wrappedValue)
-        }
     }
 }
 
