@@ -1,6 +1,7 @@
 import SwiftUI
 import MapKit
 import CoreLocation
+
 struct MainView: View {
     @ObservedObject var authVM: AuthViewModel
     @State private var showProfile = false
@@ -17,25 +18,12 @@ struct MainView: View {
                 }
             TicketsView()
                 .tabItem {
-                    Label("Tickets", systemImage: "ticket.fill")
+                    Label("Tickets", systemImage: "ticket")
                 }
         }
-        /*.toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: {
-                    showProfile = true
-                }) {
-                    Image(systemName: "person.circle.fill")
-                        .resizable()
-                        .frame(width: 28, height: 28)
-                        .foregroundColor(.blue)
-                }
-            }
-        }*/
         .sheet(isPresented: $showProfile) {
             DriverProfileView(authVM: authVM)
         }
-        .environmentObject(authVM) // Inject AuthViewModel into the environment for all tabs
     }
 }
 
@@ -50,12 +38,18 @@ struct DriverHomePage: View {
     @State private var userTrackingMode: MapUserTrackingMode = .follow
     @State private var isClockedIn = false
     @State private var currentWorkOrderIndex: Int = 0
-    @State private var swipeOffset: CGFloat = 0
-    @State private var isSwiping: Bool = false
-    @State private var isDragCompleted: Bool = false
     @StateObject private var assignedTripsVM = AssignedTripsViewModel()
     @State private var didStartListener = false
     @State private var profileImage: Image?
+    @State private var showClockInAlert = false
+    @State private var tripStates: [String: TripCardState] = [:] // Per-trip state for slider
+
+    struct TripCardState {
+        var swipeOffset: CGFloat = 0
+        var isSwiping: Bool = false
+        var isDragCompleted: Bool = false
+        var isNavigating: Bool = false
+    }
 
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     let hours = (0...12).map { $0 == 0 ? "0hr" : "\($0)hr\($0 == 1 ? "" : "s")" }
@@ -64,7 +58,6 @@ struct DriverHomePage: View {
     let vehicleNumber: String = "KA6A1204"
     private let profileImageKey = "profileImage"
 
-    
     static let darkGray = Color(red: 68/255, green: 6/255, blue: 52/255)
     static let lightGray = Color(red: 240/255, green: 242/255, blue: 245/255)
     static let highlightYellow = Color(red: 235/255, green: 64/255, blue: 52/255)
@@ -72,11 +65,10 @@ struct DriverHomePage: View {
     static let customBlue = Color(.systemBlue)
     static let gradientStart = Color(red: 74/255, green: 145/255, blue: 226/255)
     static let gradientEnd = Color(red: 80/255, green: 227/255, blue: 195/255)
-    static let initialCapsuleColor = Color(.systemGray5)
     
     private var maxX: CGFloat {
-        let capsuleWidth = 343.0
-        let circleWidth = 53.0
+        let capsuleWidth = 280.0
+        let circleWidth = 48.0
         return capsuleWidth - circleWidth
     }
     
@@ -109,7 +101,6 @@ struct DriverHomePage: View {
             }
         }
         
-        // Load profile image from UserDefaults
         if let data = UserDefaults.standard.data(forKey: profileImageKey),
            let uiImage = UIImage(data: data) {
             profileImage = Image(uiImage: uiImage)
@@ -117,10 +108,6 @@ struct DriverHomePage: View {
             profileImage = nil
         }
     }
-    
-        
-
-    
     
     private func currentDateString() -> String {
         let formatter = DateFormatter()
@@ -156,35 +143,15 @@ struct DriverHomePage: View {
         return startOfNow > startOfToday
     }
     
-/*  private var headerSection: some View {
-        HStack {
-            VStack{
-                Text("Here's your schedule for today!")
-                    .font(.system(size: 15, design: .default))
-                    .foregroundStyle(Color.secondary)
-                    .padding(.trailing, 100)
-            }
-            HStack {
-                Image(systemName: "person.crop.circle.fill")
-                    .resizable()
-                    .frame(width: 40, height: 40)
-                    .foregroundStyle(Color.primary)
-            }
-            .offset(y: -40)
-        }
-    }*/
-    
-    
     private var headerSection: some View {
         HStack {
             VStack(alignment: .leading) {
                 Text("Here's your schedule for today!")
-                    .font(.system(size: 15))
-                    .foregroundStyle(Color.secondary)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
             Spacer()
             Button(action: {
-                print("Profile image tapped") // Debug
                 showProfile = true
             }) {
                 Group {
@@ -198,84 +165,67 @@ struct DriverHomePage: View {
                         Image(systemName: "person.crop.circle.fill")
                             .resizable()
                             .frame(width: 40, height: 40)
-                            .foregroundStyle(Color.primary)
+                            .foregroundStyle(.primary)
                     }
                 }
-                .contentShape(Circle()) // Ensure entire circle is tappable
+                .contentShape(Circle())
             }
         }
         .padding(.horizontal)
     }
     
-
-
-
-
-    
     private var workingHoursSection: some View {
         VStack {
             Text("Working Hours")
-                .font(.system(size: 24, weight: .semibold, design: .default))
-                .foregroundStyle(Color.primary)
-                .frame(width: 200, height: 50, alignment: .leading)
-                .padding(.trailing, 150)
+                .font(.title2.bold())
+                .foregroundStyle(.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(.horizontal)
     }
     
     private var workingHoursContent: some View {
         ZStack {
-            Rectangle()
-                .fill(colorScheme == .dark ? Color(UIColor.systemGray4) : Color.white)
+            RoundedRectangle(cornerRadius: 12)
+                .fill(.ultraThinMaterial)
                 .frame(width: 363, height: 290)
-                .cornerRadius(10)
-                .shadow(color: colorScheme == .dark ? Color.black.opacity(0.3) : Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(colorScheme == .dark ? Color.gray.opacity(0.3) : Color.clear, lineWidth: 1)
-                )
+                .shadow(color: .black.opacity(0.1), radius: 5)
             
             VStack(spacing: 10) {
                 Text(currentTime, formatter: dateFormatter)
-                    .font(.system(size: 20, weight: .regular, design: .default))
-                    .foregroundStyle(Color.primary)
-                    .padding(.trailing, 210)
-                    .padding(.top, 40)
+                    .font(.title3)
+                    .foregroundStyle(.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 20)
+                    .padding(.leading, 20)
                 
                 if !isClockedIn {
                     Text("Clocked Hours")
-                        .font(.system(size: 18, weight: .regular, design: .default))
-                        .foregroundStyle(Color.secondary)
-                        .padding(.trailing, 200)
-                } else {
-                    Text("")
-                        .font(.system(size: 18, weight: .regular, design: .default))
-                        .frame(height: 20)
-                        .padding(.trailing, 200)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.leading, 20)
                 }
                 
                 Text(formatElapsedTime(elapsedTime))
-                    .font(.system(size: 36, weight: .semibold, design: .default))
-                    .foregroundStyle(Color.primary)
-                    .padding(.leading, 0)
-                    .padding(.trailing, 90)
+                    .font(.largeTitle.bold())
+                    .foregroundStyle(.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.leading, 20)
                 
                 if !isClockedIn, let start = startTime {
                     Text("Since first in at \(start, formatter: timeFormatter)")
-                        .font(.system(size: 18, weight: .regular, design: .default))
-                        .foregroundStyle(Color.secondary)
-                        .padding(.trailing, 130)
-                } else {
-                    Text("")
-                        .font(.system(size: 18, weight: .regular, design: .default))
-                        .foregroundStyle(Color.secondary)
-                        .padding(.trailing, 200)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.leading, 20)
                 }
                 
                 ScrollView(.horizontal, showsIndicators: false) {
                     VStack(spacing: 5) {
                         ZStack {
                             Rectangle()
-                                .fill(Color.blue.opacity(0.1))
+                                .fill(.blue.opacity(0.1))
                                 .frame(width: 684, height: 12)
                                 .padding(.horizontal, 10)
                             
@@ -286,9 +236,8 @@ struct DriverHomePage: View {
                             }()
                             
                             Rectangle()
-                                .fill(Color.blue)
-                                .border(Color.black)
-                                .frame(width: progressWidth, height: 20)
+                                .fill(.blue)
+                                .frame(width: progressWidth, height: 12)
                                 .padding(.horizontal, 10)
                             
                             HStack(spacing: 0) {
@@ -296,7 +245,7 @@ struct DriverHomePage: View {
                                     Spacer()
                                         .frame(width: 40 + 12)
                                     Rectangle()
-                                        .fill(Color.blue.opacity(0.5))
+                                        .fill(.blue.opacity(0.5))
                                         .frame(width: 1, height: 8)
                                         .offset(x: -26)
                                 }
@@ -309,85 +258,77 @@ struct DriverHomePage: View {
                         HStack(spacing: 15) {
                             ForEach(hours, id: \.self) { hour in
                                 Text(hour)
-                                    .font(.system(size: 14, weight: .regular, design: .default))
-                                    .foregroundStyle(Color.primary)
-                                    .frame(width: 40, height: 20)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                    .font(.caption)
+                                    .foregroundStyle(.primary)
+                                    .frame(width: 40)
                             }
                         }
                         .padding(.horizontal, 10)
                     }
                 }
-                .frame(width: 343)
+                .padding(.horizontal)
                 
-                VStack {
-                    Button(action: {
-                        guard let driverId = authVM.user?.id else { return }
-                        
-                        isClockedIn.toggle()
-                        let eventType = isClockedIn ? "clockIn" : "clockOut"
-                        
-                        FirebaseManager.shared.recordClockEvent(driverId: driverId, type: eventType) { result in
-                            switch result {
-                            case .success:
-                                if isClockedIn {
-                                    print("Driver Clocked in")
-                                    isStopwatchRunning = true
-                                } else {
-                                    print("Driver Clocked out")
-                                    isStopwatchRunning = false
-                                    FirebaseManager.shared.fetchTodayWorkedTime(driverId: driverId) { timeResult in
-                                        switch timeResult {
-                                        case .success(let totalSeconds):
-                                            elapsedTime = TimeInterval(totalSeconds)
-                                        case .failure(let error):
-                                            print("Error fetching updated worked time: \(error)")
-                                        }
+                Button(action: {
+                    guard let driverId = authVM.user?.id else { return }
+                    
+                    isClockedIn.toggle()
+                    let eventType = isClockedIn ? "clockIn" : "clockOut"
+                    
+                    FirebaseManager.shared.recordClockEvent(driverId: driverId, type: eventType) { result in
+                        switch result {
+                        case .success:
+                            if isClockedIn {
+                                isStopwatchRunning = true
+                            } else {
+                                isStopwatchRunning = false
+                                FirebaseManager.shared.fetchTodayWorkedTime(driverId: driverId) { timeResult in
+                                    switch timeResult {
+                                    case .success(let totalSeconds):
+                                        elapsedTime = TimeInterval(totalSeconds)
+                                    case .failure(let error):
+                                        print("Error fetching updated worked time: \(error)")
                                     }
                                 }
-                            case .failure(let error):
-                                print("Error recording clock event: \(error)")
-                                isClockedIn.toggle()
                             }
+                        case .failure(let error):
+                            print("Error recording clock event: \(error)")
+                            isClockedIn.toggle()
                         }
-                    }) {
-                        Label(isClockedIn ? "Clock Out" : "Clock In", systemImage: "person.crop.circle.badge.clock")
-                            .font(.system(size: 18, weight: .semibold, design: .default))
-                            .foregroundStyle(Color.white)
-                            .frame(width: 312, height: 35)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(isClockedIn ? Color(red: 243/255, green: 120/255, blue: 89/255) : Color(red: 3/255, green: 218/255, blue: 164/255))
-                    .padding(.bottom, 20)
+                }) {
+                    Text(isClockedIn ? "Clock Out" : "Clock In")
+                        .font(.headline.bold())
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(isClockedIn ? .red : .green)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
-                Spacer()
+                .padding(.horizontal)
+                .padding(.bottom, 20)
             }
         }
-        .offset(y: -25)
     }
     
     private var tripsHeader: some View {
         HStack {
             Text("Assigned Trips")
                 .font(.title2.bold())
-                .foregroundStyle(Color.primary)
+                .foregroundStyle(.primary)
             
             if !assignedTripsVM.assignedTrips.isEmpty {
                 Text("\(assignedTripsVM.assignedTrips.count)")
-                    .font(.footnote.weight(.semibold))
+                    .font(.caption.bold())
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(
-                        Capsule()
-                            .fill(Color.accentColor)
-                    )
-                    .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.blue)
+                    .clipShape(Capsule())
             }
         }
+        .padding(.horizontal)
     }
     
-    // State to manage each trip's map data
     struct TripMapData {
         var region: MKCoordinateRegion
         var pickup: Location?
@@ -405,17 +346,15 @@ struct DriverHomePage: View {
         }
     }
     
-    @State private var tripMapData: [String: TripMapData] = [:] // Map trip ID to its map data
+    @State private var tripMapData: [String: TripMapData] = [:]
     
     private func fetchRoute(for trip: Trip) {
-        // Initialize map data for this trip if not already present
         if tripMapData[trip.id] == nil {
             tripMapData[trip.id] = TripMapData()
         }
         
         let geocoder = CLGeocoder()
         
-        // Geocode startLocation
         geocoder.geocodeAddressString(trip.startLocation) { placemarks, error in
             guard let startPlacemark = placemarks?.first,
                   let startLocation = startPlacemark.location else {
@@ -423,7 +362,6 @@ struct DriverHomePage: View {
                 return
             }
             
-            // Geocode endLocation
             geocoder.geocodeAddressString(trip.endLocation) { placemarks, error in
                 guard let endPlacemark = placemarks?.first,
                       let endLocation = endPlacemark.location else {
@@ -434,7 +372,6 @@ struct DriverHomePage: View {
                 let pickup = Location(name: trip.startLocation, coordinate: startLocation.coordinate)
                 let drop = Location(name: trip.endLocation, coordinate: endLocation.coordinate)
                 
-                // Calculate the route
                 let request = MKDirections.Request()
                 request.source = MKMapItem(placemark: MKPlacemark(coordinate: startLocation.coordinate))
                 request.destination = MKMapItem(placemark: MKPlacemark(coordinate: endLocation.coordinate))
@@ -447,11 +384,9 @@ struct DriverHomePage: View {
                         return
                     }
                     
-                    // Calculate the region to encompass the entire route
                     let coordinates = route.polyline.coordinates
                     let region = MKCoordinateRegion(coordinates: coordinates, latitudinalMetersPadding: 1000, longitudinalMetersPadding: 1000)
                     
-                    // Update the trip's map data
                     DispatchQueue.main.async {
                         tripMapData[trip.id]?.region = region
                         tripMapData[trip.id]?.pickup = pickup
@@ -463,7 +398,6 @@ struct DriverHomePage: View {
         }
     }
     
-    // MARK: - Trip Card Components
     private struct TripMapSection: View {
         let mapData: TripMapData
         
@@ -477,8 +411,12 @@ struct DriverHomePage: View {
                 isTripStarted: false,
                 userLocationCoordinate: nil
             )
-            .frame(width: 300, height: 200)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .frame(height: 180)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(.gray.opacity(0.2), lineWidth: 1)
+            )
         }
     }
 
@@ -503,12 +441,15 @@ struct DriverHomePage: View {
             HStack(spacing: 12) {
                 Image(systemName: icon)
                     .foregroundStyle(color)
+                    .font(.system(size: 20))
                 VStack(alignment: .leading) {
                     Text(label)
-                        .font(.subheadline)
-                        .foregroundStyle(Color.secondary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     Text(value)
-                        .font(.headline)
+                        .font(.subheadline.bold())
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                 }
             }
         }
@@ -518,48 +459,146 @@ struct DriverHomePage: View {
         let trip: Trip
         
         var body: some View {
-            HStack(spacing: 24) {
-                DetailColumn(label: "Time", value: trip.time)
-                DetailColumn(label: "Vehicle Type", value: trip.vehicleType)
-                DetailColumn(
-                    label: trip.vehicleType == "Passenger Vehicle" ? "Passengers" : "Load",
-                    value: trip.vehicleType == "Passenger Vehicle" ?
-                        "\(trip.passengers ?? 0)" :
-                        "\(Int(trip.loadWeight ?? 0)) kg"
-                )
+            VStack(alignment: .leading, spacing: 12) {
+                // Date and Time Section
+                HStack(spacing: 12) {
+                    Image(systemName: "calendar")
+                        .foregroundStyle(.blue)
+                        .font(.system(size: 20))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(formatTripDate(trip.date))
+                            .font(.subheadline.bold())
+                        Text(formatTripTime(trip.time))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                
+                // Vehicle Details Section
+                HStack(spacing: 12) {
+                    Image(systemName: "car.fill")
+                        .foregroundStyle(.green)
+                        .font(.system(size: 20))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(trip.vehicleType)
+                            .font(.subheadline.bold())
+                        Text(trip.vehicleType == "Passenger Vehicle" ?
+                             "\(trip.passengers ?? 0) passengers" :
+                             "\(Int(trip.loadWeight ?? 0)) kg load")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
         }
-    }
-
-    private struct DetailColumn: View {
-        let label: String
-        let value: String
         
-        var body: some View {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(label)
-                    .font(.subheadline)
-                    .foregroundStyle(Color.secondary)
-                Text(value)
-                    .font(.headline)
+        private func formatTripDate(_ date: String) -> String {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd"
+            if let dateObj = formatter.date(from: date) {
+                let displayFormatter = DateFormatter()
+                displayFormatter.dateFormat = "EEEE, MMM d"
+                return displayFormatter.string(from: dateObj)
             }
+            return date
+        }
+        
+        private func formatTripTime(_ time: String) -> String {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "HH:mm"
+            if let date = formatter.date(from: time) {
+                let displayFormatter = DateFormatter()
+                displayFormatter.dateFormat = "h:mm a"
+                return displayFormatter.string(from: date)
+            }
+            return time
         }
     }
 
     private struct TripActionButton: View {
         let trip: Trip
-        @Binding var isNavigating: Bool
-        @Binding var swipeOffset: CGFloat
-        @Binding var isDragCompleted: Bool
-        @Binding var isSwiping: Bool
+        @Binding var state: TripCardState
         let maxX: CGFloat
         let authVM: AuthViewModel
         let gradientStart: Color
         let gradientEnd: Color
-        @Environment(\.colorScheme) var colorScheme
+        let isToday: Bool
+        let isClockedIn: Bool
+        @Binding var showClockInAlert: Bool
         
         var body: some View {
-            ZStack(alignment: .leading) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(.gray.opacity(0.2), lineWidth: 1)
+                    )
+                
+                if isToday && !state.isDragCompleted {
+                    ZStack(alignment: .leading) {
+                        LinearGradient(
+                            colors: state.swipeOffset == 0 ? [.gray.opacity(0.2)] : [gradientStart, state.isDragCompleted ? gradientEnd : gradientStart],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        
+                        HStack {
+                            ZStack {
+                                Circle()
+                                    .fill(.blue)
+                                    .frame(width: 48, height: 48)
+                                Image(systemName: "car.side.fill")
+                                    .scaleEffect(x: -1, y: 1)
+                                    .foregroundStyle(.white)
+                                    .font(.system(size: 20))
+                            }
+                            .offset(x: state.swipeOffset)
+                            .gesture(
+                                DragGesture()
+                                    .onChanged { value in
+                                        if isClockedIn {
+                                            state.isSwiping = true
+                                            state.swipeOffset = min(max(value.translation.width, 0), maxX)
+                                        } else {
+                                            showClockInAlert = true
+                                        }
+                                    }
+                                    .onEnded { _ in
+                                        if isClockedIn {
+                                            state.isSwiping = false
+                                            if state.swipeOffset >= maxX - 10 {
+                                                state.swipeOffset = maxX
+                                                state.isDragCompleted = true
+                                                state.isNavigating = true
+                                            } else {
+                                                withAnimation(.spring()) {
+                                                    state.swipeOffset = 0
+                                                }
+                                            }
+                                        }
+                                    }
+                            )
+                            
+                            Spacer()
+                            
+                            Text("Slide to Start Trip")
+                                .font(.subheadline.bold())
+                                .foregroundStyle(state.swipeOffset > 0 ? .white : .blue)
+                        }
+                        .padding(.horizontal, 8)
+                    }
+                } else {
+                    Text(isToday ? "Trip Started" : "Scheduled for Later")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                }
+            }
+            .frame(height: 56)
+            .background(
                 NavigationLink(
                     destination: PreInspectionView(
                         authVM: authVM,
@@ -568,110 +607,73 @@ struct DriverHomePage: View {
                         tripID: trip.id,
                         vehicleID: trip.vehicleId
                     ),
-                    isActive: $isNavigating,
-                    label: {
-                        LinearGradient(
-                            colors: swipeOffset == 0 ? [Color(.systemGray5), Color(.systemGray5)] : [
-                                gradientStart,
-                                swipeOffset >= maxX - 10 || isDragCompleted ? gradientEnd : gradientStart
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                        .frame(height: 55)
-                        .clipShape(Capsule())
-                    }
-                )
-                .buttonStyle(PlainButtonStyle())
-                
-                HStack(spacing: 0) {
-                    ZStack {
-                        Circle()
-                            .fill(Color(.systemBlue))
-                            .frame(width: 53, height: 53)
-                        Image(systemName: "car.side.fill")
-                            .scaleEffect(x: -1, y: 1)
-                            .foregroundStyle(Color(.systemBackground))
-                    }
-                    .padding(.trailing, 16)
-                    .offset(x: swipeOffset)
-                    .gesture(
-                        isDragCompleted ? nil : DragGesture()
-                            .onChanged { value in
-                                isSwiping = true
-                                let newOffset = max(value.translation.width, 0)
-                                swipeOffset = min(newOffset, maxX)
-                            }
-                            .onEnded { _ in
-                                isSwiping = false
-                                if swipeOffset >= maxX - 10 {
-                                    swipeOffset = maxX
-                                    isDragCompleted = true
-                                    isNavigating = true
-                                } else {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                        swipeOffset = 0
-                                    }
-                                }
-                            }
-                    )
-                    
-                    Spacer()
-                    
-                    Text("Slide to get Ready")
-                        .font(.headline)
-                        .foregroundColor(swipeOffset > 0 || isDragCompleted ? .white : Color(.systemBlue))
-                        .padding(.trailing, 16)
-                }
-                .padding(.horizontal, 8)
-            }
-            .frame(maxWidth: .infinity)
-            .background(
-                Capsule()
-                    .fill(Color(.systemGray6))
-                    .overlay(
-                        Capsule()
-                            .stroke(Color(.systemGray4), lineWidth: 1)
-                    )
+                    isActive: $state.isNavigating
+                ) { EmptyView() }
             )
-            .padding(.horizontal, 8)
         }
     }
 
-    // MARK: - Main Trip Card View
+    private func isTripToday(_ trip: Trip) -> Bool {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let today = formatter.string(from: Date())
+        return trip.date == today
+    }
+
     private func tripCardView(for trip: Trip) -> some View {
         let mapData = tripMapData[trip.id] ?? TripMapData()
+        let isToday = isTripToday(trip)
+        
+        // Initialize trip state if not present
+        if tripStates[trip.id] == nil {
+            tripStates[trip.id] = TripCardState()
+        }
         
         return VStack(spacing: 0) {
             TripMapSection(mapData: mapData)
+                .overlay(alignment: .topTrailing) {
+                    if isToday {
+                        Text("Today")
+                            .font(.caption.bold())
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(.blue)
+                            .clipShape(Capsule())
+                            .padding(8)
+                    }
+                }
             
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 12) {
                 TripLocationSection(trip: trip)
                 
                 Divider()
+                    .padding(.vertical, 8)
                 
                 TripDetailsSection(trip: trip)
                 
                 TripActionButton(
                     trip: trip,
-                    isNavigating: $isNavigating,
-                    swipeOffset: $swipeOffset,
-                    isDragCompleted: $isDragCompleted,
-                    isSwiping: $isSwiping,
+                    state: Binding(
+                        get: { tripStates[trip.id] ?? TripCardState() },
+                        set: { tripStates[trip.id] = $0 }
+                    ),
                     maxX: maxX,
                     authVM: authVM,
                     gradientStart: Self.gradientStart,
-                    gradientEnd: Self.gradientEnd
+                    gradientEnd: Self.gradientEnd,
+                    isToday: isToday,
+                    isClockedIn: isClockedIn,
+                    showClockInAlert: $showClockInAlert
                 )
             }
             .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(colorScheme == .dark ? Color(UIColor.systemGray4) : Color.white)
-                    .shadow(color: colorScheme == .dark ? Color.black.opacity(0.3) : Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
-            )
+            .frame(minHeight: 180) // Minimum height for details section, adjusted to match screenshot
         }
-        .frame(width: 300)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .shadow(color: .black.opacity(0.1), radius: 5, x: 0, y: 2)
+        .frame(width: 320)
         .onAppear {
             fetchRoute(for: trip)
         }
@@ -679,8 +681,19 @@ struct DriverHomePage: View {
     
     private var tripsListView: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                ForEach(assignedTripsVM.assignedTrips) { trip in
+            HStack(spacing: 16) {
+                let sortedTrips = assignedTripsVM.assignedTrips.sorted { trip1, trip2 in
+                    let formatter = DateFormatter()
+                    formatter.dateFormat = "yyyy-MM-dd HH:mm"
+                    let dateTime1 = "\(trip1.date) \(trip1.time)"
+                    let dateTime2 = "\(trip2.date) \(trip2.time)"
+                    guard let date1 = formatter.date(from: dateTime1),
+                          let date2 = formatter.date(from: dateTime2) else {
+                        return false
+                    }
+                    return date1 > date2 // Latest first
+                }
+                ForEach(sortedTrips) { trip in
                     tripCardView(for: trip)
                 }
             }
@@ -700,10 +713,10 @@ struct DriverHomePage: View {
                 VStack(spacing: 12) {
                     Image(systemName: "car.circle")
                         .font(.system(size: 48))
-                        .foregroundStyle(Color.secondary)
+                        .foregroundStyle(.secondary)
                     Text("No trips assigned")
                         .font(.headline)
-                        .foregroundStyle(Color.secondary)
+                        .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 200)
@@ -716,15 +729,13 @@ struct DriverHomePage: View {
             tripsHeader
             emptyOrLoadingStateView
         }
-        .padding(.horizontal)
     }
     
     var body: some View {
         NavigationView {
             ZStack {
-                (colorScheme == .dark ? Color(UIColor.systemBackground) : Color(UIColor.systemGray6))
-                    .ignoresSafeArea(.all, edges: .top)
-                    .ignoresSafeArea(.keyboard)
+                Color(.systemGroupedBackground)
+                    .ignoresSafeArea()
                 
                 ScrollView {
                     VStack {
@@ -733,7 +744,6 @@ struct DriverHomePage: View {
                         workingHoursContent
                         assignedTripSection
                     }
-                    .padding(.horizontal)
                     .padding(.bottom)
                 }
                 .scrollIndicators(.hidden)
@@ -753,7 +763,6 @@ struct DriverHomePage: View {
                     didStartListener = true
                 }
                 .onChange(of: showProfile) { newValue in
-                    // Reload profile image when profile sheet is dismissed
                     if !newValue {
                         if let data = UserDefaults.standard.data(forKey: profileImageKey),
                            let uiImage = UIImage(data: data) {
@@ -763,11 +772,16 @@ struct DriverHomePage: View {
                         }
                     }
                 }
+                .alert("Clock In Required", isPresented: $showClockInAlert) {
+                    Button("OK", role: .cancel) { }
+                } message: {
+                    Text("Please clock in before starting a trip.")
+                }
             }
         }
     }
 }
-// Extension to calculate a region encompassing a set of coordinates
+
 extension MKCoordinateRegion {
     init(coordinates: [CLLocationCoordinate2D], latitudinalMetersPadding: CLLocationDistance, longitudinalMetersPadding: CLLocationDistance) {
         guard !coordinates.isEmpty else {
@@ -796,7 +810,7 @@ extension MKCoordinateRegion {
         )
         
         let span = MKCoordinateSpan(
-            latitudeDelta: (maxLat - minLat) + (latitudinalMetersPadding / 111320.0), // Rough conversion: 1 degree latitude ~ 111,320 meters
+            latitudeDelta: (maxLat - minLat) + (latitudinalMetersPadding / 111320.0),
             longitudeDelta: (maxLon - minLon) + (longitudinalMetersPadding / (111320.0 * cos(center.latitude * .pi / 180.0)))
         )
         
@@ -804,7 +818,6 @@ extension MKCoordinateRegion {
     }
 }
 
-// Corrected extension to get coordinates from MKPolyline
 extension MKPolyline {
     var coordinates: [CLLocationCoordinate2D] {
         var coords = [CLLocationCoordinate2D](repeating: .init(), count: pointCount)
@@ -815,11 +828,13 @@ extension MKPolyline {
     }
 }
 
-// Define Location struct if not already defined elsewhere
-/*struct Location {
-    let coordinate: CLLocationCoordinate2D
-    let name: String
-}*/
-
-
-//hello
+struct DriverHomePage_Previews: PreviewProvider {
+    static var previews: some View {
+        DriverHomePage(
+            authVM: AuthViewModel(),
+            showProfile: .constant(false)
+        )
+        .preferredColorScheme(.light)
+        .environmentObject(AuthViewModel())
+    }
+}
