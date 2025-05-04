@@ -21,6 +21,7 @@ struct PostInspectionView: View {
     @State private var fetchedTrip: Trip?
     @State private var errorMessage: String?
     @State private var inspectionCompleted = false
+    @State private var mileage: Double? = nil // Changed to Double?
   
     @ObservedObject var authVM: AuthViewModel
     let dropoffLocation: String
@@ -69,264 +70,323 @@ struct PostInspectionView: View {
         }
     }
     
+    // Computed property to bind TextField (String) to mileage (Double?)
+    private var mileageText: Binding<String> {
+        Binding<String>(
+            get: {
+                if let mileageValue = mileage {
+                    return String(mileageValue)
+                } else {
+                    return ""
+                }
+            },
+            set: { newValue in
+                // Filter to allow only numbers and one decimal point
+                let filtered = newValue.filter { char in
+                    char.isNumber || char == "."
+                }
+                
+                // Handle multiple decimal points
+                let components = filtered.components(separatedBy: ".")
+                let validatedString: String
+                if components.count > 2 {
+                    validatedString = components[0] + "." + components[1]
+                } else if filtered.starts(with: ".") {
+                    validatedString = "0" + filtered
+                } else {
+                    validatedString = filtered
+                }
+                
+                // Convert to Double or set to nil if invalid
+                if validatedString.isEmpty {
+                    mileage = nil
+                } else if let doubleValue = Double(validatedString) {
+                    mileage = doubleValue
+                } else {
+                    mileage = nil
+                }
+            }
+        )
+    }
+    
     var body: some View {
-       // NavigationView {
-            VStack(spacing: 0) {
-                Form {
-                    Section(header: Text("Trip Details")) {
-                        HStack {
-                            Text("Date")
-                            Spacer()
-                            Text(currentDateString)
-                        }
-                        HStack {
-                            Text("End time")
-                            Spacer()
-                            Text(currentTimeString)
-                        }
-                        HStack {
-                            Text("Vehicle Number")
-                            Spacer()
-                            Text(vehicleNumber)
-                        }
-                        HStack {
-                            Text("Pickup Location")
-                            Spacer()
-                            Text(fetchedTrip?.startLocation ?? "Loading...")
-                        }
-                        HStack {
-                            Text("Dropoff Location")
-                            Spacer()
-                            Text(dropoffLocation)
-                        }
+        VStack(spacing: 0) {
+            Form {
+                Section(header: Text("Trip Details")) {
+                    HStack {
+                        Text("Date")
+                        Spacer()
+                        Text(currentDateString)
                     }
-                    
-                    Section(header: Text("Car check")) {
-                        Toggle(isOn: $oilCheck) {
-                            Text("Oil")
-                        }
-                        .toggleStyle(CheckboxToggleStyle2())
-                        
-                        Toggle(isOn: $hornCheck) {
-                            Text("Horns")
-                        }
-                        .toggleStyle(CheckboxToggleStyle2())
-                        
-                        Toggle(isOn: $clutchCheck) {
-                            Text("Clutch")
-                        }
-                        .toggleStyle(CheckboxToggleStyle2())
-                        
-                        Toggle(isOn: $airbagsCheck) {
-                            Text("Airbags")
-                        }
-                        .toggleStyle(CheckboxToggleStyle2())
-                        
-                        Toggle(isOn: $physicalDamageCheck) {
-                            Text("Physical damage")
-                        }
-                        .toggleStyle(CheckboxToggleStyle2())
+                    HStack {
+                        Text("End time")
+                        Spacer()
+                        Text(currentTimeString)
                     }
+                    HStack {
+                        Text("Vehicle Number")
+                        Spacer()
+                        Text(vehicleNumber)
+                    }
+                    HStack {
+                        Text("Pickup Location")
+                        Spacer()
+                        Text(fetchedTrip?.startLocation ?? "Loading...")
+                    }
+                    HStack {
+                        Text("Dropoff Location")
+                        Spacer()
+                        Text(dropoffLocation)
+                    }
+                }
+                
+                Section(header: Text("Car check")) {
+                    Toggle(isOn: $oilCheck) {
+                        Text("Oil")
+                    }
+                    .toggleStyle(CheckboxToggleStyle2())
                     
-                    Section {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Toggle(isOn: $tyrePressureCheck) {
-                                Text("Tyre Pressure").font(.headline)
-                            }
-                            .toggleStyle(CheckboxToggleStyle2())
-                            
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Remarks:")
-                                    .font(.subheadline)
-                                    .foregroundColor(.gray)
+                    Toggle(isOn: $hornCheck) {
+                        Text("Horns")
+                    }
+                    .toggleStyle(CheckboxToggleStyle2())
+                    
+                    Toggle(isOn: $clutchCheck) {
+                        Text("Clutch")
+                    }
+                    .toggleStyle(CheckboxToggleStyle2())
+                    
+                    Toggle(isOn: $airbagsCheck) {
+                        Text("Airbags")
+                    }
+                    .toggleStyle(CheckboxToggleStyle2())
+                    
+                    Toggle(isOn: $physicalDamageCheck) {
+                        Text("No Physical damage")
+                    }
+                    .toggleStyle(CheckboxToggleStyle2())
+                    
+                    // Mileage Field with KM Card
+                    HStack(alignment: .center, spacing: 8) {
+                        Text("Mileage")
+                        Spacer()
+                        ZStack {
+                            HStack(spacing: 0) {
+                                TextField("km", text: mileageText)
+                                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                                    .font(.caption)
+                                    .frame(width: 100)
+                                    .keyboardType(.numberPad)
+                                    .multilineTextAlignment(.leading)
+                                    .padding(.trailing, -1)
                                 
-                                TextField("Examples: All tyres at 35 PSI, Front-left slightly low, No visible damage",
-                                         text: $tyrePressureRemarks,
-                                         axis: .vertical)
-                                .lineLimit(2...4)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .font(.caption)
+                                Text("KM")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 6)
+                                    .background(Color(UIColor.systemBackground))
+                                    .clipShape(RoundedRectangle(cornerRadius: 5))
                             }
+                            .background(Color(UIColor.systemBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 5))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 5)
+                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                            )
                         }
-                        .padding(.vertical, 8)
+                        .frame(width: 150)
                     }
+                    .padding(.top, 8)
+                }
+                
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Toggle(isOn: $tyrePressureCheck) {
+                            Text("Tyre Pressure").font(.headline)
+                        }
+                        .toggleStyle(CheckboxToggleStyle2())
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Remarks:")
+                                .font(.subheadline)
+                                .foregroundColor(.gray)
+                            
+                            TextField("Examples: All tyres at 35 PSI, Front-left slightly low, No visible damage",
+                                     text: $tyrePressureRemarks,
+                                     axis: .vertical)
+                            .lineLimit(2...4)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .font(.caption)
+                        }
+                    }
+                    .padding(.vertical, 8)
+                }
 
-                    Section {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Toggle(isOn: $brakesCheck) {
-                                Text("Brakes").font(.headline)
-                            }
-                            .toggleStyle(CheckboxToggleStyle2())
-                            
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Remarks:")
-                                    .font(.subheadline)
-                                    .foregroundColor(.gray)
-                                
-                                TextField("Examples: Brake pads 50% worn, Fluid level normal, No unusual noises",
-                                         text: $brakeRemarks,
-                                         axis: .vertical)
-                                .lineLimit(2...4)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .font(.caption)
-                            }
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Toggle(isOn: $brakesCheck) {
+                            Text("Brakes").font(.headline)
                         }
-                        .padding(.vertical, 8)
-                    }
-                    
-                    Section {
-                        PhotosPicker(
-                            selection: $selectedItems,
-                            maxSelectionCount: 5,
-                            selectionBehavior: .ordered,
-                            matching: .images
-                        ) {
-                            Label("Add 4 images", systemImage: "photo.on.rectangle.angled")
-                                .foregroundStyle(Color.blue)
-                        }
-                        .onChange(of: selectedItems) { newItems in
-                            Task {
-                                selectedImages.removeAll()
-                                for item in newItems {
-                                    if let data = try? await item.loadTransferable(type: Data.self),
-                                       let uiImage = UIImage(data: data) {
-                                        selectedImages.append(uiImage)
-                                    }
-                                }
-                            }
-                        }
+                        .toggleStyle(CheckboxToggleStyle2())
                         
-                        if !selectedImages.isEmpty {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 10) {
-                                    ForEach(selectedImages, id: \.self) { image in
-                                        Image(uiImage: image)
-                                            .resizable()
-                                            .scaledToFill()
-                                            .frame(width: 100, height: 100)
-                                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 8)
-                                                    .stroke(Color.gray, lineWidth: 1)
-                                            )
-                                    }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Remarks:")
+                                .font(.subheadline)
+                                .foregroundColor(.gray)
+                            
+                            TextField("Examples: Brake pads 50% worn, Fluid level normal, No unusual noises",
+                                     text: $brakeRemarks,
+                                     axis: .vertical)
+                            .lineLimit(2...4)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .font(.caption)
+                        }
+                    }
+                    .padding(.vertical, 8)
+                }
+                
+                Section {
+                    PhotosPicker(
+                        selection: $selectedItems,
+                        maxSelectionCount: 5,
+                        selectionBehavior: .ordered,
+                        matching: .images
+                    ) {
+                        Label("Add 4 images", systemImage: "photo.on.rectangle.angled")
+                            .foregroundStyle(Color.blue)
+                    }
+                    .onChange(of: selectedItems) { newItems in
+                        Task {
+                            selectedImages.removeAll()
+                            for item in newItems {
+                                if let data = try? await item.loadTransferable(type: Data.self),
+                                   let uiImage = UIImage(data: data) {
+                                    selectedImages.append(uiImage)
                                 }
-                                .padding(.vertical, 10)
                             }
                         }
                     }
                     
-                    Section {
-                        HStack {
-                            Text("Overall Check")
-                            if overallCheckStatus == "Verified" {
-                                Image(systemName: "checkmark")
-                                    .foregroundColor(.green)
-                                    .padding(.leading, 5)
-                            }
-                            Spacer()
-                            Picker("", selection: $overallCheckStatus) {
-                                ForEach(overallCheckOptions, id: \.self) { option in
-                                    Text(option)
-                                        .tag(option)
+                    if !selectedImages.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 10) {
+                                ForEach(selectedImages, id: \.self) { image in
+                                    Image(uiImage: image)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 100, height: 100)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .stroke(Color.gray, lineWidth: 1)
+                                        )
                                 }
                             }
-                            .pickerStyle(.menu)
-                            .foregroundStyle(overallCheckStatus == "Verified" ? Color.green : Color.red)
+                            .padding(.vertical, 10)
                         }
                     }
                 }
                 
-                Button(action: {
-                    guard let driverId = authVM.user?.id else {
-                        print("Driver ID is nil")
-                        return
-                    }
-                    
-                    let date = currentDateForFirestore
-                    
-                    FirebaseManager.shared.recordPostInspection(
-                        driverId: driverId,
-                        tyrePressureRemarks: tyrePressureRemarks,
-                        brakeRemarks: brakeRemarks,
-                        oilCheck: oilCheck,
-                        hornCheck: hornCheck,
-                        clutchCheck: clutchCheck,
-                        airbagsCheck: airbagsCheck,
-                        physicalDamageCheck: physicalDamageCheck,
-                        tyrePressureCheck: tyrePressureCheck,
-                        brakesCheck: brakesCheck,
-                        indicatorsCheck: indicatorsCheck,
-                        overallCheckStatus: overallCheckStatus,
-                        images: selectedImages,
-                        vehicleNumber: vehicleNumber,
-                        date: date,
-                        tripId: tripID,
-                        vehicleID: vehicleID,
-                        completion: { result in
-                            switch result {
-                            case .success:
-                                print("Post-inspection recorded successfully")
-                                inspectionCompleted = true
-                            case .failure(let error):
-                                errorMessage = "Error recording post-inspection: \(error.localizedDescription)"
-                                print(errorMessage ?? "Unknown error")
+                Section {
+                    HStack {
+                        Text("Overall Check")
+                        if overallCheckStatus == "Verified" {
+                            Image(systemName: "checkmark")
+                                .foregroundColor(.green)
+                                .padding(.leading, 5)
+                        }
+                        Spacer()
+                        Picker("", selection: $overallCheckStatus) {
+                            ForEach(overallCheckOptions, id: \.self) { option in
+                                Text(option)
+                                    .tag(option)
                             }
                         }
-                    )
-                }) {
-                    Text("Complete Inspection")
-                        .font(.system(size: 18, weight: .semibold, design: .default))
-                        .foregroundStyle(Color.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
+                        .pickerStyle(.menu)
+                        .foregroundStyle(overallCheckStatus == "Verified" ? Color.green : Color.red)
+                    }
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.blue)
-                .padding(.horizontal)
-                .padding(.top, 10)
-                .disabled(selectedImages.count != 4)
             }
-            .navigationTitle(Text("Post Inspection"))
-           /* .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: {
-                        presentationMode.wrappedValue.dismiss()
-                    }) {
-                        HStack {
-                            Image(systemName: "chevron.left")
-                            Text("Back")
+            
+            Button(action: {
+                guard let driverId = authVM.user?.id else {
+                    print("Driver ID is nil")
+                    return
+                }
+                
+                let date = currentDateForFirestore
+                
+                FirebaseManager.shared.recordPostInspection(
+                    driverId: driverId,
+                    tyrePressureRemarks: tyrePressureRemarks,
+                    brakeRemarks: brakeRemarks,
+                    oilCheck: oilCheck,
+                    hornCheck: hornCheck,
+                    clutchCheck: clutchCheck,
+                    airbagsCheck: airbagsCheck,
+                    physicalDamageCheck: physicalDamageCheck,
+                    tyrePressureCheck: tyrePressureCheck,
+                    brakesCheck: brakesCheck,
+                    indicatorsCheck: indicatorsCheck,
+                    mileage: mileage,
+                    overallCheckStatus: overallCheckStatus,
+                    images: selectedImages,
+                    vehicleNumber: vehicleNumber,
+                    date: date,
+                    tripId: tripID,
+                    vehicleID: vehicleID,
+                    completion: { result in
+                        switch result {
+                        case .success:
+                            print("Post-inspection recorded successfully")
+                            inspectionCompleted = true
+                        case .failure(let error):
+                            errorMessage = "Error recording post-inspection: \(error.localizedDescription)"
+                            print(errorMessage ?? "Unknown error")
                         }
                     }
-                }
-            }*/
-            .alert(isPresented: Binding<Bool>(
-                get: { errorMessage != nil },
-                set: { if !$0 { errorMessage = nil } }
-            )) {
-                Alert(
-                    title: Text("Error"),
-                    message: Text(errorMessage ?? "Unknown error"),
-                    dismissButton: .default(Text("OK"))
                 )
+            }) {
+                Text("Complete Inspection")
+                    .font(.system(size: 18, weight: .semibold, design: .default))
+                    .foregroundStyle(Color.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
             }
-            .onChange(of: inspectionCompleted) { completed in
-                if completed {
-                    presentationMode.wrappedValue.dismiss()
+            .buttonStyle(.borderedProminent)
+            .tint(.blue)
+            .padding(.horizontal)
+            .padding(.top, 10)
+            .disabled(selectedImages.count != 4)
+        }
+        .navigationTitle(Text("Post Inspection"))
+        .alert(isPresented: Binding<Bool>(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Alert(
+                title: Text("Error"),
+                message: Text(errorMessage ?? "Unknown error"),
+                dismissButton: .default(Text("OK"))
+            )
+        }
+        .onChange(of: inspectionCompleted) { completed in
+            if completed {
+                presentationMode.wrappedValue.dismiss()
+            }
+        }
+        .onAppear {
+            fetchTrip { result in
+                switch result {
+                case .success(let trip):
+                    self.fetchedTrip = trip
+                case .failure(let error):
+                    self.errorMessage = "Failed to fetch trip: \(error.localizedDescription)"
+                    print(self.errorMessage ?? "Unknown error")
                 }
             }
-            .onAppear {
-                fetchTrip { result in
-                    switch result {
-                    case .success(let trip):
-                        self.fetchedTrip = trip
-                    case .failure(let error):
-                        self.errorMessage = "Failed to fetch trip: \(error.localizedDescription)"
-                        print(self.errorMessage ?? "Unknown error")
-                    }
-                }
-            }
-        //}
+        }
     }
 }
 
