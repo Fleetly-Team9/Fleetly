@@ -1,12 +1,15 @@
 import SwiftUI
+import FirebaseFirestore
 
 struct InventoryManagementView: View {
-    @Binding var items: [InventoryItem]
-    @State private var selectedItem: InventoryItem?
+    @StateObject private var viewModel = InventoryViewModel()
+    @State private var selectedItemId: String?
     @State private var isSheetPresented = false
     @State private var showRowAnimation = false
     @State private var isAddItemSheetPresented = false
-
+    @State private var showError = false
+    @State private var errorMessage = ""
+    
     var body: some View {
         NavigationStack {
             ZStack {
@@ -30,7 +33,7 @@ struct InventoryManagementView: View {
                         .padding(.top, 12)
 
                         // Inventory List
-                        if items.isEmpty {
+                        if viewModel.items.isEmpty {
                             Text("No Items in Inventory")
                                 .font(.system(.body, design: .rounded))
                                 .foregroundStyle(.secondary)
@@ -44,11 +47,11 @@ struct InventoryManagementView: View {
                                 )
                                 .padding(.horizontal, 16)
                         } else {
-                            ForEach($items) { $item in
+                            ForEach(viewModel.items) { item in
                                 InventoryRow(
-                                    item: $item,
+                                    item: item,
                                     onUpdate: {
-                                        selectedItem = $item.wrappedValue
+                                        selectedItemId = item.id
                                         isSheetPresented = true
                                     }
                                 )
@@ -56,7 +59,7 @@ struct InventoryManagementView: View {
                                 .opacity(showRowAnimation ? 1 : 0)
                                 .offset(y: showRowAnimation ? 0 : 20)
                                 .animation(
-                                    .easeOut(duration: 0.5).delay(Double(items.firstIndex(where: { $0.id == item.id }) ?? 0) * 0.1),
+                                    .easeOut(duration: 0.5).delay(Double(viewModel.items.firstIndex(where: { $0.id == item.id }) ?? 0) * 0.1),
                                     value: showRowAnimation
                                 )
                             }
@@ -71,46 +74,116 @@ struct InventoryManagementView: View {
                     withAnimation {
                         showRowAnimation = true
                     }
+                    viewModel.fetchItems()
+                }
+                .refreshable {
+                    viewModel.fetchItems()
                 }
 
                 // Update Sheet Overlay
-                if isSheetPresented, let selectedItem = selectedItem, let index = items.firstIndex(where: { $0.id == selectedItem.id }) {
-                    Color.black.opacity(0.25).ignoresSafeArea()
-                        .onTapGesture {
+                if isSheetPresented, let id = selectedItemId, let item = viewModel.items.first(where: { $0.id == id }) {
+                    Color.black.opacity(0.25)
+                        .ignoresSafeArea()
+                        .allowsHitTesting(false)
+
+                    UpdateSheet(
+                        item: item,
+                        onClose: {
                             withAnimation {
                                 isSheetPresented = false
+                                selectedItemId = nil
                             }
+                        },
+                        onUpdate: { newUnits in
+                            viewModel.updateItemUnits(itemId: item.id, newUnits: newUnits)
                         }
-
-                    UpdateSheet(item: $items[index]) {
-                        withAnimation {
-                            isSheetPresented = false
-                        }
-                    }
-                    .frame(width: 300, height: 220)
+                    )
+                    .frame(width: 250, height: 200)
                     .background(
                         RoundedRectangle(cornerRadius: 20)
                             .fill(Color(.systemBackground))
                             .shadow(radius: 10)
                     )
+                    .zIndex(1)
                 }
 
                 // Add Item Sheet Overlay
                 if isAddItemSheetPresented {
-                    Color.black.opacity(0.25).ignoresSafeArea()
-                        .onTapGesture {
-                            withAnimation {
-                                isAddItemSheetPresented = false
-                            }
-                        }
+                    Color.black.opacity(0.25)
+                        .ignoresSafeArea()
+                        .allowsHitTesting(false)
 
-                    AddItemSheet(items: $items)
-                        .frame(width: 300, height: 300)
-                        .background(
-                            RoundedRectangle(cornerRadius: 20)
-                                .fill(Color(.systemBackground))
-                                .shadow(radius: 10)
-                        )
+                    AddItemSheet(
+                        isPresented: $isAddItemSheetPresented,
+                        onAdd: { name, units in
+                            viewModel.addItem(name: name, units: units)
+                        }
+                    )
+                    .frame(width: 300, height: 250)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(Color(.systemBackground))
+                            .shadow(radius: 10)
+                    )
+                    .zIndex(1)
+                }
+            }
+            .alert("Error", isPresented: $showError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage)
+            }
+        }
+    }
+}
+
+class InventoryViewModel: ObservableObject {
+    @Published var items: [Inventory.Item] = []
+    @Published var isLoading = false
+    @Published var error: Error?
+    
+    func fetchItems() {
+        isLoading = true
+        InventoryManager.shared.fetchInventoryItems { [weak self] result in
+            DispatchQueue.main.async {
+                self?.isLoading = false
+                switch result {
+                case .success(let items):
+                    self?.items = items
+                case .failure(let error):
+                    self?.error = error
+                }
+            }
+        }
+    }
+    
+    func addItem(name: String, units: Int) {
+        let newItem = Inventory.Item(name: name, units: units)
+        InventoryManager.shared.addInventoryItem(newItem) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success:
+                    self?.fetchItems()
+                case .failure(let error):
+                    self?.error = error
+                }
+            }
+        }
+    }
+    
+    func updateItemUnits(itemId: String, newUnits: Int) {
+        guard let item = items.first(where: { $0.id == itemId }) else { return }
+        
+        var updatedItem = item
+        updatedItem.units = newUnits
+        
+        InventoryManager.shared.updateInventoryItem(updatedItem) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success:
+                    self?.fetchItems()
+                case .failure(let error):
+                    self?.error = error
                 }
             }
         }
@@ -118,7 +191,7 @@ struct InventoryManagementView: View {
 }
 
 struct InventoryRow: View {
-    @Binding var item: InventoryItem
+    let item: Inventory.Item
     var onUpdate: (() -> Void)?
 
     var body: some View {
@@ -134,7 +207,7 @@ struct InventoryRow: View {
                         .imageScale(.small)
                     Text("Units: \(item.units)")
                         .font(.system(.subheadline, design: .rounded))
-                        .foregroundStyle(item.units <= 5 ? .red : .secondary)
+                        .foregroundStyle(item.units <= item.minUnits ? .red : .secondary)
                 }
             }
             Spacer()
@@ -165,127 +238,110 @@ struct InventoryRow: View {
 }
 
 struct UpdateSheet: View {
-    @Binding var item: InventoryItem
-    var onClose: () -> Void
-    @State private var minusTapped = false
-    @State private var plusTapped = false
-    @State private var cancelTapped = false
-    @State private var updateTapped = false
+    let item: Inventory.Item
+    let onClose: () -> Void
+    let onUpdate: (Int) -> Void
+    @State private var tempUnits: Int
+
+    init(item: Inventory.Item, onClose: @escaping () -> Void, onUpdate: @escaping (Int) -> Void) {
+        self.item = item
+        self.onClose = onClose
+        self.onUpdate = onUpdate
+        self._tempUnits = State(initialValue: item.units)
+    }
 
     var body: some View {
-        VStack(spacing: 20) {
-            // Header
+        VStack(spacing: 5) {
             Text("Update Units")
                 .font(.system(.title3, design: .rounded, weight: .semibold))
                 .foregroundStyle(.primary)
-
-            // Item Info
+            
             Text(item.name)
                 .font(.system(.subheadline, design: .rounded))
                 .foregroundStyle(.secondary)
-
-            // Unit Adjustment
+            
             HStack(spacing: 32) {
                 Button(action: {
-                    if item.units > 0 {
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                            minusTapped.toggle()
-                            item.units -= 1
-                        }
-                    }
+                    tempUnits = max(0, tempUnits - 1)
                 }) {
                     Image(systemName: "minus.circle.fill")
-                        .foregroundStyle(item.units > 0 ? .blue : .gray)
+                        .foregroundStyle(tempUnits > 0 ? .blue : .gray)
                         .font(.system(size: 32))
-                        .scaleEffect(minusTapped ? 1.1 : 1.0)
                 }
-                .disabled(item.units <= 0)
-
-                Text("\(item.units)")
+                .disabled(tempUnits <= 0)
+                
+                Text("\(tempUnits)")
                     .font(.system(.title2, design: .rounded, weight: .bold))
                     .foregroundStyle(.primary)
                     .minimumScaleFactor(0.5)
                     .lineLimit(1)
-
+                
                 Button(action: {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                        plusTapped.toggle()
-                        item.units += 1
-                    }
+                    tempUnits += 1
                 }) {
                     Image(systemName: "plus.circle.fill")
                         .foregroundStyle(.blue)
                         .font(.system(size: 32))
-                        .scaleEffect(plusTapped ? 1.1 : 1.0)
                 }
             }
             .padding(.vertical, 16)
-
-            // Actions
+            
             HStack(spacing: 16) {
                 Button(action: {
                     withAnimation(.spring()) {
-                        cancelTapped.toggle()
                         onClose()
                     }
                 }) {
                     Text("Cancel")
                         .font(.system(.subheadline, design: .rounded, weight: .medium))
-                        .foregroundStyle(.gray)
-                        .frame(maxWidth: .infinity)
+                        .foregroundColor(.blue)
+                        .frame(maxWidth: 120)
                         .padding(.vertical, 12)
-                        .background(Color.gray.opacity(0.1))
+                        .background(Color(.systemGray6))
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
-                .scaleEffect(cancelTapped ? 1.05 : 1.0)
-
+                
                 Button(action: {
                     withAnimation(.spring()) {
-                        updateTapped.toggle()
+                        onUpdate(tempUnits)
                         onClose()
                     }
                 }) {
                     Text("Update")
                         .font(.system(.subheadline, design: .rounded, weight: .medium))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: 120)
                         .padding(.vertical, 12)
-                        .background(.blue)
+                        .background(Color.blue)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
-                .scaleEffect(updateTapped ? 1.05 : 1.0)
             }
             .padding(.horizontal, 16)
         }
         .padding()
+        .interactiveDismissDisabled()
     }
 }
 
 struct AddItemSheet: View {
-    @Binding var items: [InventoryItem]
-    @Environment(\.dismiss) var dismiss
+    @Binding var isPresented: Bool
+    let onAdd: (String, Int) -> Void
     @State private var newItemName: String = ""
     @State private var newItemUnits: String = ""
-    @State private var cancelTapped = false
-    @State private var addTapped = false
 
     var body: some View {
-        VStack(spacing: 20) {
-            // Header with Drag Indicator
-            RoundedRectangle(cornerRadius: 2)
-                .fill(Color.gray.opacity(0.3))
-                .frame(width: 40, height: 4)
-                .padding(.top, 8)
-
+        VStack(spacing: 5) {
             Text("Add New Item")
                 .font(.system(.title3, design: .rounded, weight: .semibold))
                 .foregroundStyle(.primary)
 
-            // Form
-            VStack(spacing: 16) {
+            VStack(spacing: 8) {
                 TextField("Item Name", text: $newItemName)
-                    .font(.system(.body, design: .rounded))
-                    .padding()
+                    .font(.system(.subheadline, design: .rounded))
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: 270)
+                    .frame(height: 40)
                     .background(
                         RoundedRectangle(cornerRadius: 10)
                             .fill(Color(.systemGray6))
@@ -296,9 +352,12 @@ struct AddItemSheet: View {
                     )
 
                 TextField("Units", text: $newItemUnits)
-                    .font(.system(.body, design: .rounded))
+                    .font(.system(.subheadline, design: .rounded))
                     .keyboardType(.numberPad)
-                    .padding()
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: 270)
+                    .frame(height: 40)
                     .background(
                         RoundedRectangle(cornerRadius: 10)
                             .fill(Color(.systemGray6))
@@ -308,68 +367,50 @@ struct AddItemSheet: View {
                             .stroke(Color.gray.opacity(0.2), lineWidth: 1)
                     )
             }
+            .padding(.vertical, 8)
 
-            // Actions
             HStack(spacing: 16) {
                 Button(action: {
                     withAnimation(.spring()) {
-                        cancelTapped.toggle()
-                        dismiss()
+                        isPresented = false
                     }
                 }) {
                     Text("Cancel")
-                        .font(.system(.body, design: .rounded, weight: .medium))
-                        .foregroundStyle(.gray)
+                        .font(.system(.subheadline, design: .rounded))
+                        .foregroundColor(.blue)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.gray.opacity(0.1))
-                        )
+                        .padding(.vertical, 12)
+                        .background(Color(.systemGray6))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
-                .scaleEffect(cancelTapped ? 1.05 : 1.0)
 
                 Button(action: {
-                    if let units = Int(newItemUnits), !newItemName.isEmpty {
-                        let newItem = InventoryItem(
-                            id: (items.map { $0.id }.max() ?? 0) + 1,
-                            name: newItemName,
-                            units: units
-                        )
-                        withAnimation {
-                            items.append(newItem)
-                            addTapped.toggle()
-                            dismiss()
-                        }
+                    if let units = Int(newItemUnits), !newItemName.isEmpty, units >= 0 {
+                        onAdd(newItemName, units)
+                        newItemName = ""
+                        newItemUnits = ""
+                        isPresented = false
                     }
                 }) {
                     Text("Add Item")
-                        .font(.system(.body, design: .rounded, weight: .medium))
-                        .foregroundStyle(.white)
+                        .font(.system(.subheadline, design: .rounded))
+                        .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(newItemName.isEmpty || newItemUnits.isEmpty ? Color.gray : .blue)
-                        )
+                        .padding(.vertical, 12)
+                        .background(newItemName.isEmpty || newItemUnits.isEmpty || Int(newItemUnits) == nil ? Color.blue.opacity(0.5) : Color.blue)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
-                .scaleEffect(addTapped ? 1.05 : 1.0)
-                .disabled(newItemName.isEmpty || newItemUnits.isEmpty)
+                .disabled(newItemName.isEmpty || newItemUnits.isEmpty || Int(newItemUnits) == nil)
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 16)
         }
-        .padding(.top, 8)
+        .padding()
+        .interactiveDismissDisabled()
     }
 }
 
 struct InventoryManagementView_Previews: PreviewProvider {
     static var previews: some View {
-        InventoryManagementView(
-            items: .constant([
-                InventoryItem(id: 1, name: "Brake Pads", units: 12),
-                InventoryItem(id: 2, name: "Oil Filter", units: 10)
-            ])
-        )
+        InventoryManagementView()
     }
 }
