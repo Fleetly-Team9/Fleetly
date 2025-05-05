@@ -43,7 +43,7 @@ struct LogbookView: View {
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
-                        .background(Color(.systemGray6))
+                        .background(Color(.secondarySystemBackground))
                         .cornerRadius(10)
                     }
                 }
@@ -61,7 +61,7 @@ struct LogbookView: View {
                     .datePickerStyle(.graphical)
                     .padding(.horizontal)
                     .padding(.vertical, 10)
-                    .background(Color(.systemGray6))
+                    .background(Color(.secondarySystemBackground))
                     .cornerRadius(10)
                     .padding(.horizontal)
                 }
@@ -138,9 +138,9 @@ struct DriverCard: View {
             
             Spacer()
         }
-        .background(Color(.systemBackground))
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
-        .shadow(color: .gray.opacity(0.15), radius: 6, x: 0, y: 3)
+        .shadow(color: Color(.label).opacity(0.08), radius: 6, x: 0, y: 3)
         .padding(.horizontal, 10)
     }
 }
