@@ -68,8 +68,7 @@ class DashboardViewModel: ObservableObject {
             
         // Real-time listener for pending maintenance tasks
         maintenanceTasksListener = db.collection("maintenance_tasks")
-            .whereField("status", isEqualTo: "pending")
-            .addSnapshotListener { (snapshot, error) in
+            .whereField("status", in:["in_progress", "pending"])            .addSnapshotListener { (snapshot, error) in
                 if let error = error {
                     print("Error fetching pending maintenance tasks: \(error.localizedDescription)")
                     return

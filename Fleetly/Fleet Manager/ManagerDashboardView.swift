@@ -242,9 +242,9 @@ struct TaskCardView: View {
             }
         }
         .padding()
-        .background(Color(.systemBackground))
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+        .shadow(color: Color(.label).opacity(0.05), radius: 4, x: 0, y: 2)
         .onAppear {
             fetchVehicleNumber()
         }
@@ -334,9 +334,9 @@ struct TaskDetailView: View {
                         InfoRow(title: "Created", value: task.createdAt)
                     }
                     .padding()
-                    .background(Color(.systemBackground))
+                    .background(Color(.secondarySystemBackground))
                     .cornerRadius(12)
-                    .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+                    .shadow(color: Color(.label).opacity(0.05), radius: 4, x: 0, y: 2)
                     
                     // Action Button
                     Button(action: { showingStatusSheet = true }) {
@@ -481,7 +481,7 @@ struct ReportsView: View {
                             .padding()
                             .background(Color(.systemBackground))
                             .cornerRadius(10)
-                            .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+                            .shadow(color: Color(.label).opacity(0.05), radius: 4, x: 0, y: 2)
                         }
                         .padding(.horizontal)
                     }
@@ -586,7 +586,7 @@ struct ReportTypeButton: View {
             .background(isSelected ? Color.blue.opacity(0.1) : Color(.systemBackground))
             .foregroundColor(isSelected ? .blue : .primary)
             .cornerRadius(10)
-            .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+            .shadow(color: Color(.label).opacity(0.05), radius: 4, x: 0, y: 2)
         }
     }
 }
@@ -838,9 +838,9 @@ struct ReportSummaryCard: View {
             Spacer()
         }
         .padding()
-        .background(Color(.systemBackground))
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(10)
-        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+        .shadow(color: Color(.label).opacity(0.05), radius: 4, x: 0, y: 2)
     }
 }
 
@@ -967,9 +967,9 @@ struct DashboardHomeView: View {
                     }
                     .padding(.horizontal)
                     .padding()
-                    .background(Color.white)
+                    .background(Color(.secondarySystemBackground))
                     .cornerRadius(30)
-                    .shadow(radius: 4)
+                    .shadow(color: Color(.label).opacity(0.08), radius: 4)
                     .padding(.horizontal)
 
                     // MARK: - Analytics and Alerts
@@ -982,9 +982,9 @@ struct DashboardHomeView: View {
                                 .frame(height: 200)
                         }
                         .padding()
-                        .background(Color.white)
+                        .background(Color(.secondarySystemBackground))
                         .cornerRadius(30)
-                        .shadow(radius: 5)
+                        .shadow(color: Color(.label).opacity(0.08), radius: 5)
                         .padding(.horizontal)
 
                         // Alerts Section
@@ -999,9 +999,9 @@ struct DashboardHomeView: View {
                             }
                         }
                         .padding()
-                        .background(Color.white)
+                        .background(Color(.secondarySystemBackground))
                         .cornerRadius(30)
-                        .shadow(radius: 5)
+                        .shadow(color: Color(.label).opacity(0.08), radius: 5)
                         .padding(.horizontal)
                     }
                 }
@@ -1127,9 +1127,9 @@ struct StatCardGridView: View {
                 .foregroundColor(.gray)
         }
         .padding()
-        .background(Color(.systemBackground))
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(30)
-        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+        .shadow(color: Color(.label).opacity(0.05), radius: 4, x: 0, y: 2)
     }
 }
 
@@ -1197,9 +1197,9 @@ struct AlertRowView: View {
             Spacer()
         }
         .padding()
-        .background(Color.white)
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
-        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+        .shadow(color: Color(.label).opacity(0.05), radius: 4, x: 0, y: 2)
     }
 }
 
