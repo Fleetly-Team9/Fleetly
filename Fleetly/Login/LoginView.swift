@@ -27,7 +27,7 @@ struct LoginView: View {
                     Image(systemName: "car.front.waves.up.fill")
                         .font(.system(size: 48, weight: .medium))
                         .foregroundStyle(.cyan)
-                    Text("FleetX")
+                    Text("Fleetly")
                         .font(.system(.title, design: .rounded, weight: .bold))
                         .foregroundStyle(.primary)
                 }

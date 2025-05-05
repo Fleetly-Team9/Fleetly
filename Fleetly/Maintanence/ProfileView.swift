@@ -27,10 +27,10 @@ struct ProfileView: View {
     @Environment(\.dismiss) var dismiss
 
     // Static profile details (not editable)
-    private let firstName = "John"
-    private let lastName = "Doe"
+    private let firstName = "Param"
+    private let lastName = "Patele"
     private let phoneNumber = "9603839868"
-    private let email = "john.doe@email.com"
+    private let email = "parampatel1401@gmail.com"
 
     var body: some View {
         NavigationStack {

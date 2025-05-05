@@ -69,7 +69,7 @@ struct HomeView: View {
                         
                         HStack(spacing: 12) {
                             OverviewStat(icon: "car.fill", title: "Total Vehicles", value: "19", color: Color.blue)
-                            OverviewStat(icon: "wrench.and.screwdriver.fill", title: "Pending Tasks", value: "\(maintenanceTasks.count)", color: Color.orange)
+                            OverviewStat(icon: "wrench.and.screwdriver.fill", title: "Pending  Tasks", value: "\(maintenanceTasks.count)", color: Color.orange)
                         }
                         .padding(.horizontal, 16)
                     }

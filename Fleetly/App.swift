@@ -25,7 +25,7 @@ struct FMSApp: App {
                                 .font(.system(size: 80))
                                 .foregroundStyle(.cyan)
                             
-                            Text("FleetX")
+                            Text("Fleetly")
                                 .font(.system(size: 40, weight: .bold, design: .rounded))
                                 .foregroundStyle(.primary)
                         }
