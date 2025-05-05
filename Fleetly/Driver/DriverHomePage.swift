@@ -75,9 +75,7 @@ struct DriverHomePage: View {
     static let initialCapsuleColor = Color(.systemGray5)
     
     private var maxX: CGFloat {
-        let capsuleWidth = 343.0
-        let circleWidth = 53.0
-        return capsuleWidth - circleWidth
+        return 343.0 - 53.0 // Capsule width - Circle diameter
     }
     
     @Environment(\.colorScheme) var colorScheme
@@ -117,9 +115,6 @@ struct DriverHomePage: View {
             profileImage = nil
         }
     }
-    
-        
-
     
     
     private func currentDateString() -> String {
@@ -546,7 +541,7 @@ struct DriverHomePage: View {
         }
     }
 
-    private struct TripActionButton: View {
+  /* private struct TripActionButton: View {
         let trip: Trip
         @Binding var isNavigating: Bool
         @Binding var swipeOffset: CGFloat
@@ -559,6 +554,7 @@ struct DriverHomePage: View {
         @Environment(\.colorScheme) var colorScheme
         
         var body: some View {
+            
             ZStack(alignment: .leading) {
                 NavigationLink(
                     destination: PreInspectionView(
@@ -600,7 +596,12 @@ struct DriverHomePage: View {
                             .onChanged { value in
                                 isSwiping = true
                                 let newOffset = max(value.translation.width, 0)
+                                //let newOffset = min(max(0, value.translation.width), maxX)claude
                                 swipeOffset = min(newOffset, maxX)
+                                swipeOffset = newOffset
+                                //swipeOffset = min(max(0, value.translation.width), maxX)
+
+
                             }
                             .onEnded { _ in
                                 isSwiping = false
@@ -626,6 +627,8 @@ struct DriverHomePage: View {
                 .padding(.horizontal, 8)
             }
             .frame(maxWidth: .infinity)
+           // .frame(width: 343) // Explicitly set width to match the maxX calculation
+
             .background(
                 Capsule()
                     .fill(Color(.systemGray6))
@@ -636,8 +639,445 @@ struct DriverHomePage: View {
             )
             .padding(.horizontal, 8)
         }
+    }*/
+    
+  /* CLAUde private struct TripActionButton: View {
+        let trip: Trip
+        @Binding var isNavigating: Bool
+        @Binding var swipeOffset: CGFloat
+        @Binding var isDragCompleted: Bool
+        @Binding var isSwiping: Bool
+        let maxX: CGFloat
+        let authVM: AuthViewModel
+        let gradientStart: Color
+        let gradientEnd: Color
+        @State private var dragStartLocation: CGFloat = 0
+        @Environment(\.colorScheme) var colorScheme
+        
+        var body: some View {
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    NavigationLink(
+                        destination: PreInspectionView(
+                            authVM: authVM,
+                            dropoffLocation: trip.endLocation,
+                            vehicleNumber: trip.vehicleId,
+                            tripID: trip.id,
+                            vehicleID: trip.vehicleId
+                        ),
+                        isActive: $isNavigating,
+                        label: {
+                            LinearGradient(
+                                colors: swipeOffset == 0 ? [Color(.systemGray5), Color(.systemGray5)] : [
+                                    gradientStart,
+                                    swipeOffset >= maxX - 10 || isDragCompleted ? gradientEnd : gradientStart
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                            .frame(height: 55)
+                            .clipShape(Capsule())
+                        }
+                    )
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    HStack(spacing: 0) {
+                        ZStack {
+                            Circle()
+                                .fill(Color(.systemBlue))
+                                .frame(width: 53, height: 53)
+                            Image(systemName: "car.side.fill")
+                                .scaleEffect(x: -1, y: 1)
+                                .foregroundStyle(Color(.systemBackground))
+                        }
+                        .offset(x: swipeOffset)
+                        .gesture(
+                            isDragCompleted ? nil : DragGesture()
+                                .onChanged { value in
+                                    isSwiping = true
+                                    // Constrain the offset to the available space within the capsule
+                                    swipeOffset = min(max(0, value.translation.width), maxX)
+                                }
+                                .onEnded { _ in
+                                    isSwiping = false
+                                    if swipeOffset >= maxX - 10 {
+                                        swipeOffset = maxX
+                                        isDragCompleted = true
+                                        isNavigating = true
+                                    } else {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                            swipeOffset = 0
+                                        }
+                                    }
+                                }
+                        )
+                        
+                        Spacer()
+                        
+                        Text("Slide to get Ready")
+                            .font(.headline)
+                            .foregroundColor(swipeOffset > 0 || isDragCompleted ? .white : Color(.systemBlue))
+                            .padding(.trailing, 16)
+                    }
+                    .padding(.horizontal, 8)
+                }
+                .frame(width: geometry.size.width)
+                .background(
+                    Capsule()
+                        .fill(Color(.systemGray6))
+                        .overlay(
+                            Capsule()
+                                .stroke(Color(.systemGray4), lineWidth: 1)
+                        )
+                )
+            }
+            .frame(height: 55)
+            .padding(.horizontal, 8)
+        }
     }
-
+*/
+ //MARK:- Working
+  /*WORKING YEY!!
+    struct TripActionButton: View {
+        let trip: Trip
+        @Binding var isNavigating: Bool
+        @Binding var swipeOffset: CGFloat
+        @Binding var isDragCompleted: Bool
+        @Binding var isSwiping: Bool
+        let maxX: CGFloat
+        let authVM: AuthViewModel
+        let gradientStart: Color
+        let gradientEnd: Color
+        @Environment(\.colorScheme) var colorScheme
+        
+        var body: some View {
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    // Navigation link with gradient background
+                    NavigationLink(
+                        destination: PreInspectionView(
+                            authVM: authVM,
+                            dropoffLocation: trip.endLocation,
+                            vehicleNumber: trip.vehicleId,
+                            tripID: trip.id,
+                            vehicleID: trip.vehicleId
+                        ),
+                        isActive: $isNavigating,
+                        label: {
+                            LinearGradient(
+                                colors: swipeOffset == 0 ? [Color(.systemGray5), Color(.systemGray5)] : [
+                                    gradientStart,
+                                    swipeOffset >= maxX - 10 || isDragCompleted ? gradientEnd : gradientStart
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                            .frame(width: geometry.size.width, height: 55)
+                            .clipShape(Capsule())
+                        }
+                    )
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    // Content with sliding circle
+                    HStack(spacing: 0) {
+                        ZStack {
+                            Circle()
+                                .fill(Color(.systemBlue))
+                                .frame(width: 53, height: 53)
+                            Image(systemName: "car.side.fill")
+                                .scaleEffect(x: -1, y: 1)
+                                .foregroundStyle(Color(.systemBackground))
+                        }
+                        .offset(x: swipeOffset)
+                        .gesture(
+                            isDragCompleted ? nil : DragGesture(minimumDistance: 5)
+                                .onChanged { value in
+                                    isSwiping = true
+                                    // Calculate maximum drag distance based on actual capsule width
+                                    let calculatedMaxX = geometry.size.width - 53 // Width minus circle width
+                                    swipeOffset = min(max(0, value.translation.width), calculatedMaxX)
+                                }
+                                .onEnded { _ in
+                                    isSwiping = false
+                                    let calculatedMaxX = geometry.size.width - 53
+                                    if swipeOffset >= calculatedMaxX - 10 {
+                                        swipeOffset = calculatedMaxX
+                                        isDragCompleted = true
+                                        isNavigating = true
+                                    } else {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                            swipeOffset = 0
+                                        }
+                                    }
+                                }
+                        )
+                        
+                        Spacer()
+                        
+                        Text("Slide to get Ready")
+                            .font(.headline)
+                            .foregroundColor(swipeOffset > 0 || isDragCompleted ? .white : Color(.systemBlue))
+                            .padding(.trailing, 16)
+                    }
+                    .padding(.leading, 0) // Removed horizontal padding from left
+                    .padding(.trailing, 8) // Keep padding on right side only
+                }
+            }
+            .frame(height: 55)
+            .background(
+                Capsule()
+                    .fill(Color(.systemGray6))
+                    .overlay(
+                        Capsule()
+                            .stroke(Color(.systemGray4), lineWidth: 1)
+                    )
+            )
+            .padding(.horizontal, 8)
+        }
+    }*/
+    
+  /* DISAPPEARING WORKING
+   struct TripActionButton: View {
+        let trip: Trip
+        @Binding var isNavigating: Bool
+        @Binding var swipeOffset: CGFloat
+        @Binding var isDragCompleted: Bool
+        @Binding var isSwiping: Bool
+        let maxX: CGFloat
+        let authVM: AuthViewModel
+        let gradientStart: Color
+        let gradientEnd: Color
+        @Environment(\.colorScheme) var colorScheme
+        @State private var sliderOpacity: Double = 1.0
+        
+        var body: some View {
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    // Navigation link with gradient background
+                    NavigationLink(
+                        destination: PreInspectionView(
+                            authVM: authVM,
+                            dropoffLocation: trip.endLocation,
+                            vehicleNumber: trip.vehicleId,
+                            tripID: trip.id,
+                            vehicleID: trip.vehicleId
+                        ),
+                        isActive: $isNavigating,
+                        label: {
+                            LinearGradient(
+                                colors: swipeOffset == 0 ? [Color(.systemGray5), Color(.systemGray5)] : [
+                                    gradientStart,
+                                    swipeOffset >= maxX - 10 || isDragCompleted ? gradientEnd : gradientStart
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                            .frame(width: geometry.size.width, height: 55)
+                            .clipShape(Capsule())
+                        }
+                    )
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    // Content with sliding circle
+                    HStack(spacing: 0) {
+                        ZStack {
+                            Circle()
+                                .fill(Color(.systemBlue))
+                                .frame(width: 53, height: 53)
+                            Image(systemName: "car.side.fill")
+                                .scaleEffect(x: -1, y: 1)
+                                .foregroundStyle(Color(.systemBackground))
+                        }
+                        .opacity(sliderOpacity)
+                        .offset(x: swipeOffset)
+                        .gesture(
+                            isDragCompleted ? nil : DragGesture(minimumDistance: 5)
+                                .onChanged { value in
+                                    isSwiping = true
+                                    // Calculate maximum drag distance based on actual capsule width
+                                    let calculatedMaxX = geometry.size.width - 53 // Width minus circle width
+                                    swipeOffset = min(max(0, value.translation.width), calculatedMaxX)
+                                }
+                                .onEnded { _ in
+                                    isSwiping = false
+                                    let calculatedMaxX = geometry.size.width - 53
+                                    if swipeOffset >= calculatedMaxX - 10 {
+                                        swipeOffset = calculatedMaxX
+                                        isDragCompleted = true
+                                        
+                                        // Animate the slider to fade out
+                                        withAnimation(.easeOut(duration: 0.3)) {
+                                            sliderOpacity = 0
+                                        }
+                                        
+                                        // Small delay before navigating
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                            isNavigating = true
+                                        }
+                                    } else {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                            swipeOffset = 0
+                                        }
+                                    }
+                                }
+                        )
+                        
+                        Spacer()
+                        
+                        Text("Slide to get Ready")
+                            .font(.headline)
+                            .foregroundColor(swipeOffset > 0 || isDragCompleted ? .white : Color(.systemBlue))
+                            .padding(.trailing, 16)
+                    }
+                    .padding(.leading, 0) // Removed horizontal padding from left
+                    .padding(.trailing, 8) // Keep padding on right side only
+                }
+            }
+            .frame(height: 55)
+            .background(
+                Capsule()
+                    .fill(Color(.systemGray6))
+                    .overlay(
+                        Capsule()
+                            .stroke(Color(.systemGray4), lineWidth: 1)
+                    )
+            )
+            .padding(.horizontal, 8)
+            .onAppear {
+                // Reset opacity when view appears
+                sliderOpacity = 1.0
+            }
+        }
+    }*/
+    
+    struct TripActionButton: View {
+        let trip: Trip
+        @Binding var isNavigating: Bool
+        @Binding var swipeOffset: CGFloat
+        @Binding var isDragCompleted: Bool
+        @Binding var isSwiping: Bool
+        let maxX: CGFloat
+        let authVM: AuthViewModel
+        let gradientStart: Color
+        let gradientEnd: Color
+        @Environment(\.colorScheme) var colorScheme
+        @State private var sliderOpacity: Double = 1.0
+        
+        var body: some View {
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    // Navigation link with gradient background
+                    NavigationLink(
+                        destination: PreInspectionView(
+                            authVM: authVM,
+                            dropoffLocation: trip.endLocation,
+                            vehicleNumber: trip.vehicleId,
+                            tripID: trip.id,
+                            vehicleID: trip.vehicleId
+                        ),
+                        isActive: $isNavigating,
+                        label: {
+                            LinearGradient(
+                                colors: swipeOffset == 0 ? [Color(.systemGray5), Color(.systemGray5)] : [
+                                    gradientStart,
+                                    swipeOffset >= maxX - 10 || isDragCompleted ? gradientEnd : gradientStart
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                            .frame(width: geometry.size.width, height: 55)
+                            .clipShape(Capsule())
+                        }
+                    )
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    // Content with sliding circle
+                    HStack(spacing: 0) {
+                        ZStack {
+                            Circle()
+                                .fill(Color(.systemBlue))
+                                .frame(width: 53, height: 53)
+                            Image(systemName: "car.side.fill")
+                                .scaleEffect(x: -1, y: 1)
+                                .foregroundStyle(Color(.systemBackground))
+                        }
+                        .opacity(sliderOpacity)
+                        .offset(x: swipeOffset)
+                        .gesture(
+                            isDragCompleted ? nil : DragGesture(minimumDistance: 5)
+                                .onChanged { value in
+                                    isSwiping = true
+                                    // Calculate maximum drag distance based on actual capsule width
+                                    let calculatedMaxX = geometry.size.width - 53 // Width minus circle width
+                                    swipeOffset = min(max(0, value.translation.width), calculatedMaxX)
+                                }
+                                .onEnded { _ in
+                                    isSwiping = false
+                                    let calculatedMaxX = geometry.size.width - 53
+                                    if swipeOffset >= calculatedMaxX - 10 {
+                                        swipeOffset = calculatedMaxX
+                                        isDragCompleted = true
+                                        
+                                        // Animate the slider to fade out
+                                        withAnimation(.easeOut(duration: 0.3)) {
+                                            sliderOpacity = 0
+                                        }
+                                        
+                                        // Small delay before navigating
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                            isNavigating = true
+                                        }
+                                    } else {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                            swipeOffset = 0
+                                        }
+                                    }
+                                }
+                        )
+                        
+                        Spacer()
+                        
+                        Text("Slide to get Ready")
+                            .font(.headline)
+                            .foregroundColor(swipeOffset > 0 || isDragCompleted ? .white : Color(.systemBlue))
+                            .padding(.trailing, 16)
+                    }
+                    .padding(.leading, 0)
+                    .padding(.trailing, 8)
+                }
+            }
+            .frame(height: 55)
+            .background(
+                Capsule()
+                    .fill(Color(.systemGray6))
+                    .overlay(
+                        Capsule()
+                            .stroke(Color(.systemGray4), lineWidth: 1)
+                    )
+            )
+            .padding(.horizontal, 8)
+            .onAppear {
+                // Reset slider state when view appears or reappears
+                resetSliderState()
+            }
+            .onChange(of: isNavigating) { newValue in
+                // When navigating back (isNavigating changes from true to false)
+                if !newValue {
+                    resetSliderState()
+                }
+            }
+        }
+        
+        // Helper function to reset slider state
+        private func resetSliderState() {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                swipeOffset = 0
+                isDragCompleted = false
+                sliderOpacity = 1.0
+            }
+        }
+    }
+    
     // MARK: - Main Trip Card View
     private func tripCardView(for trip: Trip) -> some View {
         let mapData = tripMapData[trip.id] ?? TripMapData()

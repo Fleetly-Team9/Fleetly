@@ -4,21 +4,14 @@ import FirebaseAuth
 
 struct LogbookView: View {
     @StateObject private var viewModel = LogbookViewModel()
-    @State private var selectedDate: Date = {
-        // Set initial date to the current date (May 2, 2025)
-        let calendar = Calendar.current
-        let components = DateComponents(year: 2025, month: 5, day: 2)
-        return calendar.date(from: components) ?? Date()
-    }()
+    @State private var selectedDate = Date() // Use today's current date
     @State private var isDatePickerVisible = false // State to toggle DatePicker visibility
-    
-    // Define the maximum selectable date (current date: May 2, 2025)
+
+    // Computed property: always returns the current date
     private var maxDate: Date {
-        let calendar = Calendar.current
-        let components = DateComponents(year: 2025, month: 5, day: 2)
-        return calendar.date(from: components) ?? Date()
+        return Date()
     }
-    
+
     var body: some View {
         NavigationView {
             VStack {
@@ -62,7 +55,7 @@ struct LogbookView: View {
                     DatePicker(
                         "Select Date",
                         selection: $selectedDate,
-                        in: ...maxDate, // Restrict to dates up to May 2, 2025
+                        in: ...maxDate, // Restrict to today or earlier
                         displayedComponents: [.date]
                     )
                     .datePickerStyle(.graphical)
@@ -71,9 +64,6 @@ struct LogbookView: View {
                     .background(Color(.systemGray6))
                     .cornerRadius(10)
                     .padding(.horizontal)
-                    .onAppear {
-                        print("DatePicker displayed with range: up to \(formattedDate(maxDate))")
-                    }
                 }
                 
                 // Driver List
@@ -99,17 +89,15 @@ struct LogbookView: View {
             }
             .navigationBarHidden(true)
             .onChange(of: selectedDate) { newDate in
-                print("Selected date changed to: \(formattedDate(newDate))")
                 isDatePickerVisible = false // Hide DatePicker after selection
                 viewModel.fetchDrivers(for: newDate)
             }
             .onAppear {
-                print("Initial date: \(formattedDate(selectedDate))")
                 viewModel.fetchDrivers(for: selectedDate)
             }
         }
     }
-    
+
     private func formattedDate(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
