@@ -9,9 +9,10 @@ struct HomeView: View {
     @State private var showCardAnimation = false
     @State private var isLoading = false
     @State private var errorMessage: String?
-    
+    @State private var selectedFilter: TaskFilter = .all // State for filter
+
     private let db = Firestore.firestore()
-    
+
     // Fallback Vehicle to simplify ForEach expression
     private static let fallbackVehicle = Vehicle(
         id: UUID(),
@@ -20,13 +21,24 @@ struct HomeView: View {
         year: "",
         vin: "",
         licensePlate: "",
-        vehicleType: .car, // Default, adjust based on VehicleType
-        status: .active, // Default, adjust based on VehicleStatus
+        vehicleType: .car,
+        status: .active,
         assignedDriverId: nil,
         passengerCapacity: nil,
         cargoCapacity: nil
     )
-    
+
+    // Enum for filter options
+    enum TaskFilter: String, CaseIterable, Identifiable {
+        case all = "All"
+        case pending = "Pending"
+        case inProgress = "In Progress"
+        case completed = "Completed"
+        case cancelled = "Cancelled"
+
+        var id: String { self.rawValue }
+    }
+
     // Initializer to allow setting initial state for previews
     init(
         maintenanceTasks: [MaintenanceTask] = [],
@@ -37,7 +49,23 @@ struct HomeView: View {
         self._vehicles = State(initialValue: vehicles)
         self._userName = State(initialValue: userName)
     }
-    
+
+    // Filtered tasks based on selected filter
+    var filteredTasks: [MaintenanceTask] {
+        switch selectedFilter {
+        case .all:
+            return maintenanceTasks
+        case .pending:
+            return maintenanceTasks.filter { $0.status == .pending }
+        case .inProgress:
+            return maintenanceTasks.filter { $0.status == .inProgress }
+        case .completed:
+            return maintenanceTasks.filter { $0.status == .completed }
+        case .cancelled:
+            return maintenanceTasks.filter { $0.status == .cancelled }
+        }
+    }
+
     var body: some View {
         NavigationView {
             ScrollView {
@@ -51,24 +79,57 @@ struct HomeView: View {
                                 value: "19",
                                 color: .blue
                             )
-                            
+
                             StatCardGridView(
                                 icon: "wrench.and.screwdriver.fill",
                                 title: "Pending Tasks",
-                                value: "\(maintenanceTasks.count)",
+                                value: "\(maintenanceTasks.filter { $0.status == .pending }.count)",
                                 color: .orange
                             )
                         }
                         .padding(.horizontal, 16)
                     }
-                    
+
                     // Assigned Work Section
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Assigned Work")
-                            .font(.system(.title3, design: .rounded, weight: .semibold))
-                            .foregroundStyle(.primary)
-                            .padding(.horizontal, 16)
-                        
+                        HStack {
+                            Text("Assigned Work")
+                                .font(.system(.title3, design: .rounded, weight: .semibold))
+                                .foregroundStyle(.primary)
+
+                            Spacer()
+
+                            // Filter Icon with Menu
+                            Menu {
+                                ForEach(TaskFilter.allCases) { filter in
+                                    Button(action: {
+                                        selectedFilter = filter
+                                    }) {
+                                        HStack {
+                                            Text(filter.rawValue)
+                                            if selectedFilter == filter {
+                                                Image(systemName: "checkmark")
+                                                    .foregroundStyle(.blue)
+                                            }
+                                        }
+                                    }
+                                }
+                            } label: {
+                                Image(systemName: "line.3.horizontal.decrease.circle")
+                                    .font(.system(size: 20, weight: .regular))
+                                    .foregroundStyle(.blue)
+                                    .padding(.vertical, 4)
+                                    .padding(.horizontal, 8)
+                                    .background(
+                                        Circle()
+                                            .fill(Color.blue.opacity(0.1))
+                                            .frame(width: 32, height: 32)
+                                    )
+                            }
+                            .accessibilityLabel("Filter tasks")
+                        }
+                        .padding(.horizontal, 16)
+
                         if isLoading {
                             ProgressView()
                                 .padding()
@@ -79,10 +140,10 @@ struct HomeView: View {
                                 .foregroundStyle(.red)
                                 .padding()
                                 .frame(maxWidth: .infinity)
-                        } else if maintenanceTasks.isEmpty {
+                        } else if filteredTasks.isEmpty {
                             VStack {
                                 Spacer()
-                                Text("No Assignments")
+                                Text(selectedFilter == .all ? "No Assignments" : "No \(selectedFilter.rawValue) Tasks")
                                     .font(.system(.title3, design: .rounded, weight: .medium))
                                     .foregroundStyle(.secondary)
                                     .padding()
@@ -97,30 +158,32 @@ struct HomeView: View {
                             }
                         } else {
                             ForEach($maintenanceTasks, id: \.id) { $task in
-                                WorkOrderCard(
-                                    task: $task,
-                                    vehicle: vehicles[task.vehicleId] ?? Self.fallbackVehicle,
-                                    onStatusChange: { newStatus in
-                                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                            task.status = newStatus
-                                            if newStatus == .completed {
-                                                if let index = maintenanceTasks.firstIndex(where: { $0.id == task.id }) {
-                                                    maintenanceTasks.remove(at: index)
+                                if filteredTasks.contains(where: { $0.id == task.id }) {
+                                    WorkOrderCard(
+                                        task: $task,
+                                        vehicle: vehicles[task.vehicleId] ?? Self.fallbackVehicle,
+                                        onStatusChange: { newStatus in
+                                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                                task.status = newStatus
+                                                if newStatus == .completed || newStatus == .archived {
+                                                    if let index = maintenanceTasks.firstIndex(where: { $0.id == task.id }) {
+                                                        maintenanceTasks.remove(at: index)
+                                                        updateTaskStatusInFirestore(taskId: task.id, newStatus: newStatus)
+                                                    }
+                                                } else {
                                                     updateTaskStatusInFirestore(taskId: task.id, newStatus: newStatus)
                                                 }
-                                            } else {
-                                                updateTaskStatusInFirestore(taskId: task.id, newStatus: newStatus)
                                             }
                                         }
-                                    }
-                                )
-                                .padding(.horizontal, 16)
-                                .opacity(showCardAnimation ? 1 : 0)
-                                .offset(y: showCardAnimation ? 0 : 20)
-                                .animation(
-                                    .easeOut(duration: 0.5).delay(Double(maintenanceTasks.firstIndex(where: { $0.id == task.id }) ?? 0) * 0.1),
-                                    value: showCardAnimation
-                                )
+                                    )
+                                    .padding(.horizontal, 16)
+                                    .opacity(showCardAnimation ? 1 : 0)
+                                    .offset(y: showCardAnimation ? 0 : 20)
+                                    .animation(
+                                        .easeOut(duration: 0.5).delay(Double(maintenanceTasks.firstIndex(where: { $0.id == task.id }) ?? 0) * 0.1),
+                                        value: showCardAnimation
+                                    )
+                                }
                             }
                         }
                     }
@@ -130,12 +193,12 @@ struct HomeView: View {
             .background(Color(.systemBackground))
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text("Hi, Personel")
-                        .font(.headline.weight(.bold)) // Matches iOS inline title style
+                    Text("Hi, \(userName)")
+                        .font(.headline.weight(.bold))
                         .foregroundStyle(.primary)
                         .accessibilityAddTraits(.isHeader)
                 }
-                
+
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink(destination: ProfileView()) {
                         Image(systemName: "person.crop.circle.fill")
@@ -147,7 +210,7 @@ struct HomeView: View {
                     .accessibilityLabel("Profile")
                 }
             }
-            .navigationBarTitleDisplayMode(.inline) // Inline title mode to match screenshot
+            .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 withAnimation {
                     showCardAnimation = true
@@ -157,14 +220,14 @@ struct HomeView: View {
             }
         }
     }
-    
+
     private func fetchUserName() {
         guard let userId = Auth.auth().currentUser?.uid else {
             print("FetchUserName: No user is logged in")
             userName = "Guest"
             return
         }
-        
+
         print("FetchUserName: Fetching name for userId: \(userId)")
         db.collection("users").document(userId).getDocument { document, error in
             if let error = error {
@@ -172,29 +235,29 @@ struct HomeView: View {
                 userName = Auth.auth().currentUser?.email?.components(separatedBy: "@").first ?? "User"
                 return
             }
-            
+
             guard let document = document, document.exists, let data = document.data(), let name = data["name"] as? String else {
                 print("FetchUserName: User document not found or missing name field")
                 userName = Auth.auth().currentUser?.email?.components(separatedBy: "@").first ?? "User"
                 return
             }
-            
+
             print("FetchUserName: Successfully fetched name: \(name)")
             userName = name
         }
     }
-    
+
     private func fetchTasks() {
         guard let userId = Auth.auth().currentUser?.uid else {
             print("FetchTasks: No user is logged in")
             errorMessage = "User not logged in"
             return
         }
-        
+
         print("FetchTasks: Fetching all tasks for userId: \(userId)")
         isLoading = true
         errorMessage = nil
-        
+
         db.collection("maintenance_tasks")
             .getDocuments { snapshot, error in
                 isLoading = false
@@ -203,18 +266,18 @@ struct HomeView: View {
                     errorMessage = "Failed to fetch tasks: \(error.localizedDescription)"
                     return
                 }
-                
+
                 guard let documents = snapshot?.documents else {
                     print("FetchTasks: No documents found")
                     errorMessage = "No tasks found"
                     return
                 }
-                
+
                 print("FetchTasks: Found \(documents.count) documents")
                 for doc in documents {
                     print("FetchTasks: Document ID: \(doc.documentID), Data: \(doc.data())")
                 }
-                
+
                 maintenanceTasks = documents.compactMap { doc in
                     do {
                         let task = try doc.data(as: MaintenanceTask.self)
@@ -225,7 +288,7 @@ struct HomeView: View {
                         return nil
                     }
                 }.filter { $0.assignedToId == userId }
-                
+
                 print("FetchTasks: Filtered to \(maintenanceTasks.count) tasks for userId: \(userId)")
                 if maintenanceTasks.isEmpty {
                     errorMessage = "No tasks assigned to you"
@@ -234,11 +297,11 @@ struct HomeView: View {
                 }
             }
     }
-    
+
     private func fetchVehicles(for tasks: [MaintenanceTask]) {
         let vehicleIds = Set(tasks.map { $0.vehicleId })
         print("FetchVehicles: Fetching data for \(vehicleIds.count) unique vehicle IDs: \(vehicleIds)")
-        
+
         for vehicleId in vehicleIds {
             db.collection("vehicles").document(vehicleId).getDocument { document, error in
                 if let error = error {
@@ -246,15 +309,14 @@ struct HomeView: View {
                     vehicles[vehicleId] = Self.fallbackVehicle
                     return
                 }
-                
+
                 guard let document = document, document.exists, let data = document.data() else {
                     print("FetchVehicles: Vehicle document \(vehicleId) not found")
                     vehicles[vehicleId] = Self.fallbackVehicle
                     return
                 }
-                
+
                 do {
-                    // Manually decode to handle UUID
                     guard let make = data["make"] as? String,
                           let model = data["model"] as? String,
                           let year = data["year"] as? String,
@@ -264,22 +326,20 @@ struct HomeView: View {
                           let statusRaw = data["status"] as? String else {
                         throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Missing required fields"))
                     }
-                    
-                    // Assume vehicleType and status are enums with rawValues
+
                     guard let vehicleType = VehicleType(rawValue: vehicleTypeRaw),
                           let status = VehicleStatus(rawValue: statusRaw) else {
                         throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Invalid vehicleType or status"))
                     }
-                    
+
                     let assignedDriverId = data["assignedDriverId"] as? String
                     let passengerCapacity = data["passengerCapacity"] as? Int
                     let cargoCapacity = data["cargoCapacity"] as? Double
-                    
-                    // Convert document ID to UUID
+
                     guard let uuid = UUID(uuidString: vehicleId) else {
                         throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Invalid UUID for vehicleId: \(vehicleId)"))
                     }
-                    
+
                     let vehicle = Vehicle(
                         id: uuid,
                         make: make,
@@ -293,7 +353,7 @@ struct HomeView: View {
                         passengerCapacity: passengerCapacity,
                         cargoCapacity: cargoCapacity
                     )
-                    
+
                     print("FetchVehicles: Successfully fetched vehicle: \(vehicle)")
                     vehicles[vehicleId] = vehicle
                 } catch {
@@ -303,7 +363,7 @@ struct HomeView: View {
             }
         }
     }
-    
+
     private func updateTaskStatusInFirestore(taskId: String, newStatus: MaintenanceTask.TaskStatus) {
         db.collection("maintenance_tasks").document(taskId).updateData([
             "status": newStatus.rawValue
@@ -322,7 +382,7 @@ struct OverviewStat: View {
     let title: String
     let value: String
     let color: Color
-    
+
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
@@ -364,14 +424,14 @@ struct WorkOrderCard: View {
     @Binding var task: MaintenanceTask
     let vehicle: Vehicle
     var onStatusChange: (MaintenanceTask.TaskStatus) -> Void
-    
+
     @State private var dragOffset: CGFloat = 0
     @State private var showAnimation: Bool = false
     @State private var showingCompletionView: Bool = false
     @State private var errorMessage: String?
-    
+
     private let db = Firestore.firestore()
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             // Header
@@ -384,10 +444,10 @@ struct WorkOrderCard: View {
                     .font(.system(.subheadline, design: .rounded, weight: .medium))
                     .foregroundStyle(.secondary)
             }
-            
+
             Divider()
                 .background(Color.secondary.opacity(0.2))
-            
+
             // Body
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 10) {
@@ -407,7 +467,7 @@ struct WorkOrderCard: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            
+
             // Status and Priority
             HStack(spacing: 12) {
                 HStack(spacing: 6) {
@@ -422,7 +482,7 @@ struct WorkOrderCard: View {
                 .padding(.vertical, 6)
                 .background(statusColor(task.status).opacity(0.2))
                 .clipShape(Capsule())
-                
+
                 HStack(spacing: 6) {
                     Image(systemName: priorityIcon(task.priority))
                         .foregroundStyle(priorityColor(task.priority))
@@ -436,23 +496,23 @@ struct WorkOrderCard: View {
                 .background(priorityColor(task.priority).opacity(0.2))
                 .clipShape(Capsule())
             }
-            
+
             // Action (All Swipable)
             GeometryReader { geometry in
                 VStack(spacing: 12) {
                     Text(swipeActionText(task.status))
                         .font(.system(.subheadline, design: .rounded, weight: .semibold))
                         .foregroundStyle(swipeActionColor(task.status))
-                    
+
                     ZStack(alignment: .leading) {
                         RoundedRectangle(cornerRadius: 12)
                             .fill(Color(.systemGray5))
                             .frame(height: 50)
-                        
+
                         RoundedRectangle(cornerRadius: 12)
                             .fill(swipeActionColor(task.status).opacity(showAnimation ? 0.5 : 0.3))
                             .frame(width: max(0, dragOffset), height: 50)
-                        
+
                         // Slider Knob
                         ZStack {
                             Circle()
@@ -518,7 +578,7 @@ struct WorkOrderCard: View {
                 .shadow(radius: 4, y: 2)
         )
     }
-    
+
     // Helper functions for status and priority
     private func statusIcon(_ status: MaintenanceTask.TaskStatus) -> String {
         switch status {
@@ -526,18 +586,20 @@ struct WorkOrderCard: View {
         case .inProgress: return "gearshape.fill"
         case .pending: return "hourglass"
         case .cancelled: return "xmark.circle.fill"
+        case .archived: return "archivebox.fill"
         }
     }
-    
+
     private func statusColor(_ status: MaintenanceTask.TaskStatus) -> Color {
         switch status {
         case .completed: return .green
         case .inProgress: return .orange
         case .pending: return .red
         case .cancelled: return .gray
+        case .archived: return .gray
         }
     }
-    
+
     private func priorityIcon(_ priority: String) -> String {
         switch priority.lowercased() {
         case "low": return "arrow.down.circle"
@@ -546,7 +608,7 @@ struct WorkOrderCard: View {
         default: return "arrow.down.circle"
         }
     }
-    
+
     private func priorityColor(_ priority: String) -> Color {
         switch priority.lowercased() {
         case "low": return .green
@@ -555,7 +617,7 @@ struct WorkOrderCard: View {
         default: return .green
         }
     }
-    
+
     // Swipe Action Helpers
     private func swipeActionText(_ status: MaintenanceTask.TaskStatus) -> String {
         switch status {
@@ -563,48 +625,53 @@ struct WorkOrderCard: View {
         case .inProgress: return "Slide to Complete"
         case .completed: return "Slide to Archive"
         case .cancelled: return "Slide to Archive"
+        case .archived: return "Archived"
         }
     }
-    
+
     private func swipeActionIcon(_ status: MaintenanceTask.TaskStatus) -> String {
         switch status {
         case .pending: return "wrench.fill"
         case .inProgress: return "checkmark.circle.fill"
         case .completed: return "archivebox.fill"
         case .cancelled: return "archivebox.fill"
+        case .archived: return "archivebox.fill"
         }
     }
-    
+
     private func swipeActionColor(_ status: MaintenanceTask.TaskStatus) -> Color {
         switch status {
         case .pending: return .blue
         case .inProgress: return .blue
         case .completed: return .green
         case .cancelled: return .gray
+        case .archived: return .gray
         }
     }
-    
+
     private func handleSwipeAction() {
         switch task.status {
         case .pending:
             onStatusChange(.inProgress)
         case .inProgress:
-            showingCompletionView = true // Show the sheet before marking as completed
+            showingCompletionView = true
         case .completed, .cancelled:
-            onStatusChange(.completed) // Adjust as needed for your workflow
+            onStatusChange(.archived)
+        case .archived:
+            break
         }
     }
-    
+
     private func storeMaintenanceCosts(taskId: String, cost: Inventory.MaintenanceCost) {
         let costsRef = db.collection("maintenance_tasks").document(taskId).collection("costs")
-        
+
         do {
             try costsRef.document(cost.id).setData(from: cost) { error in
                 if let error = error {
                     print("Error storing maintenance costs: \(error.localizedDescription)")
                     errorMessage = "Failed to store maintenance costs"
                 } else {
-                    onStatusChange(.completed) // Mark as completed after saving costs
+                    onStatusChange(.completed)
                 }
             }
         } catch {
@@ -613,4 +680,3 @@ struct WorkOrderCard: View {
         }
     }
 }
-

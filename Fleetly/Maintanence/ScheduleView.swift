@@ -457,6 +457,8 @@ struct ScheduleView: View {
         case .pending:
             return .blue
         case .cancelled:
+            return .red
+        case .archived:
             return .gray
         }
     }
@@ -470,6 +472,8 @@ struct ScheduleView: View {
         case .pending:
             return Color.blue.opacity(0.2)
         case .cancelled:
+            return Color.red.opacity(0.2)
+        case .archived:
             return Color.gray.opacity(0.2)
         }
     }

@@ -20,6 +20,7 @@ struct MaintenanceTask: Identifiable, Codable {
         case inProgress = "in_progress"
         case completed = "completed"
         case cancelled = "cancelled"
+        case archived = "archived"
     }
 }
 

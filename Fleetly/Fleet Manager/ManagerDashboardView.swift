@@ -284,6 +284,8 @@ struct ManagerStatusBadge: View {
         case .inProgress: return .blue
         case .completed: return .green
         case .cancelled: return .red
+        case .archived:
+            return .gray
         }
     }
 }
