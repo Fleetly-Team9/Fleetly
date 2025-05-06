@@ -19,17 +19,16 @@ struct ContentView: View {
                 }
                 .tag(0)
 
-            InventoryManagementView()
-                .tabItem {
-                    Label("Inventory", systemImage: "cart.fill")
-                }
-                .tag(1)
-
             ScheduleView()
                 .tabItem {
                     Label("Schedule", systemImage: "calendar")
                 }
                 .tag(2)
+            InventoryManagementView()
+                .tabItem {
+                    Label("Inventory", systemImage: "cart.fill")
+                }
+                .tag(1)
         }
         .accentColor(.blue) // Sets the selected tab item color to blue to match the screenshot
     }
