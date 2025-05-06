@@ -265,56 +265,101 @@ struct DriverHomePage: View {
                         .foregroundStyle(Color.secondary)
                         .padding(.trailing, 200)
                 }
-                
+                //hfguhik
                 ScrollView(.horizontal, showsIndicators: false) {
-                    VStack(spacing: 5) {
-                        ZStack {
-                            Rectangle()
-                                .fill(Color.blue.opacity(0.1))
-                                .frame(width: 684, height: 12)
-                                .padding(.horizontal, 10)
-                            
-                            let progressWidth: CGFloat = {
-                                let maxTime: TimeInterval = 12 * 3600
-                                let progress = min(elapsedTime / maxTime, 1.0)
-                                return 684 * progress
-                            }()
-                            
-                            Rectangle()
-                                .fill(Color.blue)
-                                .border(Color.black)
-                                .frame(width: progressWidth, height: 20)
-                                .padding(.horizontal, 10)
-                            
-                            HStack(spacing: 0) {
-                                ForEach(0..<12, id: \.self) { index in
-                                    Spacer()
-                                        .frame(width: 40 + 12)
-                                    Rectangle()
-                                        .fill(Color.blue.opacity(0.5))
-                                        .frame(width: 1, height: 8)
-                                        .offset(x: -26)
+                                    VStack(spacing: 10) {
+                                        ZStack(alignment: .leading) {
+                                            // Background track with rounded corners
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .fill(Color.blue.opacity(0.1))
+                                                .frame(width: 684, height: 12)
+                                                .padding(.horizontal, 10)
+                                            
+                                            // Progress bar calculation - more precise calculation
+                                            let progressWidth: CGFloat = {
+                                                let maxTime: TimeInterval = 12 * 3600 // 12 hours in seconds
+                                                let progress = min(elapsedTime / maxTime, 1.0)
+                                                return 684 * progress
+                                            }()
+                                            
+                                            // Progress bar with rounded corners and gradient
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .fill(
+                                                    LinearGradient(
+                                                        gradient: Gradient(colors: [Color.blue.opacity(0.8), Color.blue]),
+                                                        startPoint: .leading,
+                                                        endPoint: .trailing
+                                                    )
+                                                )
+                                                .frame(width: max(progressWidth, 0), height: 12)
+                                                .padding(.leading, 10)
+                                                // Add subtle shadow for depth
+                                                .shadow(color: Color.blue.opacity(0.3), radius: 2, x: 0, y: 1)
+                                            
+                                            // Hour markers - every hour
+                                            HStack(spacing: 0) {
+                                                ForEach(0..<13, id: \.self) { index in
+                                                    Rectangle()
+                                                        .fill(index % 3 == 0 ? Color.blue.opacity(0.6) : Color.blue.opacity(0.4))
+                                                        .frame(width: index % 3 == 0 ? 2 : 1.5, height: index % 3 == 0 ? 12 : 8)
+                                                        .padding(.leading, index == 0 ? 10 : 0)
+                                                    
+                                                    if index < 12 {
+                                                        Spacer()
+                                                            .frame(width: 684/12 - 2)
+                                                    }
+                                                }
+                                            }
+                                            
+                                            // Minute markers (smaller ticks)
+                                            HStack(spacing: 0) {
+                                                ForEach(0..<49, id: \.self) { index in
+                                                    if index % 4 != 0 { // Skip positions where hour markers are
+                                                        Rectangle()
+                                                            .fill(Color.blue.opacity(0.25))
+                                                            .frame(width: 1, height: 5)
+                                                            .padding(.leading, index == 0 ? 10 : 0)
+                                                    } else {
+                                                        Rectangle()
+                                                            .fill(Color.clear)
+                                                            .frame(width: 1, height: 5)
+                                                    }
+                                                    
+                                                    if index < 48 {
+                                                        Spacer()
+                                                            .frame(width: 684/48 - 1)
+                                                    }
+                                                }
+                                            }
+                                            
+                                            // Current progress indicator (small circle)
+                                            if progressWidth > 0 {
+                                                Circle()
+                                                    .fill(Color.white)
+                                                    .frame(width: 8, height: 8)
+                                                    .overlay(
+                                                        Circle()
+                                                            .stroke(Color.blue, lineWidth: 2)
+                                                    )
+                                                    .padding(.leading, progressWidth + 6) // Position it at the end of progress bar
+                                            }
+                                        }
+                                        
+                                        // Hour labels with consistent styling and better visibility
+                                        HStack(spacing: 0) {
+                                            ForEach(0..<13, id: \.self) { hour in
+                                                Text(hour == 0 ? "0hr" : "\(hour)hr\(hour == 1 ? "" : "s")")
+                                                    .font(.system(size: 12, weight: .medium))
+                                                    .foregroundStyle(Color.primary)
+                                                    .frame(width: 684/12)
+                                                    .multilineTextAlignment(.center)
+                                            }
+                                        }
+                                        .padding(.horizontal, 10)
+                                    }
                                 }
-                                Spacer()
-                                    .frame(width: 40)
-                            }
-                            .padding(.horizontal, 10)
-                        }
-                        
-                        HStack(spacing: 15) {
-                            ForEach(hours, id: \.self) { hour in
-                                Text(hour)
-                                    .font(.system(size: 14, weight: .regular, design: .default))
-                                    .foregroundStyle(Color.primary)
-                                    .frame(width: 40, height: 20)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                            }
-                        }
-                        .padding(.horizontal, 10)
-                    }
-                }
-                .frame(width: 343)
-                
+                                .frame(width: 343) // Constrain to parent width
+                //gjkhkhk
                 VStack {
                     Button(action: {
                         guard let driverId = authVM.user?.id else { return }
