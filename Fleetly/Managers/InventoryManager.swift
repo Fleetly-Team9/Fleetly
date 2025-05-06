@@ -32,7 +32,8 @@ class InventoryManager {
                         name: data["name"] as? String ?? "",
                         units: data["units"] as? Int ?? 0,
                         minUnits: data["minUnits"] as? Int ?? 5,
-                        lastUpdated: (data["lastUpdated"] as? Timestamp)?.dateValue() ?? Date()
+                        lastUpdated: (data["lastUpdated"] as? Timestamp)?.dateValue() ?? Date(),
+                        price: data["price"] as? Double ?? 0.0
                     )
                 }
                 
@@ -45,7 +46,8 @@ class InventoryManager {
             "name": item.name,
             "units": item.units,
             "minUnits": item.minUnits,
-            "lastUpdated": Timestamp(date: Date())
+            "lastUpdated": Timestamp(date: Date()),
+            "price": item.price
         ]
         
         db.collection("inventory").document(item.id).setData(data) { error in
@@ -62,7 +64,8 @@ class InventoryManager {
             "name": item.name,
             "units": item.units,
             "minUnits": item.minUnits,
-            "lastUpdated": Timestamp(date: Date())
+            "lastUpdated": Timestamp(date: Date()),
+            "price": item.price
         ]
         
         db.collection("inventory").document(item.id).updateData(data) { error in

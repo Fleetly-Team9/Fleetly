@@ -7,13 +7,15 @@ enum Inventory {
         var units: Int
         var minUnits: Int
         var lastUpdated: Date
+        var price: Double
         
-        init(id: String = UUID().uuidString, name: String, units: Int, minUnits: Int = 5, lastUpdated: Date = Date()) {
+        init(id: String = UUID().uuidString, name: String, units: Int, minUnits: Int = 5, lastUpdated: Date = Date(), price: Double = 0.0) {
             self.id = id
             self.name = name
             self.units = units
             self.minUnits = minUnits
             self.lastUpdated = lastUpdated
+            self.price = price
         }
     }
 
@@ -34,6 +36,31 @@ enum Inventory {
             formatter.dateStyle = .medium
             formatter.timeStyle = .short
             return formatter.string(from: timestamp)
+        }
+    }
+
+    struct MaintenanceCost: Identifiable, Codable {
+        let id: String
+        let taskId: String
+        let partsUsed: [PartUsage]
+        let laborCost: Double
+        let otherCosts: [OtherCost]
+        let totalCost: Double
+        let timestamp: Date
+        
+        struct PartUsage: Codable {
+            let partId: String
+            let partName: String
+            let quantity: Int
+            let unitPrice: Double
+            var totalPrice: Double {
+                return Double(quantity) * unitPrice
+            }
+        }
+        
+        struct OtherCost: Codable {
+            let description: String
+            let amount: Double
         }
     }
 
