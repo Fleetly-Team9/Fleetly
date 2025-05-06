@@ -29,6 +29,9 @@ struct NavigationMapView: View {
     @State private var screenWidth: CGFloat = UIScreen.main.bounds.width
     @State private var bottomSafeAreaInset: CGFloat = 0
     
+    // Emergency calling related states
+    @State private var showEmergencyCallOptions = false
+    
     // Payment proof related states
     @State private var isImagePickerPresented = false
     @State private var selectedImageData: Data? = nil
@@ -98,30 +101,160 @@ struct NavigationMapView: View {
         }
     }
     
-    private var emergencyButton: some View {
-        HStack {
-            Spacer()
-            Button(action: {
-                if let url = URL(string: "tel://1033") {
-                    UIApplication.shared.open(url)
-                }
-            }) {
-                VStack {
-                    Image(systemName: "phone.fill")
-                        .font(.system(size: 22))
-                        .padding(14)
-                        .background(Color.red)
-                        .foregroundColor(.white)
-                        .clipShape(Circle())
+    // Emergency button
+    private var emergencyCallButton: some View {
+        VStack {
+            Spacer().frame(height: 150) // Position below map style buttons
+            HStack {
+                Spacer()
+                VStack(spacing: 4) {
+                    Button(action: {
+                        showEmergencyCallOptions = true
+                    }) {
+                        Image(systemName: "phone.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(.white)
+                            .frame(width: 50, height: 50)
+                            .background(Color.red)
+                            .clipShape(Circle())
+                            .shadow(color: Color.black.opacity(0.3), radius: 4)
+                    }
                     Text("Emergency")
                         .font(.caption)
                         .foregroundColor(.black)
                         .padding(.horizontal, 5)
-                        .background(Color.white.opacity(0.7))
+                        .background(Color.white.opacity(0.8))
                         .cornerRadius(4)
                 }
+                .padding(.trailing, 12)
             }
-            .padding(.trailing, 12)
+            Spacer()
+        }
+    }
+    
+    // Emergency call options panel - improved UI
+    private var emergencyCallOptionsView: some View {
+        Group {
+            if showEmergencyCallOptions {
+                VStack {
+                    Spacer()
+                    VStack(spacing: 0) {
+                        // Title
+                        Text("Emergency Call Options")
+                            .font(.title3)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.black)
+                            .padding(.top, 20)
+                            .padding(.bottom, 16)
+                        
+                        // Call Fleet Manager Button
+                        Button(action: {
+                            if let url = URL(string: "tel://1234567890") {
+                                UIApplication.shared.open(url)
+                            }
+                            showEmergencyCallOptions = false
+                        }) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "phone.fill")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(.blue)
+                                Text("Call Fleet Manager")
+                                    .font(.body)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.blue)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                            .frame(maxWidth: .infinity)
+                            .background(
+                                Color.gray.opacity(0.1)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                    )
+                            )
+                            .cornerRadius(12)
+                        }
+                        
+                        Divider()
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 16)
+                        
+                        // Call NHAI Assistance Button
+                        Button(action: {
+                            if let url = URL(string: "tel://1033") {
+                                UIApplication.shared.open(url)
+                            }
+                            showEmergencyCallOptions = false
+                        }) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "phone.fill")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(.blue)
+                                Text("Call NHAI Assistance")
+                                    .font(.body)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.blue)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                            .frame(maxWidth: .infinity)
+                            .background(
+                                Color.gray.opacity(0.1)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                    )
+                            )
+                            .cornerRadius(12)
+                        }
+                        
+                        Divider()
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 16)
+                        
+                        // Cancel Button
+                        Button(action: {
+                            showEmergencyCallOptions = false
+                        }) {
+                            Text("Cancel")
+                                .font(.body)
+                                .fontWeight(.medium)
+                                .foregroundColor(.red)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(
+                                    Color.gray.opacity(0.1)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                        )
+                                )
+                                .cornerRadius(12)
+                        }
+                        .padding(.bottom, 20)
+                    }
+                    .padding(.horizontal, 16)
+                    .background(
+                        Color.white
+                            .clipShape(RoundedRectangle(cornerRadius: 20))
+                            .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: -4)
+                    )
+                    .padding(.bottom, 16)
+                    .transition(.move(edge: .bottom))
+                    .animation(.spring())
+                }
+                .edgesIgnoringSafeArea(.bottom)
+                .background(
+                    Color.black.opacity(0.4)
+                        .edgesIgnoringSafeArea(.all)
+                        .onTapGesture {
+                            showEmergencyCallOptions = false
+                        }
+                )
+            }
         }
     }
     
@@ -266,12 +399,16 @@ struct NavigationMapView: View {
                         } else if let pickupCoordinate = navigationVM.pickupLocation?.coordinate {
                             region.center = pickupCoordinate
                         }
+                        
+                        // Request call permission when view appears
+                        requestCallPermission()
                     }
                 
                 floatingButtons
-                emergencyButton
+                emergencyCallButton
                 bottomCard
                 expenseModal
+                emergencyCallOptionsView
                 
                 if showImagePreview, let imageData = selectedImageData, let uiImage = UIImage(data: imageData) {
                     ZStack {
@@ -337,6 +474,11 @@ struct NavigationMapView: View {
         photoPickerItems = []
     }
     
+    // Request call permission
+    private func requestCallPermission() {
+        print("Call permission is implicitly granted on iOS")
+    }
+    
     private func saveExpenseWithProof() {
         if let amount = Double(expenseAmount) {
             switch activeExpenseType {
@@ -359,7 +501,7 @@ struct NavigationMapView: View {
                 if let imageData = selectedImageData {
                     navigationVM.miscReceipt = imageData
                     navigationVM.hasMiscReceipt = true
-                    navigationVM.miscReceiptDescription = imageDescription
+                    navigationVM.fuelReceiptDescription = imageDescription
                 }
             case .none:
                 break
