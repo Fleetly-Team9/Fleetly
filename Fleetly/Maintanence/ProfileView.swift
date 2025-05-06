@@ -1,21 +1,88 @@
 import SwiftUI
 import PhotosUI
+import FirebaseAuth
+import FirebaseFirestore
+import FirebaseStorage
 
 // Add a clear implementation of ProfileImageManager
 class ProfileImageManager: ObservableObject {
     @Published var profileImage: UIImage?
+    private let storage = Storage.storage().reference()
+    private let db = Firestore.firestore()
     
-    // Add methods to save and load the image from UserDefaults or local storage
     func saveImage(_ image: UIImage) {
         self.profileImage = image
-        // Here you could implement persistence to save the image to disk
-        // saveImageToDocuments(image)
+        guard let userId = Auth.auth().currentUser?.uid,
+              let imageData = image.jpegData(compressionQuality: 0.5) else { return }
+        
+        let imageRef = storage.child("profileImages/\(userId).jpg")
+        
+        imageRef.putData(imageData, metadata: nil) { (metadata, error) in
+            if let error = error {
+                print("Error uploading image: \(error.localizedDescription)")
+                return
+            }
+            
+            imageRef.downloadURL { (url, error) in
+                if let error = error {
+                    print("Error getting download URL: \(error.localizedDescription)")
+                    return
+                }
+                
+                if let downloadURL = url?.absoluteString {
+                    self.db.collection("users").document(userId).updateData([
+                        "profileImageURL": downloadURL
+                    ])
+                }
+            }
+        }
+        
+        UserDefaults.standard.set(imageData, forKey: "profileImage")
     }
     
     func removeImage() {
-        self.profileImage = nil
-        // Here you could implement code to remove the image from storage
-        // removeImageFromDocuments()
+        guard let userId = Auth.auth().currentUser?.uid else { return }
+        let imageRef = storage.child("profileImages/\(userId).jpg")
+        
+        imageRef.delete { error in
+            if let error = error {
+                print("Error deleting image: \(error.localizedDescription)")
+                return
+            }
+            
+            self.db.collection("users").document(userId).updateData([
+                "profileImageURL": FieldValue.delete()
+            ])
+            
+            UserDefaults.standard.removeObject(forKey: "profileImage")
+            self.profileImage = nil
+        }
+    }
+    
+    func loadProfileImage() {
+        guard let userId = Auth.auth().currentUser?.uid else { return }
+        
+        if let savedData = UserDefaults.standard.data(forKey: "profileImage"),
+           let uiImage = UIImage(data: savedData) {
+            self.profileImage = uiImage
+            return
+        }
+        
+        db.collection("users").document(userId).getDocument { (document, error) in
+            if let document = document, document.exists,
+               let data = document.data(),
+               let imageURL = data["profileImageURL"] as? String,
+               let url = URL(string: imageURL) {
+                URLSession.shared.dataTask(with: url) { (data, response, error) in
+                    if let data = data, let uiImage = UIImage(data: data) {
+                        DispatchQueue.main.async {
+                            self.profileImage = uiImage
+                            UserDefaults.standard.set(data, forKey: "profileImage")
+                        }
+                    }
+                }.resume()
+            }
+        }
     }
 }
 
@@ -24,14 +91,13 @@ struct ProfileView: View {
     @StateObject private var profileImageManager = ProfileImageManager()
     @State private var isPhotoPickerPresented = false
     @State private var showResetPasswordAlert = false
+    @State private var passwordResetMessage: String?
+    @State private var userData: [String: Any] = [:]
+    @State private var isLoading = true
     @Environment(\.dismiss) var dismiss
-
-    // Static profile details (not editable)
-    private let firstName = "Param"
-    private let lastName = "Patele"
-    private let phoneNumber = "9603839868"
-    private let email = "parampatel1401@gmail.com"
-
+    
+    private let db = Firestore.firestore()
+    
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -84,49 +150,59 @@ struct ProfileView: View {
                             .foregroundColor(.gray)
                             .padding(.bottom, 5)
 
-                        HStack {
-                            Text("First Name")
-                                .font(.system(.body, design: .default))
-                                .foregroundColor(.gray)
-                            Spacer()
-                            Text(firstName)
-                                .font(.system(.body, design: .default))
-                                .foregroundColor(.primary)
-                        }
-                        .padding(.vertical, 8)
+                        if isLoading {
+                            ProgressView()
+                                .frame(maxWidth: .infinity, alignment: .center)
+                        } else {
+                            let fullName = userData["name"] as? String ?? ""
+                            let nameComponents = fullName.split(separator: " ").map { String($0) }
+                            let firstName = nameComponents.first ?? ""
+                            let lastName = nameComponents.dropFirst().joined(separator: " ")
 
-                        HStack {
-                            Text("Last Name")
-                                .font(.system(.body, design: .default))
-                                .foregroundColor(.gray)
-                            Spacer()
-                            Text(lastName)
-                                .font(.system(.body, design: .default))
-                                .foregroundColor(.primary)
-                        }
-                        .padding(.vertical, 8)
+                            HStack {
+                                Text("First Name")
+                                    .font(.system(.body, design: .default))
+                                    .foregroundColor(.gray)
+                                Spacer()
+                                Text(firstName)
+                                    .font(.system(.body, design: .default))
+                                    .foregroundColor(.primary)
+                            }
+                            .padding(.vertical, 8)
 
-                        HStack {
-                            Text("Phone Number")
-                                .font(.system(.body, design: .default))
-                                .foregroundColor(.gray)
-                            Spacer()
-                            Text(phoneNumber)
-                                .font(.system(.body, design: .default))
-                                .foregroundColor(.primary)
-                        }
-                        .padding(.vertical, 8)
+                            HStack {
+                                Text("Last Name")
+                                    .font(.system(.body, design: .default))
+                                    .foregroundColor(.gray)
+                                Spacer()
+                                Text(lastName)
+                                    .font(.system(.body, design: .default))
+                                    .foregroundColor(.primary)
+                            }
+                            .padding(.vertical, 8)
 
-                        HStack {
-                            Text("Email ID")
-                                .font(.system(.body, design: .default))
-                                .foregroundColor(.gray)
-                            Spacer()
-                            Text(email)
-                                .font(.system(.body, design: .default))
-                                .foregroundColor(.primary)
+                            HStack {
+                                Text("Phone Number")
+                                    .font(.system(.body, design: .default))
+                                    .foregroundColor(.gray)
+                                Spacer()
+                                Text(userData["phone"] as? String ?? "")
+                                    .font(.system(.body, design: .default))
+                                    .foregroundColor(.primary)
+                            }
+                            .padding(.vertical, 8)
+
+                            HStack {
+                                Text("Email ID")
+                                    .font(.system(.body, design: .default))
+                                    .foregroundColor(.gray)
+                                Spacer()
+                                Text(userData["email"] as? String ?? "")
+                                    .font(.system(.body, design: .default))
+                                    .foregroundColor(.primary)
+                            }
+                            .padding(.vertical, 8)
                         }
-                        .padding(.vertical, 8)
                     }
                     .padding(.horizontal, 15)
                     .padding(.vertical, 10)
@@ -138,7 +214,7 @@ struct ProfileView: View {
 
                     // Reset Password Button
                     Button(action: {
-                        showResetPasswordAlert = true
+                        sendPasswordResetEmail()
                     }) {
                         Text("Reset Password")
                             .font(.system(.body, design: .default, weight: .medium))
@@ -153,7 +229,7 @@ struct ProfileView: View {
                     .alert(isPresented: $showResetPasswordAlert) {
                         Alert(
                             title: Text("Password Reset"),
-                            message: Text("Password reset email sent to \(email)"),
+                            message: Text(passwordResetMessage ?? "An error occurred"),
                             dismissButton: .default(Text("OK"))
                         )
                     }
@@ -187,7 +263,6 @@ struct ProfileView: View {
             .background(Color(.systemBackground))
             .navigationTitle("Maintenance Profile")
             .navigationBarTitleDisplayMode(.inline)
-            .navigationBarBackButtonHidden(true)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Done") {
@@ -199,8 +274,47 @@ struct ProfileView: View {
             .sheet(isPresented: $isPhotoPickerPresented) {
                 ProfilePhotoPicker(profileImageManager: profileImageManager, isPresented: $isPhotoPickerPresented)
             }
+            .onAppear {
+                fetchUserData()
+                profileImageManager.loadProfileImage()
+            }
         }
         .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+    }
+    
+    private func fetchUserData() {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            isLoading = false
+            return
+        }
+        
+        db.collection("users").document(userId).getDocument { (document, error) in
+            if let document = document, document.exists, let data = document.data() {
+                self.userData = data
+                self.isLoading = false
+            } else {
+                print("Error fetching user data: \(error?.localizedDescription ?? "Unknown error")")
+                self.isLoading = false
+            }
+        }
+    }
+    
+    private func sendPasswordResetEmail() {
+        guard let email = userData["email"] as? String else {
+            passwordResetMessage = "Email not found"
+            showResetPasswordAlert = true
+            return
+        }
+        
+        Auth.auth().sendPasswordReset(withEmail: email) { error in
+            if let error = error {
+                passwordResetMessage = "Failed to send reset email: \(error.localizedDescription)"
+            } else {
+                passwordResetMessage = "Password reset email sent to \(email)"
+            }
+            showResetPasswordAlert = true
+        }
     }
 }
 
