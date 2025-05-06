@@ -95,9 +95,9 @@ struct HomeView: View {
                     // Assigned Work Section
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            Text("Assigned Work")
-                                .font(.system(.title3, design: .rounded, weight: .semibold))
-                                .foregroundStyle(.primary)
+                        Text("Assigned Work")
+                            .font(.system(.title3, design: .rounded, weight: .semibold))
+                            .foregroundStyle(.primary)
                             
                             Spacer()
                             
@@ -130,7 +130,7 @@ struct HomeView: View {
                             }
                             .accessibilityLabel("Filter tasks")
                         }
-                        .padding(.horizontal, 16)
+                            .padding(.horizontal, 16)
                         
                         if isLoading {
                             ProgressView()
@@ -161,30 +161,30 @@ struct HomeView: View {
                         } else {
                             ForEach($maintenanceTasks, id: \.id) { $task in
                                 if filteredTasks.contains(where: { $0.id == task.id }) {
-                                    WorkOrderCard(
-                                        task: $task,
-                                        vehicle: vehicles[task.vehicleId] ?? Self.fallbackVehicle,
-                                        onStatusChange: { newStatus in
-                                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                                task.status = newStatus
-                                                if newStatus == .completed {
-                                                    if let index = maintenanceTasks.firstIndex(where: { $0.id == task.id }) {
-                                                        maintenanceTasks.remove(at: index)
-                                                        updateTaskStatusInFirestore(taskId: task.id, newStatus: newStatus)
-                                                    }
-                                                } else {
+                                WorkOrderCard(
+                                    task: $task,
+                                    vehicle: vehicles[task.vehicleId] ?? Self.fallbackVehicle,
+                                    onStatusChange: { newStatus in
+                                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                            task.status = newStatus
+                                            if newStatus == .completed {
+                                                if let index = maintenanceTasks.firstIndex(where: { $0.id == task.id }) {
+                                                    maintenanceTasks.remove(at: index)
                                                     updateTaskStatusInFirestore(taskId: task.id, newStatus: newStatus)
                                                 }
+                                            } else {
+                                                updateTaskStatusInFirestore(taskId: task.id, newStatus: newStatus)
                                             }
                                         }
-                                    )
-                                    .padding(.horizontal, 16)
-                                    .opacity(showCardAnimation ? 1 : 0)
-                                    .offset(y: showCardAnimation ? 0 : 20)
-                                    .animation(
-                                        .easeOut(duration: 0.5).delay(Double(maintenanceTasks.firstIndex(where: { $0.id == task.id }) ?? 0) * 0.1),
-                                        value: showCardAnimation
-                                    )
+                                    }
+                                )
+                                .padding(.horizontal, 16)
+                                .opacity(showCardAnimation ? 1 : 0)
+                                .offset(y: showCardAnimation ? 0 : 20)
+                                .animation(
+                                    .easeOut(duration: 0.5).delay(Double(maintenanceTasks.firstIndex(where: { $0.id == task.id }) ?? 0) * 0.1),
+                                    value: showCardAnimation
+                                )
                                 }
                             }
                         }
@@ -524,8 +524,8 @@ struct WorkOrderCard: View {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Task #\(task.id.prefix(8))")
-                        .font(.system(.headline, design: .rounded, weight: .semibold))
-                        .foregroundStyle(.primary)
+                    .font(.system(.headline, design: .rounded, weight: .semibold))
+                    .foregroundStyle(.primary)
                     
                     Text("\(vehicle.make) \(vehicle.model)")
                         .font(.system(.subheadline, design: .rounded))
@@ -584,17 +584,17 @@ struct WorkOrderCard: View {
             }
             
             // Status Badge
-            HStack(spacing: 6) {
-                Image(systemName: statusIcon(task.status))
-                    .imageScale(.small)
-                Text(task.status.rawValue.capitalized)
-                    .font(.system(.subheadline, design: .rounded, weight: .medium))
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+                HStack(spacing: 6) {
+                    Image(systemName: statusIcon(task.status))
+                        .imageScale(.small)
+                    Text(task.status.rawValue.capitalized)
+                        .font(.system(.subheadline, design: .rounded, weight: .medium))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
             .background(statusColor(task.status).opacity(0.15))
             .foregroundStyle(statusColor(task.status))
-            .clipShape(Capsule())
+                .clipShape(Capsule())
             
             // Action Slider
             GeometryReader { geometry in
