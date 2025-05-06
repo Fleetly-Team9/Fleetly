@@ -1,6 +1,7 @@
 import SwiftUI
 import FirebaseAuth
 import FirebaseFirestore
+import UserNotifications
 
 struct HomeView: View {
     @State private var maintenanceTasks: [MaintenanceTask]
@@ -9,8 +10,37 @@ struct HomeView: View {
     @State private var showCardAnimation = false
     @State private var isLoading = false
     @State private var errorMessage: String?
+    @State private var lastTaskId: String?
+    @State private var selectedFilter: TaskFilter = .all // State for filter
     
     private let db = Firestore.firestore()
+    
+    // Enum for filter options
+    enum TaskFilter: String, CaseIterable, Identifiable {
+        case all = "All"
+        case pending = "Pending"
+        case inProgress = "In Progress"
+        case completed = "Completed"
+        case cancelled = "Cancelled"
+        
+        var id: String { self.rawValue }
+    }
+    
+    // Filtered tasks based on selected filter
+    var filteredTasks: [MaintenanceTask] {
+        switch selectedFilter {
+        case .all:
+            return maintenanceTasks
+        case .pending:
+            return maintenanceTasks.filter { $0.status == .pending }
+        case .inProgress:
+            return maintenanceTasks.filter { $0.status == .inProgress }
+        case .completed:
+            return maintenanceTasks.filter { $0.status == .completed }
+        case .cancelled:
+            return maintenanceTasks.filter { $0.status == .cancelled }
+        }
+    }
     
     // Fallback Vehicle to simplify ForEach expression
     private static let fallbackVehicle = Vehicle(
@@ -55,7 +85,7 @@ struct HomeView: View {
                             StatCardGridView(
                                 icon: "wrench.and.screwdriver.fill",
                                 title: "Pending Tasks",
-                                value: "\(maintenanceTasks.count)",
+                                value: "\(maintenanceTasks.filter { $0.status == .pending }.count)",
                                 color: .orange
                             )
                         }
@@ -64,10 +94,43 @@ struct HomeView: View {
                     
                     // Assigned Work Section
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Assigned Work")
-                            .font(.system(.title3, design: .rounded, weight: .semibold))
-                            .foregroundStyle(.primary)
-                            .padding(.horizontal, 16)
+                        HStack {
+                            Text("Assigned Work")
+                                .font(.system(.title3, design: .rounded, weight: .semibold))
+                                .foregroundStyle(.primary)
+                            
+                            Spacer()
+                            
+                            // Filter Icon with Menu
+                            Menu {
+                                ForEach(TaskFilter.allCases) { filter in
+                                    Button(action: {
+                                        selectedFilter = filter
+                                    }) {
+                                        HStack {
+                                            Text(filter.rawValue)
+                                            if selectedFilter == filter {
+                                                Image(systemName: "checkmark")
+                                                    .foregroundStyle(.blue)
+                                            }
+                                        }
+                                    }
+                                }
+                            } label: {
+                                Image(systemName: "line.3.horizontal.decrease.circle")
+                                    .font(.system(size: 20, weight: .regular))
+                                    .foregroundStyle(.blue)
+                                    .padding(.vertical, 4)
+                                    .padding(.horizontal, 8)
+                                    .background(
+                                        Circle()
+                                            .fill(Color.blue.opacity(0.1))
+                                            .frame(width: 32, height: 32)
+                                    )
+                            }
+                            .accessibilityLabel("Filter tasks")
+                        }
+                        .padding(.horizontal, 16)
                         
                         if isLoading {
                             ProgressView()
@@ -79,10 +142,10 @@ struct HomeView: View {
                                 .foregroundStyle(.red)
                                 .padding()
                                 .frame(maxWidth: .infinity)
-                        } else if maintenanceTasks.isEmpty {
+                        } else if filteredTasks.isEmpty {
                             VStack {
                                 Spacer()
-                                Text("No Assignments")
+                                Text(selectedFilter == .all ? "No Assignments" : "No \(selectedFilter.rawValue) Tasks")
                                     .font(.system(.title3, design: .rounded, weight: .medium))
                                     .foregroundStyle(.secondary)
                                     .padding()
@@ -97,30 +160,32 @@ struct HomeView: View {
                             }
                         } else {
                             ForEach($maintenanceTasks, id: \.id) { $task in
-                                WorkOrderCard(
-                                    task: $task,
-                                    vehicle: vehicles[task.vehicleId] ?? Self.fallbackVehicle,
-                                    onStatusChange: { newStatus in
-                                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                            task.status = newStatus
-                                            if newStatus == .completed {
-                                                if let index = maintenanceTasks.firstIndex(where: { $0.id == task.id }) {
-                                                    maintenanceTasks.remove(at: index)
+                                if filteredTasks.contains(where: { $0.id == task.id }) {
+                                    WorkOrderCard(
+                                        task: $task,
+                                        vehicle: vehicles[task.vehicleId] ?? Self.fallbackVehicle,
+                                        onStatusChange: { newStatus in
+                                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                                task.status = newStatus
+                                                if newStatus == .completed {
+                                                    if let index = maintenanceTasks.firstIndex(where: { $0.id == task.id }) {
+                                                        maintenanceTasks.remove(at: index)
+                                                        updateTaskStatusInFirestore(taskId: task.id, newStatus: newStatus)
+                                                    }
+                                                } else {
                                                     updateTaskStatusInFirestore(taskId: task.id, newStatus: newStatus)
                                                 }
-                                            } else {
-                                                updateTaskStatusInFirestore(taskId: task.id, newStatus: newStatus)
                                             }
                                         }
-                                    }
-                                )
-                                .padding(.horizontal, 16)
-                                .opacity(showCardAnimation ? 1 : 0)
-                                .offset(y: showCardAnimation ? 0 : 20)
-                                .animation(
-                                    .easeOut(duration: 0.5).delay(Double(maintenanceTasks.firstIndex(where: { $0.id == task.id }) ?? 0) * 0.1),
-                                    value: showCardAnimation
-                                )
+                                    )
+                                    .padding(.horizontal, 16)
+                                    .opacity(showCardAnimation ? 1 : 0)
+                                    .offset(y: showCardAnimation ? 0 : 20)
+                                    .animation(
+                                        .easeOut(duration: 0.5).delay(Double(maintenanceTasks.firstIndex(where: { $0.id == task.id }) ?? 0) * 0.1),
+                                        value: showCardAnimation
+                                    )
+                                }
                             }
                         }
                     }
@@ -162,6 +227,8 @@ struct HomeView: View {
                     fetchUserName()
                     fetchTasks()
                 }
+                requestNotificationPermission()
+                setupTaskListener()
             }
         }
     }
@@ -323,6 +390,77 @@ struct HomeView: View {
             }
         }
     }
+    
+    private func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+            if granted {
+                print("Notification permission granted")
+            } else if let error = error {
+                print("Error requesting notification permission: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    private func setupTaskListener() {
+        guard let userId = Auth.auth().currentUser?.uid else { return }
+        
+        db.collection("maintenance_tasks")
+            .whereField("assignedToId", isEqualTo: userId)
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    print("Error listening to tasks: \(error.localizedDescription)")
+                    return
+                }
+                
+                guard let documents = snapshot?.documents else { return }
+                
+                let newTasks = documents.compactMap { doc -> MaintenanceTask? in
+                    try? doc.data(as: MaintenanceTask.self)
+                }
+                
+                // Check for new tasks
+                if let lastTaskId = lastTaskId {
+                    let newAssignedTasks = newTasks.filter { task in
+                        task.id != lastTaskId && task.status == .pending
+                    }
+                    
+                    for task in newAssignedTasks {
+                        scheduleNotification(for: task)
+                    }
+                }
+                
+                // Update lastTaskId with the most recent task
+                if let mostRecentTask = newTasks.max(by: { $0.createdAt < $1.createdAt }) {
+                    lastTaskId = mostRecentTask.id
+                }
+                
+                // Update the tasks list
+                maintenanceTasks = newTasks
+                
+                // Fetch vehicle details for new tasks
+                fetchVehicles(for: newTasks)
+            }
+    }
+    
+    private func scheduleNotification(for task: MaintenanceTask) {
+        let content = UNMutableNotificationContent()
+        content.title = "New Maintenance Task Assigned"
+        content.body = "Task: \(task.issue)\nPriority: \(task.priority)\nDue: \(task.completionDate)"
+        content.sound = .default
+        
+        // Create a unique identifier for this notification
+        let identifier = "task-\(task.id)"
+        
+        // Create the request
+        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
+        
+        // Add the request to the notification center
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("Error scheduling notification: \(error.localizedDescription)")
+            }
+        }
+    }
 }
 
 struct OverviewStat: View {
@@ -382,104 +520,120 @@ struct WorkOrderCard: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Header
-            HStack {
-                Text("Task \(task.id)")
-                    .font(.system(.headline, design: .rounded, weight: .semibold))
-                    .foregroundStyle(.primary)
+            // Header with Task ID and Vehicle Info
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Task #\(task.id.prefix(8))")
+                        .font(.system(.headline, design: .rounded, weight: .semibold))
+                        .foregroundStyle(.primary)
+                    
+                    Text("\(vehicle.make) \(vehicle.model)")
+                        .font(.system(.subheadline, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+                
                 Spacer()
-                Text("\(vehicle.make) \(vehicle.model)")
-                    .font(.system(.subheadline, design: .rounded, weight: .medium))
-                    .foregroundStyle(.secondary)
+                
+                // Priority Badge
+                HStack(spacing: 4) {
+                    Image(systemName: priorityIcon(task.priority))
+                        .imageScale(.small)
+                    Text(task.priority.capitalized)
+                        .font(.system(.caption, design: .rounded, weight: .medium))
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(priorityColor(task.priority).opacity(0.15))
+                .foregroundStyle(priorityColor(task.priority))
+                .clipShape(Capsule())
             }
             
             Divider()
                 .background(Color.secondary.opacity(0.2))
             
-            // Body
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 10) {
+            // Task Details
+            VStack(alignment: .leading, spacing: 12) {
+                // Issue Description
+                HStack(alignment: .top, spacing: 12) {
                     Image(systemName: "wrench.and.screwdriver.fill")
+                        .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(.blue)
-                        .imageScale(.medium)
+                        .frame(width: 24, height: 24)
+                        .background(Color.blue.opacity(0.1))
+                        .clipShape(Circle())
+                    
                     Text(task.issue)
                         .font(.system(.body, design: .rounded))
                         .foregroundStyle(.primary)
+                        .lineLimit(2)
                 }
-                HStack(spacing: 10) {
-                    Image(systemName: "clock")
+                
+                // Due Date
+                HStack(spacing: 12) {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(.secondary)
-                        .imageScale(.medium)
+                        .frame(width: 24, height: 24)
+                        .background(Color.secondary.opacity(0.1))
+                        .clipShape(Circle())
+                    
                     Text("Due: \(task.completionDate)")
                         .font(.system(.subheadline, design: .rounded))
                         .foregroundStyle(.secondary)
                 }
             }
             
-            // Status and Priority
-            HStack(spacing: 12) {
-                HStack(spacing: 6) {
-                    Image(systemName: statusIcon(task.status))
-                        .foregroundStyle(statusColor(task.status))
-                        .imageScale(.small)
-                    Text(task.status.rawValue.capitalized)
-                        .font(.system(.subheadline, design: .rounded, weight: .medium))
-                        .foregroundStyle(statusColor(task.status))
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(statusColor(task.status).opacity(0.2))
-                .clipShape(Capsule())
-                
-                HStack(spacing: 6) {
-                    Image(systemName: priorityIcon(task.priority))
-                        .foregroundStyle(priorityColor(task.priority))
-                        .imageScale(.small)
-                    Text(task.priority.capitalized)
-                        .font(.system(.subheadline, design: .rounded, weight: .medium))
-                        .foregroundStyle(priorityColor(task.priority))
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(priorityColor(task.priority).opacity(0.2))
-                .clipShape(Capsule())
+            // Status Badge
+            HStack(spacing: 6) {
+                Image(systemName: statusIcon(task.status))
+                    .imageScale(.small)
+                Text(task.status.rawValue.capitalized)
+                    .font(.system(.subheadline, design: .rounded, weight: .medium))
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(statusColor(task.status).opacity(0.15))
+            .foregroundStyle(statusColor(task.status))
+            .clipShape(Capsule())
             
-            // Action (All Swipable)
+            // Action Slider
             GeometryReader { geometry in
-                VStack(spacing: 12) {
+                VStack(spacing: 8) {
                     Text(swipeActionText(task.status))
-                        .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                        .font(.system(.subheadline, design: .rounded, weight: .medium))
                         .foregroundStyle(swipeActionColor(task.status))
                     
                     ZStack(alignment: .leading) {
+                        // Background Track
                         RoundedRectangle(cornerRadius: 12)
                             .fill(Color(.systemGray5))
-                            .frame(height: 50)
+                            .frame(height: 56)
                         
+                        // Progress Track
                         RoundedRectangle(cornerRadius: 12)
                             .fill(swipeActionColor(task.status).opacity(showAnimation ? 0.5 : 0.3))
-                            .frame(width: max(0, dragOffset), height: 50)
+                            .frame(width: max(0, dragOffset), height: 56)
                         
                         // Slider Knob
                         ZStack {
                             Circle()
                                 .fill(.white)
-                                .frame(width: 42, height: 42)
-                                .shadow(radius: 2)
+                                .frame(width: 48, height: 48)
+                                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                            
                             Image(systemName: swipeActionIcon(task.status))
+                                .font(.system(size: 20, weight: .medium))
                                 .foregroundStyle(showAnimation ? swipeActionColor(task.status) : .gray)
-                                .imageScale(.medium)
                                 .scaleEffect(showAnimation ? 1.2 : 1.0)
                         }
                         .offset(x: dragOffset)
                         .gesture(
                             DragGesture(minimumDistance: 0)
                                 .onChanged { value in
-                                    let maxWidth = geometry.size.width - 42 // Account for knob width
+                                    let maxWidth = geometry.size.width - 48
                                     dragOffset = min(max(value.translation.width, 0), maxWidth)
                                     showAnimation = dragOffset >= maxWidth * 0.6
-                                    #if !targetEnvironment(simulator) // Disable haptic feedback in preview
+                                    #if !targetEnvironment(simulator)
                                     if showAnimation {
                                         let impact = UIImpactFeedbackGenerator(style: .medium)
                                         impact.impactOccurred()
@@ -487,11 +641,11 @@ struct WorkOrderCard: View {
                                     #endif
                                 }
                                 .onEnded { value in
-                                    let maxWidth = geometry.size.width - 42
+                                    let maxWidth = geometry.size.width - 48
                                     withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                                         if dragOffset >= maxWidth * 0.6 {
                                             handleSwipeAction()
-                                            #if !targetEnvironment(simulator) // Disable haptic feedback in preview
+                                            #if !targetEnvironment(simulator)
                                             let impact = UIImpactFeedbackGenerator(style: .heavy)
                                             impact.impactOccurred()
                                             #endif
@@ -507,24 +661,17 @@ struct WorkOrderCard: View {
                     .accessibilityLabel("\(swipeActionText(task.status)) for task \(task.id)")
                 }
             }
-            .frame(height: 86) // Fixed height to accommodate the slider and text
-            .sheet(isPresented: $showingCompletionView) {
-                MaintenanceCompletionView(task: task)
-            }
+            .frame(height: 100)
         }
-        .padding(25)
+        .padding(20)
         .background(
-            RoundedRectangle(cornerRadius: 30)
-                .fill(Color(.systemGray6))
-                .overlay(
-                    LinearGradient(
-                        colors: [.gray.opacity(0.03), .gray.opacity(0.08)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .shadow(radius: 4, y: 2)
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.systemBackground))
+                .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
         )
+        .sheet(isPresented: $showingCompletionView) {
+            MaintenanceCompletionView(task: task)
+        }
     }
     
     // Helper functions for status and priority
