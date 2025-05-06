@@ -3,9 +3,9 @@ import FirebaseAuth
 import FirebaseFirestore
 
 struct HomeView: View {
-    @State private var maintenanceTasks: [MaintenanceTask] = []
-    @State private var vehicles: [String: Vehicle] = [:] // Maps vehicleId to Vehicle
-    @State private var userName: String = "User"
+    @State private var maintenanceTasks: [MaintenanceTask]
+    @State private var vehicles: [String: Vehicle]
+    @State private var userName: String
     @State private var showCardAnimation = false
     @State private var isLoading = false
     @State private var errorMessage: String?
@@ -27,49 +27,37 @@ struct HomeView: View {
         cargoCapacity: nil
     )
     
+    // Initializer to allow setting initial state for previews
+    init(
+        maintenanceTasks: [MaintenanceTask] = [],
+        vehicles: [String: Vehicle] = [:],
+        userName: String = "User"
+    ) {
+        self._maintenanceTasks = State(initialValue: maintenanceTasks)
+        self._vehicles = State(initialValue: vehicles)
+        self._userName = State(initialValue: userName)
+    }
+    
     var body: some View {
-        NavigationStack {
+        NavigationView {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    // Header
-                    HStack {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Welcome, \(userName)!")
-                                .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                                .foregroundStyle(.primary)
-                            Text("Your tasks for today")
-                                .font(.system(.subheadline, design: .rounded, weight: .medium))
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        NavigationLink(destination: ProfileView()) {
-                            Image(systemName: "person.circle.fill")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 40, height: 40)
-                                .foregroundStyle(.white)
-                                .background(
-                                    Circle()
-                                        .fill(.blue)
-                                        .frame(width: 44, height: 44)
-                                        .shadow(radius: 4)
-                                )
-                        }
-                        .accessibilityLabel("Profile")
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 12)
-                    
                     // Overview Section
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Overview")
-                            .font(.system(.title3, design: .rounded, weight: .semibold))
-                            .foregroundStyle(.primary)
-                            .padding(.horizontal, 16)
-                        
-                        HStack(spacing: 12) {
-                            OverviewStat(icon: "car.fill", title: "Total Vehicles", value: "19", color: Color.blue)
-                            OverviewStat(icon: "wrench.and.screwdriver.fill", title: "Pending  Tasks", value: "\(maintenanceTasks.count)", color: Color.orange)
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                            StatCardGridView(
+                                icon: "car.fill",
+                                title: "Total Vehicles",
+                                value: "19",
+                                color: .blue
+                            )
+                            
+                            StatCardGridView(
+                                icon: "wrench.and.screwdriver.fill",
+                                title: "Pending Tasks",
+                                value: "\(maintenanceTasks.count)",
+                                color: .orange
+                            )
                         }
                         .padding(.horizontal, 16)
                     }
@@ -100,7 +88,7 @@ struct HomeView: View {
                                     .padding()
                                     .background(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .fill(.background)
+                                            .fill(Color.white)
                                             .overlay(.ultraThinMaterial)
                                             .shadow(radius: 2)
                                     )
@@ -118,9 +106,11 @@ struct HomeView: View {
                                             if newStatus == .completed {
                                                 if let index = maintenanceTasks.firstIndex(where: { $0.id == task.id }) {
                                                     maintenanceTasks.remove(at: index)
+                                                    updateTaskStatusInFirestore(taskId: task.id, newStatus: newStatus)
                                                 }
+                                            } else {
+                                                updateTaskStatusInFirestore(taskId: task.id, newStatus: newStatus)
                                             }
-                                            updateTaskStatusInFirestore(taskId: task.id, newStatus: newStatus)
                                         }
                                     }
                                 )
@@ -137,9 +127,27 @@ struct HomeView: View {
                 }
                 .padding(.vertical, 16)
             }
-            .background(Color(.systemBackground).ignoresSafeArea())
-            .navigationTitle("")
-            .navigationBarHidden(true)
+            .background(Color(.systemBackground))
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("Hi, Personel")
+                        .font(.headline.weight(.bold)) // Matches iOS inline title style
+                        .foregroundStyle(.primary)
+                        .accessibilityAddTraits(.isHeader)
+                }
+                
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink(destination: ProfileView()) {
+                        Image(systemName: "person.crop.circle.fill")
+                            .font(.system(size: 24, weight: .regular, design: .rounded))
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(.blue)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Profile")
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline) // Inline title mode to match screenshot
             .onAppear {
                 withAnimation {
                     showCardAnimation = true
@@ -297,37 +305,14 @@ struct HomeView: View {
     }
     
     private func updateTaskStatusInFirestore(taskId: String, newStatus: MaintenanceTask.TaskStatus) {
-        let taskRef = db.collection("maintenance_tasks").document(taskId)
-        
-        var updateData: [String: Any] = [
+        db.collection("maintenance_tasks").document(taskId).updateData([
             "status": newStatus.rawValue
-        ]
-        
-        if newStatus == .completed {
-            updateData["completedAt"] = FieldValue.serverTimestamp()
-        }
-        
-        taskRef.updateData(updateData) { error in
+        ]) { error in
             if let error = error {
-                print("Error updating task status: \(error.localizedDescription)")
-                errorMessage = "Failed to update task status"
+                print("UpdateTaskStatus: Error updating task \(taskId): \(error.localizedDescription)")
+            } else {
+                print("UpdateTaskStatus: Successfully updated task \(taskId) to status \(newStatus.rawValue)")
             }
-        }
-    }
-    
-    private func storeMaintenanceCosts(taskId: String, cost: Inventory.MaintenanceCost) {
-        let costsRef = db.collection("maintenance_tasks").document(taskId).collection("costs")
-        
-        do {
-            try costsRef.document(cost.id).setData(from: cost) { error in
-                if let error = error {
-                    print("Error storing maintenance costs: \(error.localizedDescription)")
-                    errorMessage = "Failed to store maintenance costs"
-                }
-            }
-        } catch {
-            print("Error encoding maintenance cost: \(error.localizedDescription)")
-            errorMessage = "Failed to encode maintenance costs"
         }
     }
 }
@@ -382,7 +367,10 @@ struct WorkOrderCard: View {
     
     @State private var dragOffset: CGFloat = 0
     @State private var showAnimation: Bool = false
-    @State private var showingCompletionView = false
+    @State private var showingCompletionView: Bool = false
+    @State private var errorMessage: String?
+    
+    private let db = Firestore.firestore()
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -483,18 +471,22 @@ struct WorkOrderCard: View {
                                     let maxWidth = geometry.size.width - 42 // Account for knob width
                                     dragOffset = min(max(value.translation.width, 0), maxWidth)
                                     showAnimation = dragOffset >= maxWidth * 0.6
+                                    #if !targetEnvironment(simulator) // Disable haptic feedback in preview
                                     if showAnimation {
                                         let impact = UIImpactFeedbackGenerator(style: .medium)
                                         impact.impactOccurred()
                                     }
+                                    #endif
                                 }
                                 .onEnded { value in
                                     let maxWidth = geometry.size.width - 42
                                     withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                                         if dragOffset >= maxWidth * 0.6 {
                                             handleSwipeAction()
+                                            #if !targetEnvironment(simulator) // Disable haptic feedback in preview
                                             let impact = UIImpactFeedbackGenerator(style: .heavy)
                                             impact.impactOccurred()
+                                            #endif
                                         }
                                         dragOffset = 0
                                         showAnimation = false
@@ -508,11 +500,14 @@ struct WorkOrderCard: View {
                 }
             }
             .frame(height: 86) // Fixed height to accommodate the slider and text
+            .sheet(isPresented: $showingCompletionView) {
+                MaintenanceCompletionView(task: task)
+            }
         }
-        .padding(16)
+        .padding(25)
         .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.background)
+            RoundedRectangle(cornerRadius: 30)
+                .fill(Color(.systemGray6))
                 .overlay(
                     LinearGradient(
                         colors: [.gray.opacity(0.03), .gray.opacity(0.08)],
@@ -522,9 +517,6 @@ struct WorkOrderCard: View {
                 )
                 .shadow(radius: 4, y: 2)
         )
-        .sheet(isPresented: $showingCompletionView) {
-            MaintenanceCompletionView(task: task)
-        }
     }
     
     // Helper functions for status and priority
@@ -597,15 +589,28 @@ struct WorkOrderCard: View {
         case .pending:
             onStatusChange(.inProgress)
         case .inProgress:
-            showingCompletionView = true
+            showingCompletionView = true // Show the sheet before marking as completed
         case .completed, .cancelled:
             onStatusChange(.completed) // Adjust as needed for your workflow
         }
     }
-}
-
-struct HomeView_Previews: PreviewProvider {
-    static var previews: some View {
-        HomeView()
+    
+    private func storeMaintenanceCosts(taskId: String, cost: Inventory.MaintenanceCost) {
+        let costsRef = db.collection("maintenance_tasks").document(taskId).collection("costs")
+        
+        do {
+            try costsRef.document(cost.id).setData(from: cost) { error in
+                if let error = error {
+                    print("Error storing maintenance costs: \(error.localizedDescription)")
+                    errorMessage = "Failed to store maintenance costs"
+                } else {
+                    onStatusChange(.completed) // Mark as completed after saving costs
+                }
+            }
+        } catch {
+            print("Error encoding maintenance cost: \(error.localizedDescription)")
+            errorMessage = "Failed to encode maintenance costs"
+        }
     }
 }
+
