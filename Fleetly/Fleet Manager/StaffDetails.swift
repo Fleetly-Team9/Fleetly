@@ -1169,7 +1169,7 @@ struct UserFormView: View {
                                 showingImagePicker = true
                             } label: {
                                 Label(
-                                    aadharImage != nil ? "Change Aadhar" : "Upload Aadhar",
+                                    aadharImage != nil ? "Change Aadhar" : "Upload",
                                     systemImage: "photo"
                                 )
                                 .frame(maxWidth: .infinity)
@@ -1212,7 +1212,7 @@ struct UserFormView: View {
                                     showingImagePicker = true
                                 } label: {
                                     Label(
-                                        licenseImage != nil ? "Change License" : "Upload License",
+                                        licenseImage != nil ? "Change License" : "Upload",
                                         systemImage: "photo"
                                     )
                                     .frame(maxWidth: .infinity)

@@ -130,14 +130,22 @@ struct HomeView: View {
             .background(Color(.systemBackground))
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text("Hi, Personel")
+                    Text("Hi, \(userName)")
                         .font(.headline.weight(.bold)) // Matches iOS inline title style
                         .foregroundStyle(.primary)
                         .accessibilityAddTraits(.isHeader)
                 }
                 
                 ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink(destination: ProfileView()) {
+                    Button(action: {
+                        // Present ProfileView as a sheet
+                        let profileView = ProfileView()
+                        let hostingController = UIHostingController(rootView: profileView)
+                        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                           let window = windowScene.windows.first {
+                            window.rootViewController?.present(hostingController, animated: true)
+                        }
+                    }) {
                         Image(systemName: "person.crop.circle.fill")
                             .font(.system(size: 24, weight: .regular, design: .rounded))
                             .symbolRenderingMode(.hierarchical)
