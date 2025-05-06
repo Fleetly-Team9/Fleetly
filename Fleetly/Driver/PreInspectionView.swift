@@ -215,8 +215,10 @@ struct PreInspectionView: View {
                             selectedImages.removeAll()
                             for item in newItems {
                                 if let data = try? await item.loadTransferable(type: Data.self),
-                                   let uiImage = UIImage(data: data) {
-                                    selectedImages.append(uiImage)
+                                   let uiImage = UIImage(data: data),
+                                   let compressedData = FirebaseManager.shared.compressImage(uiImage),
+                                   let compressedImage = UIImage(data: compressedData) {
+                                    selectedImages.append(compressedImage)
                                 }
                             }
                             isUploadingImages = false

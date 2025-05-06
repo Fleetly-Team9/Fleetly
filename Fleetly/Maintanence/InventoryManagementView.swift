@@ -94,8 +94,8 @@ struct InventoryManagementView: View {
                                 selectedItemId = nil
                             }
                         },
-                        onUpdate: { newUnits in
-                            viewModel.updateItemUnits(itemId: item.id, newUnits: newUnits)
+                        onUpdate: { newUnits, newPrice in
+                            viewModel.updateItemUnits(itemId: item.id, newUnits: newUnits, newPrice: newPrice)
                         }
                     )
                     .frame(width: 250, height: 200)
@@ -115,8 +115,8 @@ struct InventoryManagementView: View {
 
                     AddItemSheet(
                         isPresented: $isAddItemSheetPresented,
-                        onAdd: { name, units in
-                            viewModel.addItem(name: name, units: units)
+                        onAdd: { name, units, price in
+                            viewModel.addItem(name: name, units: units, price: price)
                         }
                     )
                     .frame(width: 300, height: 250)
@@ -157,8 +157,8 @@ class InventoryViewModel: ObservableObject {
         }
     }
     
-    func addItem(name: String, units: Int) {
-        let newItem = Inventory.Item(name: name, units: units)
+    func addItem(name: String, units: Int, price: Double) {
+        let newItem = Inventory.Item(name: name, units: units, price: price)
         InventoryManager.shared.addInventoryItem(newItem) { [weak self] result in
             DispatchQueue.main.async {
                 switch result {
@@ -171,11 +171,12 @@ class InventoryViewModel: ObservableObject {
         }
     }
     
-    func updateItemUnits(itemId: String, newUnits: Int) {
+    func updateItemUnits(itemId: String, newUnits: Int, newPrice: Double) {
         guard let item = items.first(where: { $0.id == itemId }) else { return }
         
         var updatedItem = item
         updatedItem.units = newUnits
+        updatedItem.price = newPrice
         
         InventoryManager.shared.updateInventoryItem(updatedItem) { [weak self] result in
             DispatchQueue.main.async {
@@ -209,6 +210,15 @@ struct InventoryRow: View {
                         .font(.system(.subheadline, design: .rounded))
                         .foregroundStyle(item.units <= item.minUnits ? .red : .secondary)
                 }
+                
+                HStack(spacing: 8) {
+                    Image(systemName: "dollarsign.circle.fill")
+                        .foregroundStyle(.secondary)
+                        .imageScale(.small)
+                    Text("Price: $\(String(format: "%.2f", item.price))")
+                        .font(.system(.subheadline, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
             }
             Spacer()
             Button(action: {
@@ -240,19 +250,21 @@ struct InventoryRow: View {
 struct UpdateSheet: View {
     let item: Inventory.Item
     let onClose: () -> Void
-    let onUpdate: (Int) -> Void
+    let onUpdate: (Int, Double) -> Void
     @State private var tempUnits: Int
+    @State private var tempPrice: String
 
-    init(item: Inventory.Item, onClose: @escaping () -> Void, onUpdate: @escaping (Int) -> Void) {
+    init(item: Inventory.Item, onClose: @escaping () -> Void, onUpdate: @escaping (Int, Double) -> Void) {
         self.item = item
         self.onClose = onClose
         self.onUpdate = onUpdate
         self._tempUnits = State(initialValue: item.units)
+        self._tempPrice = State(initialValue: String(format: "%.2f", item.price))
     }
 
     var body: some View {
         VStack(spacing: 5) {
-            Text("Update Units")
+            Text("Update Item")
                 .font(.system(.title3, design: .rounded, weight: .semibold))
                 .foregroundStyle(.primary)
             
@@ -260,29 +272,47 @@ struct UpdateSheet: View {
                 .font(.system(.subheadline, design: .rounded))
                 .foregroundStyle(.secondary)
             
-            HStack(spacing: 32) {
-                Button(action: {
-                    tempUnits = max(0, tempUnits - 1)
-                }) {
-                    Image(systemName: "minus.circle.fill")
-                        .foregroundStyle(tempUnits > 0 ? .blue : .gray)
-                        .font(.system(size: 32))
+            VStack(spacing: 16) {
+                HStack(spacing: 32) {
+                    Button(action: {
+                        tempUnits = max(0, tempUnits - 1)
+                    }) {
+                        Image(systemName: "minus.circle.fill")
+                            .foregroundStyle(tempUnits > 0 ? .blue : .gray)
+                            .font(.system(size: 32))
+                    }
+                    .disabled(tempUnits <= 0)
+                    
+                    Text("\(tempUnits)")
+                        .font(.system(.title2, design: .rounded, weight: .bold))
+                        .foregroundStyle(.primary)
+                        .minimumScaleFactor(0.5)
+                        .lineLimit(1)
+                    
+                    Button(action: {
+                        tempUnits += 1
+                    }) {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundStyle(.blue)
+                            .font(.system(size: 32))
+                    }
                 }
-                .disabled(tempUnits <= 0)
                 
-                Text("\(tempUnits)")
-                    .font(.system(.title2, design: .rounded, weight: .bold))
-                    .foregroundStyle(.primary)
-                    .minimumScaleFactor(0.5)
-                    .lineLimit(1)
-                
-                Button(action: {
-                    tempUnits += 1
-                }) {
-                    Image(systemName: "plus.circle.fill")
-                        .foregroundStyle(.blue)
-                        .font(.system(size: 32))
-                }
+                TextField("Price", text: $tempPrice)
+                    .font(.system(.subheadline, design: .rounded))
+                    .keyboardType(.decimalPad)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: 200)
+                    .frame(height: 40)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color(.systemGray6))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                    )
             }
             .padding(.vertical, 16)
             
@@ -303,8 +333,10 @@ struct UpdateSheet: View {
                 
                 Button(action: {
                     withAnimation(.spring()) {
-                        onUpdate(tempUnits)
-                        onClose()
+                        if let price = Double(tempPrice) {
+                            onUpdate(tempUnits, price)
+                            onClose()
+                        }
                     }
                 }) {
                     Text("Update")
@@ -325,9 +357,10 @@ struct UpdateSheet: View {
 
 struct AddItemSheet: View {
     @Binding var isPresented: Bool
-    let onAdd: (String, Int) -> Void
+    let onAdd: (String, Int, Double) -> Void
     @State private var newItemName: String = ""
     @State private var newItemUnits: String = ""
+    @State private var newItemPrice: String = ""
 
     var body: some View {
         VStack(spacing: 5) {
@@ -366,6 +399,22 @@ struct AddItemSheet: View {
                         RoundedRectangle(cornerRadius: 10)
                             .stroke(Color.gray.opacity(0.2), lineWidth: 1)
                     )
+                
+                TextField("Price", text: $newItemPrice)
+                    .font(.system(.subheadline, design: .rounded))
+                    .keyboardType(.decimalPad)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: 270)
+                    .frame(height: 40)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color(.systemGray6))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                    )
             }
             .padding(.vertical, 8)
 
@@ -385,10 +434,14 @@ struct AddItemSheet: View {
                 }
 
                 Button(action: {
-                    if let units = Int(newItemUnits), !newItemName.isEmpty, units >= 0 {
-                        onAdd(newItemName, units)
+                    if let units = Int(newItemUnits),
+                       let price = Double(newItemPrice),
+                       !newItemName.isEmpty,
+                       units >= 0 {
+                        onAdd(newItemName, units, price)
                         newItemName = ""
                         newItemUnits = ""
+                        newItemPrice = ""
                         isPresented = false
                     }
                 }) {
@@ -397,15 +450,25 @@ struct AddItemSheet: View {
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(newItemName.isEmpty || newItemUnits.isEmpty || Int(newItemUnits) == nil ? Color.blue.opacity(0.5) : Color.blue)
+                        .background(isFormValid ? Color.blue : Color.blue.opacity(0.5))
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
-                .disabled(newItemName.isEmpty || newItemUnits.isEmpty || Int(newItemUnits) == nil)
+                .disabled(!isFormValid)
             }
             .padding(.horizontal, 16)
         }
         .padding()
         .interactiveDismissDisabled()
+    }
+    
+    private var isFormValid: Bool {
+        guard !newItemName.isEmpty,
+              let units = Int(newItemUnits),
+              let _ = Double(newItemPrice),
+              units >= 0 else {
+            return false
+        }
+        return true
     }
 }
 

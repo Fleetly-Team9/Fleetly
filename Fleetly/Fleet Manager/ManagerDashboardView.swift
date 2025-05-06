@@ -319,6 +319,7 @@ struct TaskDetailView: View {
     @State private var showingStatusSheet = false
     @State private var selectedStatus: MaintenanceTask.TaskStatus?
     @State private var vehicleNumber: String = ""
+    @State private var showingCompletionView = false
     
     var body: some View {
         NavigationStack {
@@ -369,7 +370,7 @@ struct TaskDetailView: View {
                     updateStatus(.inProgress)
                 }
                 Button("Mark as Completed") {
-                    updateStatus(.completed)
+                    showingCompletionView = true
                 }
                 Button("Mark as Cancelled") {
                     updateStatus(.cancelled)
@@ -377,6 +378,9 @@ struct TaskDetailView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("Select new status for the task")
+            }
+            .sheet(isPresented: $showingCompletionView) {
+                MaintenanceCompletionView(task: task)
             }
             .onAppear {
                 fetchVehicleNumber()

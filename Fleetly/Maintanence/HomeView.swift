@@ -118,11 +118,9 @@ struct HomeView: View {
                                             if newStatus == .completed {
                                                 if let index = maintenanceTasks.firstIndex(where: { $0.id == task.id }) {
                                                     maintenanceTasks.remove(at: index)
-                                                    updateTaskStatusInFirestore(taskId: task.id, newStatus: newStatus)
                                                 }
-                                            } else {
-                                                updateTaskStatusInFirestore(taskId: task.id, newStatus: newStatus)
                                             }
+                                            updateTaskStatusInFirestore(taskId: task.id, newStatus: newStatus)
                                         }
                                     }
                                 )
@@ -299,14 +297,37 @@ struct HomeView: View {
     }
     
     private func updateTaskStatusInFirestore(taskId: String, newStatus: MaintenanceTask.TaskStatus) {
-        db.collection("maintenance_tasks").document(taskId).updateData([
+        let taskRef = db.collection("maintenance_tasks").document(taskId)
+        
+        var updateData: [String: Any] = [
             "status": newStatus.rawValue
-        ]) { error in
+        ]
+        
+        if newStatus == .completed {
+            updateData["completedAt"] = FieldValue.serverTimestamp()
+        }
+        
+        taskRef.updateData(updateData) { error in
             if let error = error {
-                print("UpdateTaskStatus: Error updating task \(taskId): \(error.localizedDescription)")
-            } else {
-                print("UpdateTaskStatus: Successfully updated task \(taskId) to status \(newStatus.rawValue)")
+                print("Error updating task status: \(error.localizedDescription)")
+                errorMessage = "Failed to update task status"
             }
+        }
+    }
+    
+    private func storeMaintenanceCosts(taskId: String, cost: Inventory.MaintenanceCost) {
+        let costsRef = db.collection("maintenance_tasks").document(taskId).collection("costs")
+        
+        do {
+            try costsRef.document(cost.id).setData(from: cost) { error in
+                if let error = error {
+                    print("Error storing maintenance costs: \(error.localizedDescription)")
+                    errorMessage = "Failed to store maintenance costs"
+                }
+            }
+        } catch {
+            print("Error encoding maintenance cost: \(error.localizedDescription)")
+            errorMessage = "Failed to encode maintenance costs"
         }
     }
 }
@@ -361,6 +382,7 @@ struct WorkOrderCard: View {
     
     @State private var dragOffset: CGFloat = 0
     @State private var showAnimation: Bool = false
+    @State private var showingCompletionView = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -500,6 +522,9 @@ struct WorkOrderCard: View {
                 )
                 .shadow(radius: 4, y: 2)
         )
+        .sheet(isPresented: $showingCompletionView) {
+            MaintenanceCompletionView(task: task)
+        }
     }
     
     // Helper functions for status and priority
@@ -572,7 +597,7 @@ struct WorkOrderCard: View {
         case .pending:
             onStatusChange(.inProgress)
         case .inProgress:
-            onStatusChange(.completed)
+            showingCompletionView = true
         case .completed, .cancelled:
             onStatusChange(.completed) // Adjust as needed for your workflow
         }
