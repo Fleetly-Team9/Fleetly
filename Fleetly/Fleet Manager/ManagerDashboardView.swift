@@ -542,7 +542,7 @@ struct DashboardHomeView: View {
                         case .maintain:
                             AssignTaskView()
                         case .track:
-                            TrackView()
+                            FourWheelerMapView()
                         }
                     }
                     .padding(.horizontal)
