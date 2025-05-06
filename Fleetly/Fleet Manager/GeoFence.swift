@@ -362,9 +362,12 @@ class FourWheelerPathManager: NSObject, ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private let routeColors: [Color] = [.blue, .red, .green, .purple]
     private var simulatedFourWheelerId: UUID?
-    private var notificationStatusByVehicle: [UUID: Bool] = [:]
+    private var notificationStatusByFourWheeler: [UUID: Bool] = [:]
     private var simulationTimer: Timer?
     private var lastUpdateTime: Date?
+    public var lastOffRouteFourWheelerId: UUID?
+    private var startTime: Date?
+    private var hasFourWheeler3Deviated = false
     
     static let shared = FourWheelerPathManager()
     
@@ -405,13 +408,14 @@ class FourWheelerPathManager: NSObject, ObservableObject {
     }
     
     func sendOffRouteNotification(for fourWheeler: FourWheeler) {
-        let vehicleId = fourWheeler.id
-        guard notificationStatusByVehicle[vehicleId] != true else { return }
+        let fourWheelerId = fourWheeler.id
+        guard notificationStatusByFourWheeler[fourWheelerId] != true else { return }
         
         let content = UNMutableNotificationContent()
-        content.title = "Vehicle Off Route"
-        content.body = "\(fourWheeler.name) is off its assigned route!"
+        content.title = "FourWheeler Off Route"
+        content.body = "\(fourWheeler.name) is off its assigned route! Deviation: \(fourWheeler.deviation?.formatted() ?? "N/A") meters"
         content.sound = .default
+        content.badge = 1
         
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request) { error in
@@ -421,11 +425,15 @@ class FourWheelerPathManager: NSObject, ObservableObject {
                 print("Off-route notification sent for \(fourWheeler.name)")
             }
         }
-        notificationStatusByVehicle[vehicleId] = true
+        notificationStatusByFourWheeler[fourWheelerId] = true
+        lastOffRouteFourWheelerId = fourWheelerId
     }
     
     func resetNotificationFlag(for fourWheelerId: UUID) {
-        notificationStatusByVehicle[fourWheelerId] = false
+        notificationStatusByFourWheeler[fourWheelerId] = false
+        if lastOffRouteFourWheelerId == fourWheelerId {
+            lastOffRouteFourWheelerId = nil
+        }
     }
     
     func centerMapOnUserLocation() {
@@ -434,7 +442,9 @@ class FourWheelerPathManager: NSObject, ObservableObject {
                 center: CLLocationCoordinate2D(latitude: 12.9716, longitude: 77.5946),
                 span: MKCoordinateSpan(latitudeDelta: 5.0, longitudeDelta: 5.0)
             )
-            mapRegion = southIndiaRegion
+            withAnimation(.easeInOut) {
+                mapRegion = southIndiaRegion
+            }
             return
         }
         
@@ -442,25 +452,30 @@ class FourWheelerPathManager: NSObject, ObservableObject {
             center: userLocation,
             span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
         )
-        mapRegion = region
+        withAnimation(.easeInOut) {
+            mapRegion = region
+        }
     }
     
-    func centerMapOnVehicle1() {
-        guard let vehicle1 = fourWheelers.first(where: { $0.name == "Vehicle 1" }),
-              let vehicleLocation = vehicle1.currentLocation, vehicleLocation.isValid else {
-            let mysoreRegion = MKCoordinateRegion(
+    func centerMapOnFourWheeler(_ fourWheeler: FourWheeler) {
+        guard let fourWheelerLocation = fourWheeler.currentLocation, fourWheelerLocation.isValid else {
+            let defaultRegion = MKCoordinateRegion(
                 center: CLLocationCoordinate2D(latitude: 12.2958, longitude: 76.6394),
                 span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
             )
-            mapRegion = mysoreRegion
+            withAnimation(.easeInOut) {
+                mapRegion = defaultRegion
+            }
             return
         }
         
         let region = MKCoordinateRegion(
-            center: vehicleLocation,
+            center: fourWheelerLocation,
             span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
         )
-        mapRegion = region
+        withAnimation(.easeInOut) {
+            mapRegion = region
+        }
     }
     
     func fitMapToRoutes() {
@@ -472,7 +487,9 @@ class FourWheelerPathManager: NSObject, ObservableObject {
                 center: CLLocationCoordinate2D(latitude: 12.9716, longitude: 77.5946),
                 span: MKCoordinateSpan(latitudeDelta: 5.0, longitudeDelta: 5.0)
             )
-            mapRegion = southIndiaRegion
+            withAnimation(.easeInOut) {
+                mapRegion = southIndiaRegion
+            }
             return
         }
         
@@ -491,7 +508,9 @@ class FourWheelerPathManager: NSObject, ObservableObject {
             center: CLLocationCoordinate2D(latitude: centerLat, longitude: centerLon),
             span: MKCoordinateSpan(latitudeDelta: spanLat, longitudeDelta: spanLon)
         )
-        mapRegion = region
+        withAnimation(.easeInOut) {
+            mapRegion = region
+        }
     }
     
     func handleAuthorizationChange(_ status: CLAuthorizationStatus) {
@@ -655,7 +674,7 @@ class FourWheelerPathManager: NSObject, ObservableObject {
             
             let fourWheeler = FourWheeler(
                 id: fourWheelerId,
-                name: "Vehicle \(index + 1)",
+                name: "FourWheeler \(index + 1)",
                 currentLocationCoordinate: CodableCoordinate(coordinate: initialLocation),
                 assignedRouteId: route.id,
                 status: .onRoute,
@@ -664,7 +683,7 @@ class FourWheelerPathManager: NSObject, ObservableObject {
             )
             fourWheelers.append(fourWheeler)
             
-            notificationStatusByVehicle[fourWheelerId] = false
+            notificationStatusByFourWheeler[fourWheelerId] = false
         }
         
         self.routes = routes
@@ -682,7 +701,7 @@ class FourWheelerPathManager: NSObject, ObservableObject {
         objectWillChange.send()
     }
     
-    // MARK: - Four Wheeler Monitoring
+    // MARK: - FourWheeler Monitoring
     func startFourWheelerMonitoring() {
         guard simulationTimer == nil else { return }
         
@@ -690,26 +709,18 @@ class FourWheelerPathManager: NSObject, ObservableObject {
         isMonitoringStarted = true
         
         lastUpdateTime = Date()
+        startTime = Date()
         
         if locationManager.authorizationStatus == .authorizedWhenInUse ||
            locationManager.authorizationStatus == .authorizedAlways {
             locationManager.startUpdatingLocation()
         }
         
-        simulationTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+        simulationTimer = Timer.scheduledTimer(withTimeInterval: 7, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self = self else { return }
                 
-                if let userLocation = self.userLocation,
-                   let simulatedId = self.simulatedFourWheelerId,
-                   let index = self.fourWheelers.firstIndex(where: { $0.id == simulatedId }) {
-                    self.fourWheelers[index].currentLocation = userLocation
-                    self.fourWheelers[index].lastUpdated = Date()
-                    
-                    self.checkFourWheelerStatuses()
-                }
-                
-                self.updateOtherVehicleLocations()
+                self.updateFourWheelerLocations()
                 
                 self.objectWillChange.send()
             }
@@ -723,29 +734,40 @@ class FourWheelerPathManager: NSObject, ObservableObject {
         locationManager.stopUpdatingLocation()
     }
     
-    func updateOtherVehicleLocations() {
+    func updateFourWheelerLocations() {
         for i in 0..<fourWheelers.count {
-            if fourWheelers[i].id != simulatedFourWheelerId {
-                if let routeId = fourWheelers[i].assignedRouteId,
-                   let route = routes.first(where: { $0.id == routeId }),
-                   let polyline = route.polylineCoordinates {
-                    
-                    let elapsedTime = Date().timeIntervalSince(lastUpdateTime ?? Date())
-                    let speed = 30.0
-                    let distanceToMove = speed * elapsedTime
-                    
-                    moveVehicleAlongRoute(vehicleIndex: i, route: polyline.map { $0.coordinate }, distanceToMove: distanceToMove)
+            if let routeId = fourWheelers[i].assignedRouteId,
+               let route = routes.first(where: { $0.id == routeId }),
+               let polyline = route.polylineCoordinates {
+                
+                let elapsedTime = Date().timeIntervalSince(lastUpdateTime ?? Date())
+                let speed = 30.0 // meters per second
+                let distanceToMove = speed * elapsedTime
+                
+                if fourWheelers[i].name == "FourWheeler 3" {
+                    // Simulate FourWheeler 3 moving outside geofence after 10 seconds
+                    if let startTime = startTime,
+                       Date().timeIntervalSince(startTime) >= 10,
+                       !hasFourWheeler3Deviated {
+                        simulateFourWheeler3Deviation(fourWheelerIndex: i, route: polyline.map { $0.coordinate })
+                        hasFourWheeler3Deviated = true
+                    } else {
+                        moveFourWheelerAlongRoute(fourWheelerIndex: i, route: polyline.map { $0.coordinate }, distanceToMove: distanceToMove)
+                    }
+                } else {
+                    moveFourWheelerAlongRoute(fourWheelerIndex: i, route: polyline.map { $0.coordinate }, distanceToMove: distanceToMove)
                 }
             }
         }
         
         lastUpdateTime = Date()
+        checkFourWheelerStatuses()
     }
     
-    func moveVehicleAlongRoute(vehicleIndex: Int, route: [CLLocationCoordinate2D], distanceToMove: Double) {
-        guard !route.isEmpty, vehicleIndex < fourWheelers.count else { return }
+    func moveFourWheelerAlongRoute(fourWheelerIndex: Int, route: [CLLocationCoordinate2D], distanceToMove: Double) {
+        guard !route.isEmpty, fourWheelerIndex < fourWheelers.count else { return }
         
-        let currentLocation = fourWheelers[vehicleIndex].currentLocation ?? route[0]
+        let currentLocation = fourWheelers[fourWheelerIndex].currentLocation ?? route[0]
         
         var closestPointIndex = 0
         var minDistance = Double.greatestFiniteMagnitude
@@ -777,22 +799,44 @@ class FourWheelerPathManager: NSObject, ObservableObject {
             let newLat = currentPoint.latitude + moveRatio * (nextPoint.latitude - currentPoint.latitude)
             let newLon = currentPoint.longitude + moveRatio * (nextPoint.longitude - currentPoint.longitude)
             
-            fourWheelers[vehicleIndex].currentLocation = CLLocationCoordinate2D(latitude: newLat, longitude: newLon)
-            fourWheelers[vehicleIndex].lastUpdated = Date()
+            fourWheelers[fourWheelerIndex].currentLocation = CLLocationCoordinate2D(latitude: newLat, longitude: newLon)
+            fourWheelers[fourWheelerIndex].lastUpdated = Date()
         }
     }
     
-    // MARK: - Four Wheeler Status Monitoring
+    func simulateFourWheeler3Deviation(fourWheelerIndex: Int, route: [CLLocationCoordinate2D]) {
+        guard !route.isEmpty, fourWheelerIndex < fourWheelers.count else { return }
+        
+        let currentLocation = fourWheelers[fourWheelerIndex].currentLocation ?? route[0]
+        
+        // Apply a lateral offset to move FourWheeler 3 outside the geofence
+        let avgLat = route.reduce(0) { $0 + $1.latitude } / Double(route.count)
+        let metersToLonDegrees = 1.0 / CoordinateUtils.metersPerDegreeLongitude(atLatitude: avgLat)
+        let offsetMeters = 400.0 // Move 400 meters off the route (beyond 300m corridor width)
+        let offsetLon = offsetMeters * metersToLonDegrees
+        
+        let newLocation = CLLocationCoordinate2D(
+            latitude: currentLocation.latitude,
+            longitude: currentLocation.longitude + offsetLon
+        )
+        
+        fourWheelers[fourWheelerIndex].currentLocation = newLocation
+        fourWheelers[fourWheelerIndex].lastUpdated = Date()
+        
+        checkFourWheelerStatuses()
+    }
+    
+    // MARK: - FourWheeler Status Monitoring
     func checkFourWheelerStatuses() {
         for i in 0..<fourWheelers.count {
-            guard let vehicleLocation = fourWheelers[i].currentLocation,
+            guard let fourWheelerLocation = fourWheelers[i].currentLocation,
                   let routeId = fourWheelers[i].assignedRouteId,
                   let route = routes.first(where: { $0.id == routeId }),
                   let routePolyline = route.polylineCoordinates?.map({ $0.coordinate }) else {
                 continue
             }
             
-            let deviation = calculateMinimumDistanceToRoute(point: vehicleLocation, route: routePolyline)
+            let deviation = calculateMinimumDistanceToRoute(point: fourWheelerLocation, route: routePolyline)
             fourWheelers[i].deviation = deviation
             
             let isWithinCorridor = deviation <= (route.corridorWidth / 2)
@@ -920,10 +964,14 @@ extension MKPolyline {
 struct FourWheelerMapView: View {
     @ObservedObject private var pathManager = FourWheelerPathManager.shared
     @State private var mapType: MKMapType = .standard
-    @State private var showControls = true
+    @State private var showControls = false
+    @State private var showFourWheelerList = false
+    @State private var showOffRouteBanner = false
+    @State private var offRouteFourWheelerName: String?
     
     var body: some View {
-        ZStack {
+        ZStack(alignment: .top) {
+            // Map
             MapView(
                 mapRegion: $pathManager.mapRegion,
                 mapType: $mapType,
@@ -932,54 +980,97 @@ struct FourWheelerMapView: View {
             )
             .edgesIgnoringSafeArea(.all)
             
-            VStack {
+            // Status Bar
+            HStack {
+                Text("Fleetly")
+                    .font(.headline)
+                    .foregroundColor(.white)
                 Spacer()
-                
-                if showControls {
-                    HStack {
-                        Button(action: toggleMapType) {
-                            Image(systemName: "map")
-                                .padding()
-                                .background(Color.white.opacity(0.8))
-                                .clipShape(Circle())
-                                .shadow(radius: 3)
-                        }
-                        
-                        Spacer()
-                        
-                        Button(action: pathManager.centerMapOnUserLocation) {
-                            Image(systemName: "location")
-                                .padding()
-                                .background(Color.white.opacity(0.8))
-                                .clipShape(Circle())
-                                .shadow(radius: 3)
-                        }
-                        
-                        Spacer()
-                        
-                        Button(action: pathManager.centerMapOnVehicle1) {
-                            Image(systemName: "car.fill")
-                                .padding()
-                                .background(Color.white.opacity(0.8))
-                                .clipShape(Circle())
-                                .shadow(radius: 3)
-                        }
-                        
-                        Spacer()
-                        
-                        Button(action: pathManager.fitMapToRoutes) {
-                            Image(systemName: "arrow.up.left.and.arrow.down.right")
-                                .padding()
-                                .background(Color.white.opacity(0.8))
-                                .clipShape(Circle())
-                                .shadow(radius: 3)
+                Text("Monitoring: \(pathManager.isMonitoringStarted ? "Active" : "Inactive")")
+                    .font(.subheadline)
+                    .foregroundColor(.white)
+                Text("On Route: \(pathManager.fourWheelers.filter { $0.status == .onRoute }.count)/\(pathManager.fourWheelers.count)")
+                    .font(.subheadline)
+                    .foregroundColor(.white)
+                    .padding(.leading, 8)
+            }
+            .padding()
+            .background(
+                Color.blue
+                    .overlay(.ultraThinMaterial)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal)
+            .padding(.top, 8)
+            
+            // Off-Route Banner
+            if showOffRouteBanner, let fourWheelerName = offRouteFourWheelerName {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.white)
+                    Text("\(fourWheelerName) is off route!")
+                        .font(.subheadline)
+                        .foregroundColor(.white)
+                    Spacer()
+                    Button("Dismiss") {
+                        withAnimation {
+                            showOffRouteBanner = false
                         }
                     }
-                    .padding()
-                    .background(Color.white.opacity(0.5))
-                    .cornerRadius(15)
-                    .padding()
+                    .foregroundColor(.white)
+                    .accessibilityLabel("Dismiss off-route alert")
                 }
+                .padding()
+                .background(
+                    Color.blue
+                        .overlay(.ultraThinMaterial)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .padding(.horizontal)
+                .padding(.top, 60)
+                .transition(.move(edge: .top))
+            }
+            
+            // Floating Action Button (FAB) for Controls
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Button(action: {
+                        let impact = UIImpactFeedbackGenerator(style: .medium)
+                        impact.impactOccurred()
+                        withAnimation {
+                            showControls.toggle()
+                        }
+                    }) {
+                        Image(systemName: showControls ? "xmark" : "gearshape.fill")
+                            .font(.title2)
+                            .foregroundColor(.white)
+                            .frame(width: 56, height: 56)
+                            .background(Color.blue)
+                            .clipShape(Circle())
+                    }
+                    .accessibilityLabel(showControls ? "Close controls" : "Open controls")
+                    .padding(.trailing, 16)
+                    .padding(.bottom, 16)
+                }
+            }
+            
+            // Expanded Controls
+            if showControls {
+                VStack(spacing: 12) {
+                    Spacer()
+                    ControlButton(icon: "map", label: "Map Type", action: toggleMapType)
+                    ControlButton(icon: "location.fill", label: "User Location", action: pathManager.centerMapOnUserLocation)
+                    ControlButton(icon: "arrow.up.left.and.arrow.down.right", label: "Fit Routes", action: pathManager.fitMapToRoutes)
+                    ControlButton(icon: "list.bullet", label: "FourWheelers", action: {
+                        let impact = UIImpactFeedbackGenerator(style: .medium)
+                        impact.impactOccurred()
+                        showFourWheelerList = true
+                    })
+                    .padding(.bottom, 80)
+                }
+                .frame(maxWidth: .infinity, alignment: .trailing)
             }
         }
         .onAppear {
@@ -987,12 +1078,34 @@ struct FourWheelerMapView: View {
                 pathManager.startFourWheelerMonitoring()
             }
         }
+        .onReceive(pathManager.$fourWheelers) { fourWheelers in
+            if let offRouteFourWheeler = fourWheelers.first(where: { $0.status == .offRoute }),
+               pathManager.lastOffRouteFourWheelerId == offRouteFourWheeler.id {
+                withAnimation {
+                    showOffRouteBanner = true
+                    offRouteFourWheelerName = offRouteFourWheeler.name
+                }
+            }
+        }
+        .sheet(isPresented: $showFourWheelerList) {
+            FourWheelerListView(
+                fourWheelers: pathManager.fourWheelers,
+                onSelectFourWheeler: { fourWheeler in
+                    pathManager.centerMapOnFourWheeler(fourWheeler)
+                    showFourWheelerList = false
+                }
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
         .alert(isPresented: $pathManager.showLocationPermissionAlert) {
             Alert(
-                title: Text("Location Permission Required"),
-                message: Text("Please enable location services in Settings to track four-wheelers."),
+                title: Text("Location Access Needed"),
+                message: Text("Fleetly requires location access to track four-wheelers in real-time. Please enable 'Always' in Settings."),
                 primaryButton: .default(Text("Open Settings"), action: openSettings),
-                secondaryButton: .cancel()
+                secondaryButton: .default(Text("Retry")) {
+                    pathManager.requestLocationPermission()
+                }
             )
         }
     }
@@ -1026,7 +1139,8 @@ struct FourWheelerMapView: View {
                     coordinate: location,
                     title: fourWheeler.name,
                     subtitle: fourWheeler.status.rawValue,
-                    status: fourWheeler.status
+                    status: fourWheeler.status,
+                    name: fourWheeler.name
                 )
                 annotations.append(annotation)
             }
@@ -1036,13 +1150,17 @@ struct FourWheelerMapView: View {
     }
     
     private func toggleMapType() {
-        switch mapType {
-        case .standard:
-            mapType = .satellite
-        case .satellite:
-            mapType = .hybrid
-        default:
-            mapType = .standard
+        let impact = UIImpactFeedbackGenerator(style: .medium)
+        impact.impactOccurred()
+        withAnimation {
+            switch mapType {
+            case .standard:
+                mapType = .satellite
+            case .satellite:
+                mapType = .hybrid
+            default:
+                mapType = .standard
+            }
         }
     }
     
@@ -1050,6 +1168,126 @@ struct FourWheelerMapView: View {
         if let url = URL(string: UIApplication.openSettingsURLString) {
             UIApplication.shared.open(url)
         }
+    }
+}
+
+// MARK: - Control Button View
+struct ControlButton: View {
+    let icon: String
+    let label: String
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: {
+            let impact = UIImpactFeedbackGenerator(style: .medium)
+            impact.impactOccurred()
+            action()
+        }) {
+            HStack {
+                Image(systemName: icon)
+                    .font(.body)
+                    .foregroundColor(.white)
+                Text(label)
+                    .font(.body)
+                    .foregroundColor(.white)
+                    .dynamicTypeSize(.medium)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .frame(minWidth: 150)
+            .background(Color.blue)
+            .clipShape(Capsule())
+        }
+        .accessibilityLabel(label)
+        .padding(.trailing, 16)
+    }
+}
+
+// MARK: - FourWheeler List View
+struct FourWheelerListView: View {
+    let fourWheelers: [FourWheeler]
+    let onSelectFourWheeler: (FourWheeler) -> Void
+    
+    var body: some View {
+        NavigationView {
+            List(fourWheelers) { fourWheeler in
+                FourWheelerInfoCard(
+                    fourWheeler: fourWheeler,
+                    onTap: {
+                        onSelectFourWheeler(fourWheeler)
+                    }
+                )
+            }
+            .navigationTitle("FourWheelers")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
+
+// MARK: - FourWheeler Info Card
+struct FourWheelerInfoCard: View {
+    let fourWheeler: FourWheeler
+    let onTap: () -> Void
+    @ObservedObject private var pathManager = FourWheelerPathManager.shared
+    
+    private var routeDetails: String {
+        guard let routeId = fourWheeler.assignedRouteId,
+              let route = pathManager.routes.first(where: { $0.id == routeId }),
+              route.waypoints.count >= 2 else {
+            return "Route: Not assigned"
+        }
+        let start = route.waypoints[0].locationName
+        let end = route.waypoints[1].locationName
+        return "Route: \(start) to \(end)"
+    }
+    
+    private var currentLocation: String {
+        guard let location = fourWheeler.currentLocation else {
+            return "Location: Unknown"
+        }
+        return "Location: (\(location.latitude.formatted(.number.precision(.fractionLength(4)))), \(location.longitude.formatted(.number.precision(.fractionLength(4)))))"
+    }
+    
+    var body: some View {
+        Button(action: {
+            let impact = UIImpactFeedbackGenerator(style: .medium)
+            impact.impactOccurred()
+            onTap()
+        }) {
+            HStack {
+                Image(systemName: "car.fill")
+                    .foregroundColor(fourWheeler.status.color)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(fourWheeler.name)
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                        .dynamicTypeSize(.large)
+                    Text("Status: \(fourWheeler.status.rawValue)")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .dynamicTypeSize(.medium)
+                    Text("Deviation: \(fourWheeler.deviation?.formatted() ?? "N/A") m")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .dynamicTypeSize(.medium)
+                    Text(routeDetails)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .dynamicTypeSize(.medium)
+                    Text(currentLocation)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .dynamicTypeSize(.medium)
+                }
+                Spacer()
+                Circle()
+                    .fill(fourWheeler.status.color)
+                    .frame(width: 12, height: 12)
+            }
+            .padding(.vertical, 8)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(fourWheeler.name), Status: \(fourWheeler.status.rawValue), Deviation: \(fourWheeler.deviation?.formatted() ?? "N/A") meters, \(routeDetails), \(currentLocation)")
     }
 }
 
@@ -1124,13 +1362,26 @@ struct MapView: UIViewRepresentable {
             }
             
             if let fourWheelerAnnotation = annotation as? FourWheelerAnnotation {
-                let identifier = "FourWheeler"
+                let identifier = "FourWheeler_\(fourWheelerAnnotation.name ?? "Unknown")"
                 var annotationView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) as? MKMarkerAnnotationView
                 
                 if annotationView == nil {
                     annotationView = MKMarkerAnnotationView(annotation: fourWheelerAnnotation, reuseIdentifier: identifier)
                     annotationView?.canShowCallout = true
-                    annotationView?.glyphImage = UIImage(systemName: "car.fill")
+                    
+                    // Assign different icons based on the four-wheeler name
+                    switch fourWheelerAnnotation.name {
+                    case "FourWheeler 1":
+                        annotationView?.glyphImage = UIImage(systemName: "car.fill")
+                    case "FourWheeler 2":
+                        annotationView?.glyphImage = UIImage(systemName: "truck.fill")
+                    case "FourWheeler 3":
+                        annotationView?.glyphImage = UIImage(systemName: "suv.side.fill")
+                    case "FourWheeler 4":
+                        annotationView?.glyphImage = UIImage(systemName: "van.fill")
+                    default:
+                        annotationView?.glyphImage = UIImage(systemName: "car.fill")
+                    }
                 } else {
                     annotationView?.annotation = fourWheelerAnnotation
                 }
@@ -1140,6 +1391,7 @@ struct MapView: UIViewRepresentable {
                     annotationView?.markerTintColor = .green
                 case .offRoute:
                     annotationView?.markerTintColor = .red
+                    annotationView?.animatesWhenAdded = true
                 case .unknown:
                     annotationView?.markerTintColor = .gray
                 }
@@ -1173,12 +1425,14 @@ class FourWheelerAnnotation: NSObject, MKAnnotation {
     var title: String?
     var subtitle: String?
     var status: FourWheeler.FourWheelerStatus
+    var name: String?
     
-    init(coordinate: CLLocationCoordinate2D, title: String?, subtitle: String?, status: FourWheeler.FourWheelerStatus) {
+    init(coordinate: CLLocationCoordinate2D, title: String?, subtitle: String?, status: FourWheeler.FourWheelerStatus, name: String?) {
         self.coordinate = coordinate
         self.title = title
         self.subtitle = subtitle
         self.status = status
+        self.name = name
         super.init()
     }
 }
@@ -1195,4 +1449,3 @@ class WaypointAnnotation: NSObject, MKAnnotation {
         super.init()
     }
 }
-
