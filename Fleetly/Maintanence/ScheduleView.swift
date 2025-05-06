@@ -458,6 +458,8 @@ struct ScheduleView: View {
             return .blue
         case .cancelled:
             return .gray
+        case .archived:
+            return .gray
         }
     }
 
@@ -471,6 +473,8 @@ struct ScheduleView: View {
             return Color.blue.opacity(0.2)
         case .cancelled:
             return Color.gray.opacity(0.2)
+        case .archived:
+            return .gray
         }
     }
 
