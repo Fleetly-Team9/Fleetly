@@ -15,23 +15,6 @@ struct InventoryManagementView: View {
             ZStack {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
-                        // Header
-                        HStack {
-                            Text("Inventory Management")
-                                .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                                .foregroundStyle(.primary)
-                            Spacer()
-                            Button(action: {
-                                isAddItemSheetPresented = true
-                            }) {
-                                Image(systemName: "plus.circle.fill")
-                                    .foregroundStyle(.blue)
-                                    .font(.system(size: 28))
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 12)
-
                         // Inventory List
                         if viewModel.items.isEmpty {
                             Text("No Items in Inventory")
@@ -65,11 +48,22 @@ struct InventoryManagementView: View {
                             }
                         }
                     }
-                    .padding(.vertical, 20)
+                    .padding(.vertical, 10)
                 }
                 .background(Color(.systemBackground).ignoresSafeArea())
-                .navigationTitle("")
-                .navigationBarHidden(true)
+                .navigationTitle("Inventory")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button(action: {
+                            isAddItemSheetPresented = true
+                        }) {
+                            Image(systemName: "plus.circle.fill")
+                                .foregroundStyle(.blue)
+                                .font(.system(size: 20))
+                        }
+                    }
+                }
                 .onAppear {
                     withAnimation {
                         showRowAnimation = true
@@ -98,7 +92,7 @@ struct InventoryManagementView: View {
                             viewModel.updateItemUnits(itemId: item.id, newUnits: newUnits, newPrice: newPrice)
                         }
                     )
-                    .frame(width: 250, height: 200)
+                    .frame(width: 300, height: 250)
                     .background(
                         RoundedRectangle(cornerRadius: 20)
                             .fill(Color(.systemBackground))
@@ -212,10 +206,10 @@ struct InventoryRow: View {
                 }
                 
                 HStack(spacing: 8) {
-                    Image(systemName: "dollarsign.circle.fill")
+                    Image(systemName: "indianrupeesign")
                         .foregroundStyle(.secondary)
                         .imageScale(.small)
-                    Text("Price: $\(String(format: "%.2f", item.price))")
+                    Text("Price: ₹\(String(format: "%.2f", item.price))")
                         .font(.system(.subheadline, design: .rounded))
                         .foregroundStyle(.secondary)
                 }
@@ -227,21 +221,18 @@ struct InventoryRow: View {
                 }
             }) {
                 Text("Update")
-                    .font(.system(.subheadline, design: .rounded, weight: .medium))
-                    .foregroundStyle(.blue)
+                    .font(.body)
+                    .padding(12)
+                    .frame(maxWidth: 95)
+                    .background(.gray.opacity(0.2))
+                    .clipShape(RoundedRectangle(cornerRadius: 25))
+                    .foregroundColor(.blue)
             }
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.background)
-                .overlay(
-                    LinearGradient(
-                        colors: [.gray.opacity(0.05), .gray.opacity(0.1)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Color(.systemGray6))
                 .shadow(radius: 4, y: 2)
         )
     }
@@ -284,7 +275,7 @@ struct UpdateSheet: View {
                     .disabled(tempUnits <= 0)
                     
                     Text("\(tempUnits)")
-                        .font(.system(.title2, design: .rounded, weight: .bold))
+                        .font(.system(size: 32))
                         .foregroundStyle(.primary)
                         .minimumScaleFactor(0.5)
                         .lineLimit(1)
@@ -303,15 +294,15 @@ struct UpdateSheet: View {
                     .keyboardType(.decimalPad)
                     .padding(.vertical, 8)
                     .padding(.horizontal, 12)
-                    .frame(maxWidth: 200)
+                    .frame(maxWidth: 230)
                     .frame(height: 40)
                     .background(
                         RoundedRectangle(cornerRadius: 10)
-                            .fill(Color(.systemGray6))
+                        .fill(Color(.systemGray6))
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
                     )
             }
             .padding(.vertical, 16)
@@ -341,10 +332,10 @@ struct UpdateSheet: View {
                 }) {
                     Text("Update")
                         .font(.system(.subheadline, design: .rounded, weight: .medium))
-                        .foregroundColor(.white)
+                        .foregroundColor(.blue)
                         .frame(maxWidth: 120)
                         .padding(.vertical, 12)
-                        .background(Color.blue)
+                        .background(Color(.systemGray6))
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
             }
@@ -377,11 +368,11 @@ struct AddItemSheet: View {
                     .frame(height: 40)
                     .background(
                         RoundedRectangle(cornerRadius: 10)
-                            .fill(Color(.systemGray6))
+                        .fill(Color(.systemGray6))
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
                     )
 
                 TextField("Units", text: $newItemUnits)
@@ -393,11 +384,11 @@ struct AddItemSheet: View {
                     .frame(height: 40)
                     .background(
                         RoundedRectangle(cornerRadius: 10)
-                            .fill(Color(.systemGray6))
+                        .fill(Color(.systemGray6))
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
                     )
                 
                 TextField("Price", text: $newItemPrice)
@@ -409,11 +400,11 @@ struct AddItemSheet: View {
                     .frame(height: 40)
                     .background(
                         RoundedRectangle(cornerRadius: 10)
-                            .fill(Color(.systemGray6))
+                        .fill(Color(.systemGray6))
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
                     )
             }
             .padding(.vertical, 8)
