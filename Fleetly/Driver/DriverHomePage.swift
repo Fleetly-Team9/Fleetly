@@ -170,39 +170,38 @@ struct DriverHomePage: View {
     }*/
     
     
-    private var headerSection: some View {
-        HStack {
-            VStack(alignment: .leading) {
-                Text("Here's your schedule for today!")
-                    .font(.system(size: 15))
-                    .foregroundStyle(Color.secondary)
-            }
-            Spacer()
-            Button(action: {
-                print("Profile image tapped") // Debug
-                showProfile = true
-            }) {
-                Group {
-                    if let profileImage = profileImage {
-                        profileImage
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 40, height: 40)
-                            .clipShape(Circle())
-                    } else {
-                        Image(systemName: "person.crop.circle.fill")
-                            .resizable()
-                            .frame(width: 40, height: 40)
-                            .foregroundStyle(Color.primary)
+    // change start here
+            
+            private var headerSection: some View {
+                HStack {
+                    VStack(alignment: .leading) {
+                        Text("Here's your schedule for today!")
+                            .font(.system(size: 15))
+                            .foregroundStyle(Color.secondary)
+                    }
+                    Spacer()
+                    Button(action: {
+                        print("Profile image tapped") // Debug
+                        showProfile = true
+                    }) {
+                        Group {
+                            if let profileImage = profileImage {
+                                profileImage
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 40, height: 40)
+                                    .clipShape(Circle())
+                            } else {
+                                Image(systemName: "person.crop.circle.fill")
+                                    .resizable()
+                                    .frame(width: 40, height: 40)
+                                    .foregroundStyle(Color.primary)
+                            }
+                        }
+                        .contentShape(Circle()) // Ensure entire circle is tappable
                     }
                 }
-                .contentShape(Circle()) // Ensure entire circle is tappable
             }
-        }
-        .padding(.horizontal)
-    }
-    
-
 
 
 
