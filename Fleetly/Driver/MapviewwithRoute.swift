@@ -15,6 +15,7 @@ struct MapViewWithRoute: UIViewRepresentable {
     @Binding var mapStyle: MapStyle
     let isTripStarted: Bool
     let userLocationCoordinate: CLLocationCoordinate2D?
+    let poiAnnotations: [CustomPointAnnotation]
     
     private let carAnnotationIdentifier = "carAnnotation"
     
@@ -53,7 +54,10 @@ struct MapViewWithRoute: UIViewRepresentable {
         dropAnnotation.title = drop.name
         dropAnnotation.annotationType = .drop
         
-        mapView.addAnnotations([pickupAnnotation, dropAnnotation])
+        var annotationsToAdd = [pickupAnnotation, dropAnnotation]
+        annotationsToAdd.append(contentsOf: poiAnnotations)
+        
+        mapView.addAnnotations(annotationsToAdd)
         
         if let route = route {
             mapView.addOverlay(route.polyline)
@@ -158,6 +162,50 @@ struct MapViewWithRoute: UIViewRepresentable {
                         annotationView?.image = finalImage
                     }
                     return annotationView
+                case .hospital:
+                    let identifier = "hospitalPin"
+                    var annotationView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
+                    if annotationView == nil {
+                        annotationView = MKMarkerAnnotationView(annotation: customAnnotation, reuseIdentifier: identifier)
+                        annotationView?.canShowCallout = true
+                    } else {
+                        annotationView?.annotation = customAnnotation
+                    }
+                    if let markerView = annotationView as? MKMarkerAnnotationView {
+                        markerView.markerTintColor = .purple
+                        markerView.glyphImage = UIImage(systemName: "cross.circle.fill")
+                    }
+                    return annotationView
+                case .petrolPump:
+                    let identifier = "petrolPumpPin"
+                    var annotationView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
+                    if annotationView == nil {
+                        annotationView = MKMarkerAnnotationView(annotation: customAnnotation, reuseIdentifier: identifier)
+                        annotationView?.canShowCallout = true
+                    } else {
+                        annotationView?.annotation = customAnnotation
+                    }
+                    if let markerView = annotationView as? MKMarkerAnnotationView {
+                        markerView.markerTintColor = .orange
+                        markerView.glyphImage = UIImage(systemName: "fuelpump.circle.fill")
+                    }
+                    return annotationView
+                case .mechanics:
+                    let identifier = "mechanicsPin"
+                    var annotationView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
+                    if annotationView == nil {
+                        annotationView = MKMarkerAnnotationView(annotation: customAnnotation, reuseIdentifier: identifier)
+                        annotationView?.canShowCallout = true
+                    } else {
+                        annotationView?.annotation = customAnnotation
+                    }
+                    if let markerView = annotationView as? MKMarkerAnnotationView {
+                        markerView.markerTintColor = .gray
+                        markerView.glyphImage = UIImage(systemName: "wrench.and.screwdriver.fill")
+                    }
+                    return annotationView
+                case .none:
+                    return nil
                 }
             }
             return nil
