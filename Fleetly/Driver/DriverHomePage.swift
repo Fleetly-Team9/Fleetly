@@ -523,7 +523,7 @@ struct DriverHomePage: View {
                     label: trip.vehicleType == "Passenger Vehicle" ? "Passengers" : "Load",
                     value: trip.vehicleType == "Passenger Vehicle" ?
                         "\(trip.passengers ?? 0)" :
-                        "\(Int(trip.loadWeight ?? 0)) kg",
+                        "\(Int(trip.loadWeight ?? 0)) kg"
                 )
             }
         }
