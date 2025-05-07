@@ -149,7 +149,7 @@ struct NavigationMapView: View {
                         
                         // Call Fleet Manager Button
                         Button(action: {
-                            if let url = URL(string: "tel://1234567890") {
+                            if let url = URL(string: "tel://7440312800") {
                                 UIApplication.shared.open(url)
                             }
                             showEmergencyCallOptions = false
