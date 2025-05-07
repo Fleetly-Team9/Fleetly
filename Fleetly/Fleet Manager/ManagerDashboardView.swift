@@ -696,6 +696,44 @@ struct DashboardHomeView: View {
                     }
                     .padding(.horizontal)
 
+                    // MARK: - Quick Actions
+                    VStack(alignment: .center, spacing: 8) {
+                        Text("Quick Actions")
+                            .font(.headline)
+                            .padding(.horizontal)
+
+                        HStack(spacing: 20) {
+                            QuickActionButton(icon: "person.fill.badge.plus", title: "Assign")
+                                .onTapGesture { selectedAction = .assign }
+
+                            QuickActionButton(icon: "calendar.badge.clock", title: "Maintain")
+                                .onTapGesture { selectedAction = .maintain }
+                            QuickActionButton(icon: "doc.text.magnifyingglass", title: "Reports")
+                                                           .onTapGesture { selectedAction = .reports }
+                            QuickActionButton(icon: "map.fill", title: "Track")
+                                .onTapGesture { selectedAction = .track }
+                          
+                        }
+                    }
+                    .sheet(item: $selectedAction) { action in
+                        switch action {
+                        case .reports:
+                            ReportsView()
+                        case .assign:
+                            AssignView()
+                        case .maintain:
+                            AssignTaskView()
+                        case .track:
+                            TrackView()
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding()
+                    .background(Color(.secondarySystemBackground))
+                    .cornerRadius(30)
+                    .shadow(color: Color(.label).opacity(0.08), radius: 4)
+                    .padding(.horizontal)
+
                     // MARK: - Analytics Section
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Analytics")
@@ -752,44 +790,6 @@ struct DashboardHomeView: View {
                                 .transition(.opacity)
                         }
                     }
-
-                    // MARK: - Quick Actions
-                    VStack(alignment: .center, spacing: 8) {
-                        Text("Quick Actions")
-                            .font(.headline)
-                            .padding(.horizontal)
-
-                        HStack(spacing: 20) {
-                            QuickActionButton(icon: "person.fill.badge.plus", title: "Assign")
-                                .onTapGesture { selectedAction = .assign }
-
-                            QuickActionButton(icon: "calendar.badge.clock", title: "Maintain")
-                                .onTapGesture { selectedAction = .maintain }
-                            QuickActionButton(icon: "doc.text.magnifyingglass", title: "Reports")
-                                                           .onTapGesture { selectedAction = .reports }
-                            QuickActionButton(icon: "map.fill", title: "Track")
-                                .onTapGesture { selectedAction = .track }
-                          
-                        }
-                    }
-                    .sheet(item: $selectedAction) { action in
-                        switch action {
-                        case .reports:
-                            ReportsView()
-                        case .assign:
-                            AssignView()
-                        case .maintain:
-                            AssignTaskView()
-                        case .track:
-                            FourWheelerMapView()
-                        }
-                    }
-                    .padding(.horizontal)
-                    .padding()
-                    .background(Color(.secondarySystemBackground))
-                    .cornerRadius(30)
-                    .shadow(color: Color(.label).opacity(0.08), radius: 4)
-                    .padding(.horizontal)
 
                     // MARK: - Analytics and Alerts
                     VStack(alignment: .leading, spacing: 16) {
