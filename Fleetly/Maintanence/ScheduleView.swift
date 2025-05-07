@@ -19,12 +19,14 @@ struct ScheduleView: View {
     private let displayFormatter = DateFormatter()
     private let db = Firestore.firestore()
 
-    @State private var tasksByDate: [String: [DisplayTask]] = [:]
+    @State private var tasksByDate: [String: [DisplayTask]]
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var isLoaderVisible = false // For fade animation
 
-    init() {
+    // Initializer to allow setting initial state for previews
+    init(tasksByDate: [String: [DisplayTask]] = [:]) {
+        self._tasksByDate = State(initialValue: tasksByDate)
         formatter.dateFormat = "dd-MM-yyyy"
         displayFormatter.dateFormat = "MMMM yyyy"
     }
@@ -57,7 +59,7 @@ struct ScheduleView: View {
                     Text("Schedule")
                         .font(.title)
                         .fontWeight(.bold)
-                        .foregroundColor(.primary)
+                        .foregroundStyle(.primary)
                         .padding(.horizontal, 20)
                         .padding(.top, 10)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -66,17 +68,17 @@ struct ScheduleView: View {
                     VStack(spacing: 10) {
                         HStack {
                             Text(displayFormatter.string(from: startOfMonth))
-                                .font(.system(.body, design: .rounded).weight(.medium))
-                                .foregroundColor(.blue)
+                                .font(.system(.body, design: .rounded, weight: .medium))
+                                .foregroundStyle(.blue)
                             Spacer()
                             HStack(spacing: 10) {
                                 Button(action: { withAnimation { currentMonthOffset -= 1 } }) {
                                     Image(systemName: "chevron.left")
-                                        .foregroundColor(.blue)
+                                        .foregroundStyle(.blue)
                                 }
                                 Button(action: { withAnimation { currentMonthOffset += 1 } }) {
                                     Image(systemName: "chevron.right")
-                                        .foregroundColor(.blue)
+                                        .foregroundStyle(.blue)
                                 }
                             }
                         }
@@ -86,7 +88,7 @@ struct ScheduleView: View {
                                 Text(day)
                                     .frame(maxWidth: .infinity)
                                     .font(.caption)
-                                    .foregroundColor(.gray)
+                                    .foregroundStyle(.secondary)
                             }
                         }
 
@@ -102,16 +104,16 @@ struct ScheduleView: View {
                                         Text("\(day)")
                                             .frame(width: 30, height: 30)
                                             .background(
-                                                calendar.isDate(date, inSameDayAs: selectedDate) ? Color.blue.opacity(0.2) : Color.clear
+                                                calendar.isDate(date, inSameDayAs: selectedDate) ? Color.blue.opacity(0.15) : Color.clear
                                             )
-                                            .foregroundColor(
-                                                calendar.isDate(date, inSameDayAs: today) ? .blue : .black
+                                            .foregroundStyle(
+                                                calendar.isDate(date, inSameDayAs: today) ? .blue : .primary
                                             )
                                             .overlay(
                                                 calendar.isDate(date, inSameDayAs: today) ?
                                                 Circle().stroke(Color.blue, lineWidth: 1) : nil
                                             )
-                                            .cornerRadius(15)
+                                            .clipShape(Circle())
                                     }
                                     .buttonStyle(PlainButtonStyle())
                                 }
@@ -119,12 +121,21 @@ struct ScheduleView: View {
                         }
                     }
                     .padding()
-                    .background(Color.white)
-                    .cornerRadius(12)
-                    .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color(.systemBackground))
+                            .overlay(
+                                LinearGradient(
+                                    colors: [Color.gray.opacity(0.03), Color.gray.opacity(0.02)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
+                    )
                     .padding(.horizontal)
                 }
-                .background(Color(hex: "F3F3F3"))
+                .background(Color(.systemBackground))
 
                 // Scrollable Content: Loader, Error, and Tasks
                 ScrollView {
@@ -138,14 +149,15 @@ struct ScheduleView: View {
                                     .padding(.bottom, 8)
                                 Text("Loading tasks...")
                                     .font(.system(.body, design: .rounded, weight: .medium))
-                                    .foregroundColor(.gray)
+                                    .foregroundStyle(.secondary)
                             }
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(Color.white)
-                            .cornerRadius(12)
-                            .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
-                            .padding(.horizontal)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color(.systemBackground))
+                                    .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+                            )
                             .opacity(isLoaderVisible ? 1 : 0)
                             .animation(.easeInOut(duration: 0.3), value: isLoaderVisible)
                             .onAppear {
@@ -156,108 +168,151 @@ struct ScheduleView: View {
                             }
                         } else if let errorMessage = errorMessage {
                             Text(errorMessage)
-                                .foregroundColor(.red)
+                                .font(.system(.body, design: .rounded))
+                                .foregroundStyle(.red)
                                 .padding()
                         } else {
                             // Task Details
-                            VStack(spacing: 10) {
+                            VStack(spacing: 12) {
                                 if selectedTasks.isEmpty {
                                     Text("No maintenance tasks on this date")
                                         .font(.system(.body, design: .rounded))
-                                        .foregroundColor(Color(hex: "444444"))
+                                        .foregroundStyle(.secondary)
                                         .padding()
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .fill(Color(.systemBackground))
+                                                .overlay(.ultraThinMaterial)
+                                                .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+                                        )
                                 } else {
                                     ForEach(selectedTasks, id: \.id) { displayTask in
                                         let task = displayTask.task
                                         let isCompleted = task.status == .completed
-                                        VStack(alignment: .leading, spacing: 5) {
-                                            HStack {
+                                        VStack(alignment: .leading, spacing: 12) {
+                                            // Header with Date and Status/Priority
+                                            HStack(alignment: .center) {
                                                 Text(formatter.string(from: selectedDate))
                                                     .font(.system(.caption, design: .rounded))
+                                                    .foregroundStyle(.secondary)
                                                 Spacer()
+                                                // Status Menu
                                                 Menu {
                                                     Button("Pending", action: { updateTaskStatus(taskId: task.id, status: .pending) })
                                                     Button("In Progress", action: { updateTaskStatus(taskId: task.id, status: .inProgress) })
                                                     Button("Completed", action: { updateTaskStatus(taskId: task.id, status: .completed) })
                                                     Button("Cancelled", action: { updateTaskStatus(taskId: task.id, status: .cancelled) })
                                                 } label: {
-                                                    HStack(spacing: 2) {
+                                                    HStack(spacing: 4) {
                                                         Text(task.status.rawValue.capitalized)
-                                                            .font(.system(size: 14, design: .rounded).weight(.medium))
-                                                            .foregroundColor(statusColor(for: task.status))
+                                                            .font(.system(.subheadline, design: .rounded, weight: .medium))
                                                         if isCompleted {
                                                             Image(systemName: "checkmark")
                                                                 .font(.system(size: 10))
-                                                                .foregroundColor(statusColor(for: task.status))
                                                         }
                                                         Image(systemName: "chevron.down")
                                                             .font(.system(size: 10))
-                                                            .foregroundColor(.gray)
                                                     }
-                                                    .padding(.horizontal, 6)
-                                                    .padding(.vertical, 3)
-                                                    .background(statusBackgroundColor(for: task.status))
-                                                    .cornerRadius(6)
-                                                    .overlay(
-                                                        RoundedRectangle(cornerRadius: 6)
-                                                            .stroke(Color.gray.opacity(0.3), lineWidth: 0.5)
-                                                    )
+                                                    .foregroundStyle(statusColor(for: task.status))
+                                                    .padding(.horizontal, 8)
+                                                    .padding(.vertical, 4)
+                                                    .background(statusColor(for: task.status).opacity(0.15))
+                                                    .clipShape(Capsule())
                                                 }
-                                                // Priority Tag (Static, No Dropdown)
-                                                HStack(spacing: 2) {
+                                                // Priority Badge
+                                                HStack(spacing: 4) {
                                                     Text(task.priority.capitalized)
-                                                        .font(.system(size: 14, design: .rounded).weight(.medium))
-                                                        .foregroundColor(priorityColor(for: task.priority))
+                                                        .font(.system(.subheadline, design: .rounded, weight: .medium))
                                                 }
-                                                .padding(.horizontal, 6)
-                                                .padding(.vertical, 3)
-                                                .background(priorityBackgroundColor(for: task.priority))
-                                                .cornerRadius(6)
-                                                .overlay(
-                                                    RoundedRectangle(cornerRadius: 6)
-                                                        .stroke(Color.gray.opacity(0.3), lineWidth: 0.5)
-                                                )
+                                                .foregroundStyle(priorityColor(for: task.priority))
+                                                .padding(.horizontal, 8)
+                                                .padding(.vertical, 4)
+                                                .background(priorityColor(for: task.priority).opacity(0.15))
+                                                .clipShape(Capsule())
                                             }
-                                            Text("Vehicle: \(displayTask.make) \(displayTask.model)")
-                                                .font(.system(.body, design: .rounded).weight(.medium))
-                                                .overlay(
-                                                    isCompleted ?
-                                                    GeometryReader { geometry in
-                                                        Path { path in
-                                                            let width = geometry.size.width
-                                                            let height = geometry.size.height
-                                                            path.move(to: CGPoint(x: 0, y: height / 2))
-                                                            path.addLine(to: CGPoint(x: width, y: height / 2))
-                                                        }
-                                                        .stroke(Color.gray, lineWidth: 1)
-                                                    } : nil
-                                                )
-                                            Text("License Plate: \(displayTask.licensePlate)")
-                                                .font(.system(.body, design: .rounded))
-                                                .foregroundColor(.gray)
-                                            Text("Issue: \(task.issue)")
-                                                .font(.system(.body, design: .rounded))
-                                                .foregroundColor(.gray)
-                                                .overlay(
-                                                    isCompleted ?
-                                                    GeometryReader { geometry in
-                                                        Path { path in
-                                                            let width = geometry.size.width
-                                                            let height = geometry.size.height
-                                                            path.move(to: CGPoint(x: 0, y: height / 2))
-                                                            path.addLine(to: CGPoint(x: width, y: height / 2))
-                                                        }
-                                                        .stroke(Color.gray, lineWidth: 1)
-                                                    } : nil
-                                                )
-                                            Text("Expected Completion: \(task.completionDate)")
-                                                .font(.system(.caption, design: .rounded))
-                                                .foregroundColor(.gray)
+
+                                            // Vehicle Information
+                                            HStack(alignment: .top, spacing: 12) {
+                                                Image(systemName: "car.fill")
+                                                    .font(.system(size: 16, weight: .medium))
+                                                    .foregroundStyle(.blue)
+                                                    .frame(width: 24, height: 24)
+                                                    .background(Color.blue.opacity(0.1))
+                                                    .clipShape(Circle())
+                                                Text("Vehicle: \(displayTask.make) \(displayTask.model)")
+                                                    .font(.system(.body, design: .rounded, weight: .medium))
+                                                    .foregroundStyle(.primary)
+                                                    .overlay(
+                                                        isCompleted ?
+                                                        GeometryReader { geometry in
+                                                            Path { path in
+                                                                let width = geometry.size.width
+                                                                let height = geometry.size.height
+                                                                path.move(to: CGPoint(x: 0, y: height / 2))
+                                                                path.addLine(to: CGPoint(x: width, y: height / 2))
+                                                            }
+                                                            .stroke(Color.gray, lineWidth: 1)
+                                                        } : nil
+                                                    )
+                                            }
+
+                                            // License Plate
+                                            HStack(alignment: .top, spacing: 12) {
+                                                Image(systemName: "doc.text.fill")
+                                                    .font(.system(size: 16, weight: .medium))
+                                                    .foregroundStyle(.secondary)
+                                                    .frame(width: 24, height: 24)
+                                                    .background(Color.secondary.opacity(0.1))
+                                                    .clipShape(Circle())
+                                                Text("License Plate: \(displayTask.licensePlate)")
+                                                    .font(.system(.body, design: .rounded))
+                                                    .foregroundStyle(.secondary)
+                                            }
+
+                                            // Issue Description
+                                            HStack(alignment: .top, spacing: 12) {
+                                                Image(systemName: "wrench.and.screwdriver.fill")
+                                                    .font(.system(size: 16, weight: .medium))
+                                                    .foregroundStyle(.blue)
+                                                    .frame(width: 24, height: 24)
+                                                    .background(Color.blue.opacity(0.1))
+                                                    .clipShape(Circle())
+                                                Text("Issue: \(task.issue)")
+                                                    .font(.system(.body, design: .rounded))
+                                                    .foregroundStyle(.primary)
+                                                    .overlay(
+                                                        isCompleted ?
+                                                        GeometryReader { geometry in
+                                                            Path { path in
+                                                                let width = geometry.size.width
+                                                                let height = geometry.size.height
+                                                                path.move(to: CGPoint(x: 0, y: height / 2))
+                                                                path.addLine(to: CGPoint(x: width, y: height / 2))
+                                                            }
+                                                            .stroke(Color.gray, lineWidth: 1)
+                                                        } : nil
+                                                    )
+                                            }
+
+                                            // Expected Completion
+                                            HStack(spacing: 12) {
+                                                Image(systemName: "calendar")
+                                                    .font(.system(size: 16, weight: .medium))
+                                                    .foregroundStyle(.secondary)
+                                                    .frame(width: 24, height: 24)
+                                                    .background(Color.secondary.opacity(0.1))
+                                                    .clipShape(Circle())
+                                                Text("Expected Completion: \(task.completionDate)")
+                                                    .font(.system(.caption, design: .rounded))
+                                                    .foregroundStyle(.secondary)
+                                            }
                                         }
-                                        .padding()
-                                        .background(Color.white)
-                                        .cornerRadius(12)
-                                        .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
+                                        .padding(20)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .fill(Color(.systemGray6))
+                                                .shadow(color: Color.black.opacity(0.1), radius: 3, x: 0, y: 2)
+                                        )
                                         .opacity(isCompleted ? 0.7 : 1.0)
                                     }
                                 }
@@ -267,11 +322,11 @@ struct ScheduleView: View {
                         Spacer()
                     }
                     .frame(maxWidth: .infinity)
-                    .background(Color(hex: "F3F3F3"))
-                    .padding(.top, 20) // Added padding to push task cards down
+                    .background(Color(.systemBackground))
+                    .padding(.top, 20)
                 }
             }
-            .background(Color(hex: "F3F3F3").ignoresSafeArea())
+            .background(Color(.systemBackground).ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
             .task {
                 await fetchTasks()
@@ -461,49 +516,63 @@ struct ScheduleView: View {
         }
     }
 
-    func statusBackgroundColor(for status: MaintenanceTask.TaskStatus) -> Color {
-        switch status {
-        case .completed:
-            return Color.green.opacity(0.2)
-        case .inProgress:
-            return Color.orange.opacity(0.2)
-        case .pending:
-            return Color.blue.opacity(0.2)
-        case .cancelled:
-            return Color.gray.opacity(0.2)
-        }
-    }
-
     func priorityColor(for priority: String) -> Color {
         switch priority.lowercased() {
         case "low":
             return .green
         case "medium":
-            return .yellow
+            return .orange
         case "high":
             return .red
         default:
             return .gray
         }
     }
-
-    func priorityBackgroundColor(for priority: String) -> Color {
-        switch priority.lowercased() {
-        case "low":
-            return Color.green.opacity(0.2)
-        case "medium":
-            return Color.yellow.opacity(0.2)
-        case "high":
-            return Color.red.opacity(0.2)
-        default:
-            return Color.gray.opacity(0.2)
-        }
-    }
 }
 
 struct ScheduleView_Previews: PreviewProvider {
     static var previews: some View {
-        ScheduleView()
+        NavigationView {
+            ScheduleView(
+                tasksByDate: [
+                    "06-05-2025": [
+                        DisplayTask(
+                            id: "1",
+                            task: MaintenanceTask(
+                                id: "1",
+                                vehicleId: "veh1",
+                                issue: "Oil Change",
+                                completionDate: "2025-05-06",
+                                priority: "medium",
+                                assignedToId: "user1",
+                                status: .pending,
+                                createdAt: "2025-05-01"
+                            ),
+                            licensePlate: "ABC123",
+                            make: "Toyota",
+                            model: "Camry"
+                        ),
+                        DisplayTask(
+                            id: "2",
+                            task: MaintenanceTask(
+                                id: "2",
+                                vehicleId: "veh2",
+                                issue: "Tire Rotation",
+                                completionDate: "2025-05-06",
+                                priority: "low",
+                                assignedToId: "user1",
+                                status: .completed,
+                                createdAt: "2025-05-01"
+                            ),
+                            licensePlate: "XYZ789",
+                            make: "Honda",
+                            model: "Civic"
+                        )
+                    ]
+                ]
+            )
+        }
+        .preferredColorScheme(.dark) // Test in dark mode
     }
 }
 
