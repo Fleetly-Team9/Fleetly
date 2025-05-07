@@ -12,6 +12,10 @@ class CustomPointAnnotation: MKPointAnnotation {
         case pickup
         case drop
         case car
+        case hospital
+        case petrolPump
+        case mechanics
+        case none
     }
     
     var annotationType: AnnotationType = .pickup

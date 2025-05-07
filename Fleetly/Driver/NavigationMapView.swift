@@ -39,9 +39,21 @@ struct NavigationMapView: View {
     @State private var photoPickerItems: [PhotosPickerItem] = []
     @State private var imageDescription: String = ""
     
+    // Filter related states
+    @State private var selectedFilter: FilterType = .none
+    @State private var poiAnnotations: [CustomPointAnnotation] = []
+    @State private var showFilterOptions = false // Added for filter panel
+    
     private var minCardHeight: CGFloat { 220 }
     private var midCardHeight: CGFloat { screenHeight * 0.4 }
     private var maxCardHeight: CGFloat { screenHeight * 0.75 }
+    
+    enum FilterType: String {
+        case none = "None"
+        case hospital = "Hospital"
+        case petrolPump = "Petrol Pump"
+        case mechanics = "Mechanics"
+    }
     
     // MARK: - Subviews
     
@@ -59,7 +71,8 @@ struct NavigationMapView: View {
             route: navigationVM.route,
             mapStyle: $mapStyle,
             isTripStarted: isTripStarted,
-            userLocationCoordinate: navigationVM.userLocation
+            userLocationCoordinate: navigationVM.userLocation,
+            poiAnnotations: poiAnnotations
         )
     }
     
@@ -93,6 +106,27 @@ struct NavigationMapView: View {
                             .clipShape(Circle())
                             .shadow(color: Color.black.opacity(0.2), radius: 3)
                     }
+                    Button(action: {
+                        showFilterOptions.toggle()
+                    }) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.white)
+                                .frame(width: 40, height: 40)
+                                .shadow(color: Color.black.opacity(0.2), radius: 3)
+                            VStack(spacing: 2) {
+                                Rectangle()
+                                    .fill(Color.blue)
+                                    .frame(width: 20, height: 2)
+                                Rectangle()
+                                    .fill(Color.blue)
+                                    .frame(width: 16, height: 2)
+                                Rectangle()
+                                    .fill(Color.blue)
+                                    .frame(width: 12, height: 2)
+                            }
+                        }
+                    }
                 }
                 .padding(.trailing, 12)
                 .padding(.top, 16)
@@ -104,7 +138,7 @@ struct NavigationMapView: View {
     // Emergency button
     private var emergencyCallButton: some View {
         VStack {
-            Spacer().frame(height: 150) // Position below map style buttons
+            Spacer().frame(height: 206) // Adjusted from 150 to 206 (150 + 56 points for 1.5cm)
             HStack {
                 Spacer()
                 VStack(spacing: 4) {
@@ -132,14 +166,13 @@ struct NavigationMapView: View {
         }
     }
     
-    // Emergency call options panel - improved UI
+    // Emergency call options panel
     private var emergencyCallOptionsView: some View {
         Group {
             if showEmergencyCallOptions {
                 VStack {
                     Spacer()
                     VStack(spacing: 0) {
-                        // Title
                         Text("Emergency Call Options")
                             .font(.title3)
                             .fontWeight(.semibold)
@@ -147,7 +180,6 @@ struct NavigationMapView: View {
                             .padding(.top, 20)
                             .padding(.bottom, 16)
                         
-                        // Call Fleet Manager Button
                         Button(action: {
                             if let url = URL(string: "tel://7440312800") {
                                 UIApplication.shared.open(url)
@@ -181,7 +213,6 @@ struct NavigationMapView: View {
                             .padding(.vertical, 8)
                             .padding(.horizontal, 16)
                         
-                        // Call NHAI Assistance Button
                         Button(action: {
                             if let url = URL(string: "tel://1033") {
                                 UIApplication.shared.open(url)
@@ -215,7 +246,6 @@ struct NavigationMapView: View {
                             .padding(.vertical, 8)
                             .padding(.horizontal, 16)
                         
-                        // Cancel Button
                         Button(action: {
                             showEmergencyCallOptions = false
                         }) {
@@ -232,7 +262,7 @@ struct NavigationMapView: View {
                                                 .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                                         )
                                 )
-                                .cornerRadius(12)
+                            .cornerRadius(12)
                         }
                         .padding(.bottom, 20)
                     }
@@ -244,7 +274,7 @@ struct NavigationMapView: View {
                     )
                     .padding(.bottom, 16)
                     .transition(.move(edge: .bottom))
-                    .animation(.spring())
+                    .animation(.spring(), value: showEmergencyCallOptions)
                 }
                 .edgesIgnoringSafeArea(.bottom)
                 .background(
@@ -252,6 +282,166 @@ struct NavigationMapView: View {
                         .edgesIgnoringSafeArea(.all)
                         .onTapGesture {
                             showEmergencyCallOptions = false
+                        }
+                )
+            }
+        }
+    }
+    
+    // Blur view for filter options background
+    struct BlurView: UIViewRepresentable {
+        func makeUIView(context: Context) -> UIVisualEffectView {
+            let view = UIVisualEffectView(effect: UIBlurEffect(style: .regular))
+            return view
+        }
+        
+        func updateUIView(_ uiView: UIVisualEffectView, context: Context) {}
+    }
+    
+    // Filter options panel
+    private var filterOptionsView: some View {
+        Group {
+            if showFilterOptions {
+                VStack {
+                    VStack(spacing: 0) {
+                        Text("HELP POINTS")
+                            .font(.title3)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.black)
+                            .padding(.top, 20)
+                            .padding(.bottom, 16)
+                        
+                        Button(action: {
+                            toggleFilter(.hospital)
+                            showFilterOptions = false
+                        }) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "cross.circle.fill")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(.blue)
+                                Text("Hospital")
+                                    .font(.body)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.blue)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                            .frame(maxWidth: .infinity)
+                            .background(
+                                Color.gray.opacity(0.1)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                    )
+                            )
+                            .cornerRadius(12)
+                        }
+                        
+                        Divider()
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 16)
+                        
+                        Button(action: {
+                            toggleFilter(.petrolPump)
+                            showFilterOptions = false
+                        }) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "fuelpump.fill")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(.blue)
+                                Text("Petrol Pump")
+                                    .font(.body)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.blue)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                            .frame(maxWidth: .infinity)
+                            .background(
+                                Color.gray.opacity(0.1)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                    )
+                            )
+                            .cornerRadius(12)
+                        }
+                        
+                        Divider()
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 16)
+                        
+                        Button(action: {
+                            toggleFilter(.mechanics)
+                            showFilterOptions = false
+                        }) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "wrench.and.screwdriver.fill")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(.blue)
+                                Text("Mechanics")
+                                    .font(.body)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.blue)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                            .frame(maxWidth: .infinity)
+                            .background(
+                                Color.gray.opacity(0.1)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                    )
+                            )
+                            .cornerRadius(12)
+                        }
+                        
+                        Divider()
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 16)
+                        
+                        Button(action: {
+                            toggleFilter(.none)
+                            showFilterOptions = false
+                        }) {
+                            Text("Cancel")
+                                .font(.body)
+                                .fontWeight(.medium)
+                                .foregroundColor(.red)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(
+                                    Color.gray.opacity(0.1)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                        )
+                                )
+                            .cornerRadius(12)
+                        }
+                        .padding(.bottom, 20)
+                    }
+                    .padding(.horizontal, 16)
+                    .background(
+                        Color.white
+                            .clipShape(RoundedRectangle(cornerRadius: 20))
+                    )
+                    .padding(.top, 100) // Position below floating buttons
+                    .padding(.horizontal, 16)
+                    .transition(.move(edge: .top))
+                    .animation(.spring(), value: showFilterOptions)
+                }
+                .edgesIgnoringSafeArea(.top)
+                .background(
+                    BlurView()
+                        .edgesIgnoringSafeArea(.all)
+                        .onTapGesture {
+                            toggleFilter(.none)
+                            showFilterOptions = false
                         }
                 )
             }
@@ -409,6 +599,7 @@ struct NavigationMapView: View {
                 bottomCard
                 expenseModal
                 emergencyCallOptionsView
+                filterOptionsView
                 
                 if showImagePreview, let imageData = selectedImageData, let uiImage = UIImage(data: imageData) {
                     ZStack {
@@ -521,6 +712,93 @@ struct NavigationMapView: View {
                     }
                 }
             )
+        }
+    }
+    
+    private func toggleFilter(_ filter: FilterType) {
+        if selectedFilter == filter {
+            selectedFilter = .none
+            poiAnnotations = []
+        } else {
+            selectedFilter = filter
+            searchNearbyPOIs(filter: filter)
+        }
+    }
+    
+    private func searchNearbyPOIs(filter: FilterType) {
+        guard let pickup = navigationVM.pickupLocation?.coordinate,
+              let drop = navigationVM.dropLocation?.coordinate else {
+            poiAnnotations = []
+            return
+        }
+        
+        let searchTerm: String
+        switch filter {
+        case .hospital:
+            searchTerm = "hospital, medical, clinic, emergency room"
+        case .petrolPump:
+            searchTerm = "gas station, fuel, petrol station, service station"
+        case .mechanics:
+            searchTerm = "auto repair, mechanic, car repair, auto service"
+        default:
+            poiAnnotations = []
+            return
+        }
+        
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = searchTerm
+        request.resultTypes = .pointOfInterest
+        
+        // Create a region that encompasses both pickup and drop locations
+        let coordinates = [pickup, drop]
+        let minLat = coordinates.map { $0.latitude }.min()!
+        let maxLat = coordinates.map { $0.latitude }.max()!
+        let minLon = coordinates.map { $0.longitude }.min()!
+        let maxLon = coordinates.map { $0.longitude }.max()!
+        
+        let center = CLLocationCoordinate2D(
+            latitude: (minLat + maxLat) / 2,
+            longitude: (minLon + maxLon) / 2
+        )
+        
+        // Calculate span with a minimum threshold to ensure broader coverage
+        let baseLatDelta = maxLat - minLat
+        let baseLonDelta = maxLon - minLon
+        let minDelta = 0.1 // ~11 km at equator
+        let span = MKCoordinateSpan(
+            latitudeDelta: max(baseLatDelta * 2.0, minDelta),
+            longitudeDelta: max(baseLonDelta * 2.0, minDelta)
+        )
+        request.region = MKCoordinateRegion(center: center, span: span)
+        
+        let search = MKLocalSearch(request: request)
+        search.start { response, error in
+            guard let response = response, error == nil else {
+                print("Error searching for \(searchTerm): \(error?.localizedDescription ?? "Unknown error")")
+                poiAnnotations = []
+                return
+            }
+            
+            print("Found \(response.mapItems.count) results for \(searchTerm) in region: \(request.region)")
+            
+            poiAnnotations = response.mapItems.map { item in
+                let annotation = CustomPointAnnotation()
+                annotation.coordinate = item.placemark.coordinate
+                annotation.title = item.name
+                switch filter {
+                case .hospital:
+                    annotation.annotationType = .hospital
+                case .petrolPump:
+                    annotation.annotationType = .petrolPump
+                case .mechanics:
+                    annotation.annotationType = .mechanics
+                default:
+                    annotation.annotationType = .none
+                }
+                return annotation
+            }
+            
+            print("\(filter.rawValue) found: \(poiAnnotations.map { $0.title ?? "Unnamed" })")
         }
     }
 }
