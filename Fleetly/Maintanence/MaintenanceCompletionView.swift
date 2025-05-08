@@ -22,7 +22,7 @@ struct MaintenanceCompletionView: View {
                             VStack(alignment: .leading) {
                                 Text(part.name)
                                     .font(.headline)
-                                Text("Unit Price: $\(String(format: "%.2f", part.price))")
+                                Text("Unit Price: ₹\(String(format: "%.2f", part.price))")
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                             }
@@ -86,7 +86,7 @@ struct MaintenanceCompletionView: View {
                         Text("Total Cost")
                             .font(.headline)
                         Spacer()
-                        Text("$\(String(format: "%.2f", totalCost))")
+                        Text("₹\(String(format: "%.2f", totalCost))")
                             .font(.headline)
                             .foregroundColor(.blue)
                     }
