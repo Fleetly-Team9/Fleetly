@@ -18,7 +18,7 @@ import FirebaseFirestore
 //    let vehicleType: String
 //    let passengers: Int?
 //    let loadWeight: Double?
-//    
+//
 //    enum TripStatus: String, Codable {
 //        case assigned = "assigned"
 //        case ongoing = "ongoing"
@@ -343,8 +343,6 @@ struct AssignView: View {
     @State private var showDateWarning: Bool = false
     @State private var dateWarningMessage: String = ""
     
-    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
-    
     enum VehicleType: String, CaseIterable {
         case passenger = "Passenger Vehicle"
         case cargo = "Cargo Vehicle"
@@ -361,7 +359,7 @@ struct AssignView: View {
                     // FROM Location Row (OUTSIDE Section)
                     HStack(spacing: 12) {
                         Image(systemName: "location.fill")
-                            .foregroundColor(isColorBlindMode ? Color(hex: "E69F00") : .green)
+                            .foregroundColor(.green)
                             .frame(width: 24, height: 24)
                         
                         ClearableTextField(text: $fromLocation, placeholder: "From Location")
@@ -388,7 +386,7 @@ struct AssignView: View {
                                 }) {
                                     HStack(spacing: 12) {
                                         Image(systemName: "mappin.and.ellipse")
-                                            .foregroundColor(isColorBlindMode ? Color(hex: "0072B2") : .blue)
+                                            .foregroundColor(.blue)
                                             .frame(width: 24, height: 24)
                                             .padding(.trailing, 4)
                                         
@@ -422,7 +420,7 @@ struct AssignView: View {
                     // TO Location Row (OUTSIDE Section)
                     HStack(spacing: 12) {
                         Image(systemName: "location.fill")
-                            .foregroundColor(isColorBlindMode ? Color(hex: "E69F00") : .red)
+                            .foregroundColor(.red)
                             .frame(width: 24, height: 24)
                         
                         ClearableTextField(text: $toLocation, placeholder: "To Location")
@@ -450,7 +448,7 @@ struct AssignView: View {
                                 }) {
                                     HStack(spacing: 12) {
                                         Image(systemName: "mappin.and.ellipse")
-                                            .foregroundColor(isColorBlindMode ? Color(hex: "0072B2") : .green)
+                                            .foregroundColor(.green)
                                             .frame(width: 24, height: 24)
                                             .padding(.trailing, 4)
                                         
@@ -510,7 +508,7 @@ struct AssignView: View {
                     // Time of Journey
                     HStack(spacing: 12) {
                         Image(systemName: "clock")
-                            .foregroundColor(isColorBlindMode ? Color(hex: "E69F00") : .orange)
+                            .foregroundColor(.orange)
                             .frame(width: 24, height: 24)
                         
                         DatePicker(
@@ -597,7 +595,7 @@ struct AssignView: View {
                                     .frame(width: 30, height: 30)
                                 Image(systemName: "car.fill")
                                     .font(.system(size: 20, weight: .medium))
-                                    .foregroundColor(isColorBlindMode ? Color(hex: "0072B2") : .blue)
+                                    .foregroundColor(.blue)
                             }
                             
                             VStack(alignment: .leading, spacing: 2) {
@@ -644,7 +642,7 @@ struct AssignView: View {
                                     .frame(width: 30, height: 30)
                                 Image(systemName: "person.fill")
                                     .font(.system(size: 20, weight: .medium))
-                                    .foregroundColor(isColorBlindMode ? Color(hex: "0072B2") : .green)
+                                    .foregroundColor(.green)
                             }
                             
                             VStack(alignment: .leading, spacing: 2) {
@@ -749,16 +747,24 @@ struct AssignView: View {
             }
             .sheet(isPresented: $showVehicleSheet) {
                 TaskVehicleListView(selectedVehicle: $selectedVehicle, vehicles: assignViewModel.vehicles, viewModel: assignViewModel)
+                    .background(
+                        RoundedRectangle(cornerRadius: 30)
+                            .fill(Color(.systemBackground))
+                            .edgesIgnoringSafeArea(.bottom)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
                     .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-                    .interactiveDismissDisabled(false)
             }
             
             .sheet(isPresented: $showDriverSheet) {
                 DriverListView(selectedDriver: $selectedDriver, drivers: assignViewModel.drivers, viewModel: assignViewModel)
+                    .background(
+                        RoundedRectangle(cornerRadius: 30)
+                            .fill(Color(.systemBackground))
+                            .edgesIgnoringSafeArea(.bottom)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
                     .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-                    .interactiveDismissDisabled(false)
             }
             
         }
@@ -859,77 +865,80 @@ struct TaskVehicleListView: View {
     let vehicles: [Vehicle]
     @ObservedObject var viewModel: AssignTripViewModel
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
 
     var body: some View {
         NavigationStack {
-
-            List {
-                ForEach(vehicles) { vehicle in
-                    Button(action: {
-                        selectedVehicle = vehicle
-                        dismiss()
-                    }) {
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack(spacing: 16) {
-                                Image(systemName: "car.fill")
-                                    .font(.system(size: 24))
-                                    .foregroundColor(.blue)
-                                    .frame(width: 44, height: 44)
-                                    .background(Color.blue.opacity(0.1))
-                                    .clipShape(Circle())
-
-
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("\(vehicle.make) \(vehicle.model)")
-                                        .font(.headline)
-                                        .foregroundColor(.primary)
-
-                                    Text(vehicle.licensePlate)
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-                                }
-
-                                Spacer()
-
-                                if selectedVehicle?.id == vehicle.id {
-                                    Image(systemName: "checkmark.circle.fill")
+            ScrollView {
+                LazyVStack(spacing: 16) {
+                    ForEach(vehicles) { vehicle in
+                        Button(action: {
+                            selectedVehicle = vehicle
+                            dismiss()
+                        }) {
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack(spacing: 16) {
+                                    Image(systemName: "car.fill")
+                                        .font(.system(size: 24))
                                         .foregroundColor(.blue)
-                                }
-                            }
-                            
-                            if let trips = viewModel.vehicleTrips[vehicle.id.uuidString], !trips.isEmpty {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Today's Trips:")
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-                                    
-                                    ForEach(trips) { trip in
-                                        HStack {
-                                            Image(systemName: "clock")
-                                                .foregroundColor(.orange)
-                                            (
-                                                Text("\(trip.time)  ").fontWeight(.semibold).foregroundColor(.black)
-                                                    + Text("•  \(trip.startLocation) ")
-                                                    + Text("→").bold().foregroundColor(.black)
-                                                    
-                                                    + Text(" \(trip.endLocation)")
-                                                )
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                        }
+                                        .frame(width: 44, height: 44)
+                                        .background(Color.blue.opacity(0.1))
+                                        .clipShape(Circle())
+
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("\(vehicle.make) \(vehicle.model)")
+                                            .font(.headline)
+                                            .foregroundColor(.primary)
+
+                                        Text(vehicle.licensePlate)
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+                                    }
+
+                                    Spacer()
+
+                                    if selectedVehicle?.id == vehicle.id {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(.blue)
                                     }
                                 }
-                                .padding(.leading, 60)
+                                
+                                if let trips = viewModel.vehicleTrips[vehicle.id.uuidString], !trips.isEmpty {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text("Today's Trips:")
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+                                        
+                                        ForEach(trips) { trip in
+                                            HStack {
+                                                Image(systemName: "clock")
+                                                    .foregroundColor(.orange)
+                                                (
+                                                    Text("\(trip.time)  ").fontWeight(.semibold).foregroundColor(.black)
+                                                        + Text("•  \(trip.startLocation) ")
+                                                        + Text("→").bold().foregroundColor(.black)
+                                                        
+                                                        + Text(" \(trip.endLocation)")
+                                                    )
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                            }
+                                        }
+                                    }
+                                    .padding(.leading, 60)
+                                }
                             }
+                            .padding()
+                            .background(Color(.systemBackground))
+                            .cornerRadius(16)
+                            .shadow(color: Color.black.opacity(0.1), radius: 4, x: 2, y: 2)
                         }
-                        .padding(.vertical, 8)
+                        .buttonStyle(PlainButtonStyle())
+                        .padding(.horizontal)
                     }
-                    .buttonStyle(PlainButtonStyle())
                 }
+                .padding(.top)
             }
             .navigationTitle("Select Vehicle")
-            .navigationBarTitleDisplayMode(.inline)
         }
     }
 }
@@ -941,11 +950,9 @@ struct DriverListView: View {
     let drivers: [User]
     @ObservedObject var viewModel: AssignTripViewModel
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
 
     var body: some View {
         NavigationStack {
-
             ScrollView {
                 LazyVStack(spacing: 16) {
                     ForEach(drivers) { driver in
@@ -957,64 +964,67 @@ struct DriverListView: View {
                                 HStack(spacing: 16) {
                                     Image(systemName: "person.fill")
                                         .font(.system(size: 24))
-                                        .foregroundColor(isColorBlindMode ? Color(hex: "0072B2") : .green)
+                                        .foregroundColor(.green)
                                         .frame(width: 44, height: 44)
                                         .background(Color.green.opacity(0.1))
                                         .clipShape(Circle())
 
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(driver.name)
+                                            .font(.headline)
+                                            .foregroundColor(.primary)
 
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(driver.name)
-                                        .font(.headline)
-                                        .foregroundColor(.primary)
+                                        Text(driver.phone)
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+                                    }
 
-                                    Text(driver.phone)
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-                                }
+                                    Spacer()
 
-                                Spacer()
-
-                                if selectedDriver?.id == driver.id {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundColor(.green)
-                                }
-                            }
-                            
-                            if let trips = viewModel.driverTrips[driver.id], !trips.isEmpty {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Today's Trips:")
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-                                    
-                                    ForEach(trips) { trip in
-                                        HStack {
-                                            Image(systemName: "clock")
-                                                .foregroundColor(.orange)
-                                            (
-                                                Text("\(trip.time)  ").fontWeight(.semibold).foregroundColor(.black)
-                                                    + Text("•  \(trip.startLocation) ")
-                                                    + Text("→").bold().foregroundColor(.black)
-                                                    
-                                                    + Text(" \(trip.endLocation)")
-                                                )
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                        }
+                                    if selectedDriver?.id == driver.id {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(.green)
                                     }
                                 }
-                                .padding(.leading, 60)
+                                
+                                if let trips = viewModel.driverTrips[driver.id], !trips.isEmpty {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text("Today's Trips:")
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+                                        
+                                        ForEach(trips) { trip in
+                                            HStack {
+                                                Image(systemName: "clock")
+                                                    .foregroundColor(.orange)
+                                                (
+                                                    Text("\(trip.time)  ").fontWeight(.semibold).foregroundColor(.black)
+                                                        + Text("•  \(trip.startLocation) ")
+                                                        + Text("→").bold().foregroundColor(.black)
+                                                        
+                                                        + Text(" \(trip.endLocation)")
+                                                    )
+                                       .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                            }
+                                        }
+                                    }
+                                    .padding(.leading, 60)
+                                }
                             }
+                            .padding()
+                            .background(Color(.systemBackground))
+                            .cornerRadius(16)
+                            .shadow(color: Color.black.opacity(0.1), radius: 4, x: 2, y: 2)
                         }
-                        .padding(.vertical, 8)
+                        .buttonStyle(PlainButtonStyle())
+                        .padding(.horizontal)
                     }
-                    .buttonStyle(PlainButtonStyle())
                 }
+                .padding(.top)
             }
             .navigationTitle("Select Driver")
-            .navigationBarTitleDisplayMode(.inline)
         }
     }
 }
-
 
