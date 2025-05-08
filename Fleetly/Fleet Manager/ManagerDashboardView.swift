@@ -412,13 +412,15 @@ class DriverStatsViewModel: ObservableObject {
     private let db = Firestore.firestore()
 
     func fetchDriverCount() {
-        db.collection("users").getDocuments { (querySnapshot, error) in
-            if let error = error {
-                print("Error fetching driver count: \(error.localizedDescription)")
-                return
+        db.collection("users")
+            .whereField("role", isEqualTo: "driver")
+            .getDocuments { (querySnapshot, error) in
+                if let error = error {
+                    print("Error fetching driver count: \(error.localizedDescription)")
+                    return
+                }
+                self.driverCount = querySnapshot?.documents.count ?? 0
             }
-            self.driverCount = querySnapshot?.documents.count ?? 0
-        }
     }
 }
 
@@ -861,7 +863,7 @@ struct DashboardHomeView: View {
                 .padding(.bottom, 20)
             }
             .background(Color(.systemGroupedBackground))
-            .navigationTitle("Hello, Fleet!")
+            .navigationTitle("Hello, Manager!")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
