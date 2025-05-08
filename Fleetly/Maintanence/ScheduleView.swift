@@ -536,51 +536,6 @@ struct ScheduleView: View {
     }
 }
 
-struct ScheduleView_Previews: PreviewProvider {
-    static var previews: some View {
-        NavigationView {
-            ScheduleView(
-                tasksByDate: [
-                    "06-05-2025": [
-                        DisplayTask(
-                            id: "1",
-                            task: MaintenanceTask(
-                                id: "1",
-                                vehicleId: "veh1",
-                                issue: "Oil Change",
-                                completionDate: "2025-05-06",
-                                priority: "medium",
-                                assignedToId: "user1",
-                                status: .pending,
-                                createdAt: "2025-05-01"
-                            ),
-                            licensePlate: "ABC123",
-                            make: "Toyota",
-                            model: "Camry"
-                        ),
-                        DisplayTask(
-                            id: "2",
-                            task: MaintenanceTask(
-                                id: "2",
-                                vehicleId: "veh2",
-                                issue: "Tire Rotation",
-                                completionDate: "2025-05-06",
-                                priority: "low",
-                                assignedToId: "user1",
-                                status: .completed,
-                                createdAt: "2025-05-01"
-                            ),
-                            licensePlate: "XYZ789",
-                            make: "Honda",
-                            model: "Civic"
-                        )
-                    ]
-                ]
-            )
-        }
-        .preferredColorScheme(.dark) // Test in dark mode
-    }
-}
 
 // Extension to chunk arrays for Firestore 'in' query limit
 extension Array {
