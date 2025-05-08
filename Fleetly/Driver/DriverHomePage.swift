@@ -517,6 +517,7 @@ struct DriverHomePage: View {
         let trip: Trip
         
         var body: some View {
+
             VStack(spacing: 12) {
                             // Date and Time Row
                             HStack(spacing: 24) {
@@ -538,6 +539,9 @@ struct DriverHomePage: View {
                         }
                     }
                 }
+
+      
+
 
     private struct DetailColumn: View {
         let icon: String
