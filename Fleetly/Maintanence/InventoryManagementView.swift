@@ -11,6 +11,7 @@ struct InventoryManagementView: View {
     @State private var errorMessage = ""
     @State private var searchText = ""
     @Environment(\.colorScheme) private var colorScheme
+    @StateObject private var colorManager = ColorManager.shared
     
     var filteredItems: [Inventory.Item] {
         let items = viewModel.items
@@ -70,14 +71,14 @@ struct InventoryManagementView: View {
                                 title: "Total Items",
                                 value: "\(viewModel.items.count)",
                                 icon: "cube.box.fill",
-                                color: .blue
+                                color: colorManager.primaryColor
                             )
                             
                             StatCard(
                                 title: "Low Stock",
                                 value: "\(viewModel.items.filter { $0.units <= $0.minUnits }.count)",
                                 icon: "exclamationmark.triangle.fill",
-                                color: .red
+                                color: colorManager.accentColor
                             )
                         }
                         .padding(.horizontal)
@@ -86,10 +87,10 @@ struct InventoryManagementView: View {
                         if filteredItems.contains(where: { $0.units <= $0.minUnits }) {
                             HStack(spacing: 8) {
                                 Image(systemName: "exclamationmark.triangle.fill")
-                                    .foregroundColor(.red)
+                                    .foregroundColor(colorManager.accentColor)
                                 Text("Items need attention")
                                     .font(.system(.subheadline, design: .rounded))
-                                    .foregroundColor(.red)
+                                    .foregroundColor(colorManager.accentColor)
                             }
                             .padding(.horizontal)
                         }
@@ -133,7 +134,7 @@ struct InventoryManagementView: View {
                             isAddItemSheetPresented = true
                         }) {
                             Image(systemName: "plus.circle.fill")
-                                .foregroundStyle(.blue)
+                                .foregroundStyle(colorManager.primaryColor)
                                 .font(.system(size: 22))
                         }
                     }
@@ -289,6 +290,7 @@ struct EmptyStateView: View {
 struct InventoryRow: View {
     let item: Inventory.Item
     var onUpdate: (() -> Void)?
+    @StateObject private var colorManager = ColorManager.shared
     
     var body: some View {
         HStack(spacing: 16) {
@@ -302,7 +304,7 @@ struct InventoryRow: View {
                     
                     if item.units <= item.minUnits {
                         Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundColor(.red)
+                            .foregroundColor(colorManager.accentColor)
                             .imageScale(.small)
                     }
                 }
@@ -312,11 +314,11 @@ struct InventoryRow: View {
                     // Units
                     HStack(spacing: 4) {
                         Image(systemName: "cube.box.fill")
-                            .foregroundColor(item.units <= item.minUnits ? .red : .secondary)
+                            .foregroundColor(item.units <= item.minUnits ? colorManager.accentColor : .secondary)
                             .imageScale(.small)
                         Text("\(item.units) units")
                             .font(.system(.subheadline, design: .rounded))
-                            .foregroundColor(item.units <= item.minUnits ? .red : .secondary)
+                            .foregroundColor(item.units <= item.minUnits ? colorManager.accentColor : .secondary)
                     }
                     
                     // Price
@@ -340,12 +342,12 @@ struct InventoryRow: View {
                     .padding(.vertical, 8)
                     .background(
                         LinearGradient(
-                            colors: [Color.blue.opacity(0.15), Color.blue.opacity(0.1)],
+                            colors: [colorManager.primaryColor.opacity(0.15), colorManager.primaryColor.opacity(0.1)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
-                    .foregroundColor(.blue)
+                    .foregroundColor(colorManager.primaryColor)
                     .cornerRadius(10)
             }
         }
@@ -367,8 +369,8 @@ struct InventoryRow: View {
                         .strokeBorder(
                             LinearGradient(
                                 colors: [
-                                    item.units <= item.minUnits ? Color.red.opacity(0.3) : Color.blue.opacity(0.3),
-                                    item.units <= item.minUnits ? Color.red.opacity(0.1) : Color.blue.opacity(0.1)
+                                    item.units <= item.minUnits ? colorManager.accentColor.opacity(0.3) : colorManager.primaryColor.opacity(0.3),
+                                    item.units <= item.minUnits ? colorManager.accentColor.opacity(0.1) : colorManager.primaryColor.opacity(0.1)
                                 ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
@@ -440,6 +442,7 @@ struct UpdateSheet: View {
     let onUpdate: (Int, Double) -> Void
     @State private var tempUnits: Int
     @State private var tempPrice: String
+    @StateObject private var colorManager = ColorManager.shared
 
     init(item: Inventory.Item, onClose: @escaping () -> Void, onUpdate: @escaping (Int, Double) -> Void) {
         self.item = item
@@ -465,7 +468,7 @@ struct UpdateSheet: View {
                         tempUnits = max(0, tempUnits - 1)
                     }) {
                         Image(systemName: "minus.circle.fill")
-                            .foregroundStyle(tempUnits > 0 ? .blue : .gray)
+                            .foregroundStyle(tempUnits > 0 ? colorManager.primaryColor : .gray)
                             .font(.system(size: 32))
                     }
                     .disabled(tempUnits <= 0)
@@ -480,7 +483,7 @@ struct UpdateSheet: View {
                         tempUnits += 1
                     }) {
                         Image(systemName: "plus.circle.fill")
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(colorManager.primaryColor)
                             .font(.system(size: 32))
                     }
                 }
@@ -511,7 +514,7 @@ struct UpdateSheet: View {
                 }) {
                     Text("Cancel")
                         .font(.system(.subheadline, design: .rounded, weight: .medium))
-                        .foregroundColor(.blue)
+                        .foregroundColor(colorManager.primaryColor)
                         .frame(maxWidth: 120)
                         .padding(.vertical, 12)
                         .background(Color(.systemGray6))
@@ -528,7 +531,7 @@ struct UpdateSheet: View {
                 }) {
                     Text("Update")
                         .font(.system(.subheadline, design: .rounded, weight: .medium))
-                        .foregroundColor(.blue)
+                        .foregroundColor(colorManager.primaryColor)
                         .frame(maxWidth: 120)
                         .padding(.vertical, 12)
                         .background(Color(.systemGray6))
@@ -548,6 +551,7 @@ struct AddItemSheet: View {
     @State private var newItemName: String = ""
     @State private var newItemUnits: String = ""
     @State private var newItemPrice: String = ""
+    @StateObject private var colorManager = ColorManager.shared
 
     var body: some View {
         VStack(spacing: 5) {
@@ -613,7 +617,7 @@ struct AddItemSheet: View {
                 }) {
                     Text("Cancel")
                         .font(.system(.subheadline, design: .rounded))
-                        .foregroundColor(.blue)
+                        .foregroundColor(colorManager.primaryColor)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .background(Color(.systemGray6))
@@ -637,7 +641,7 @@ struct AddItemSheet: View {
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(isFormValid ? Color.blue : Color.blue.opacity(0.5))
+                        .background(isFormValid ? colorManager.primaryColor : colorManager.primaryColor.opacity(0.5))
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
                 .disabled(!isFormValid)
