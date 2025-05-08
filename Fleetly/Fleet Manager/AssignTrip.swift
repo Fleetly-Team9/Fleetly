@@ -249,7 +249,13 @@ class AssignTripViewModel: ObservableObject {
             status: .assigned,
             vehicleType: vehicleType,
             passengers: passengers,
-            loadWeight: loadWeight
+            loadWeight: loadWeight,
+            misc: nil,
+            fuelLog: nil,
+            tollFees: nil,
+            incidental: nil,
+            goClicked: nil,
+            endClicked: nil
         )
         
         do {
