@@ -34,14 +34,13 @@ struct DriverHomePage: View {
     @State private var elapsedTime: TimeInterval = 0
     @State private var isStopwatchRunning = false
     @State private var startTime: Date? = nil
-    @State private var isNavigating = false
+    @State private var navigatingTripId: String? = nil
     @State private var userTrackingMode: MapUserTrackingMode = .follow
     @State private var isClockedIn = false
     @State private var currentWorkOrderIndex: Int = 0
     @State private var swipeOffsets: [String: CGFloat] = [:]
-    @State private var isSwiping: [String: Bool] = [:]
     @State private var isDragCompleted: [String: Bool] = [:]
-    @State private var isNavigatingTrip: [String: Bool] = [:]
+    @State private var isSwiping: [String: Bool] = [:]
     @StateObject private var assignedTripsVM = AssignedTripsViewModel()
     @State private var didStartListener = false
     @State private var profileImage: Image?
@@ -517,64 +516,58 @@ struct DriverHomePage: View {
         let trip: Trip
         
         var body: some View {
-            VStack(spacing: 12) {
-                            // Date and Time Row
-                            HStack(spacing: 24) {
-                                DetailColumn(icon: "calendar", label: "Date", value: trip.date)
-                                DetailColumn(icon: "clock", label: "Time", value: trip.time)
-                            }
-                            
-                            // Vehicle Type and Capacity Row
-                            HStack(spacing: 24) {
-                                DetailColumn(icon: "car.fill", label: "Vehicle Type", value: trip.vehicleType)
-                                DetailColumn(
-                                    icon: trip.vehicleType == "Passenger Vehicle" ? "person.2.fill" : "scalemass.fill",
-                                    label: trip.vehicleType == "Passenger Vehicle" ? "Passengers" : "Load",
-                                    value: trip.vehicleType == "Passenger Vehicle" ?
-                                        "\(trip.passengers ?? 0)" :
-                                        "\(Int(trip.loadWeight ?? 0)) kg"
-                                )
-                            }
-                        }
-                    }
-                }
+            HStack(spacing: 24) {
+                DetailColumn(label: "Time", value: trip.time)
+                DetailColumn(label: "Vehicle Type", value: trip.vehicleType)
+                DetailColumn(
+                    label: trip.vehicleType == "Passenger Vehicle" ? "Passengers" : "Load",
+                    value: trip.vehicleType == "Passenger Vehicle" ?
+                        "\(trip.passengers ?? 0)" :
+                        "\(Int(trip.loadWeight ?? 0)) kg",
+                )
+            }
+        }
+    }
 
     private struct DetailColumn: View {
-        let icon: String
         let label: String
-        
         let value: String
         
         var body: some View {
-            HStack(spacing: 8) {
-                            Image(systemName: icon)
-                                .foregroundStyle(Color.accentColor)
-                                .frame(width: 20)
-                            
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(label)
-                                    .font(.subheadline)
-                                    .foregroundStyle(Color.secondary)
-                                Text(value)
-                                    .font(.headline)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
+            VStack(alignment: .leading, spacing: 2) { // Reduced spacing from 4 to 2
+                Text(label)
+                    .font(.subheadline)
+                    .foregroundStyle(Color.secondary)
+                Text(value)
+                    .font(.headline)
+            }
+        }
+    }
 
     struct TripActionButton: View {
         let trip: Trip
-        @Binding var isNavigating: Bool
-        @Binding var swipeOffset: CGFloat
-        @Binding var isDragCompleted: Bool
-        @Binding var isSwiping: Bool
+        @Binding var navigatingTripId: String?
+        @Binding var swipeOffsets: [String: CGFloat]
+        @Binding var isDragCompleted: [String: Bool]
+        @Binding var isSwiping: [String: Bool]
         let maxX: CGFloat
         let authVM: AuthViewModel
         let gradientStart: Color
         let gradientEnd: Color
         @Environment(\.colorScheme) var colorScheme
         @State private var sliderOpacity: Double = 1.0
+        
+        private var swipeOffset: CGFloat {
+            swipeOffsets[trip.id] ?? 0
+        }
+        
+        private var isTripDragCompleted: Bool {
+            isDragCompleted[trip.id] ?? false
+        }
+        
+        private var isTripSwiping: Bool {
+            isSwiping[trip.id] ?? false
+        }
         
         var body: some View {
             GeometryReader { geometry in
@@ -587,12 +580,15 @@ struct DriverHomePage: View {
                             tripID: trip.id,
                             vehicleID: trip.vehicleId
                         ),
-                        isActive: $isNavigating,
+                        isActive: Binding(
+                            get: { navigatingTripId == trip.id },
+                            set: { if !$0 { navigatingTripId = nil } }
+                        ),
                         label: {
                             LinearGradient(
                                 colors: swipeOffset == 0 ? [Color(.systemGray5), Color(.systemGray5)] : [
                                     gradientStart,
-                                    swipeOffset >= maxX - 10 || isDragCompleted ? gradientEnd : gradientStart
+                                    swipeOffset >= maxX - 10 || isTripDragCompleted ? gradientEnd : gradientStart
                                 ],
                                 startPoint: .leading,
                                 endPoint: .trailing
@@ -615,29 +611,29 @@ struct DriverHomePage: View {
                         .opacity(sliderOpacity)
                         .offset(x: swipeOffset)
                         .gesture(
-                            isDragCompleted ? nil : DragGesture(minimumDistance: 5)
+                            isTripDragCompleted ? nil : DragGesture(minimumDistance: 5)
                                 .onChanged { value in
-                                    isSwiping = true
+                                    isSwiping[trip.id] = true
                                     let calculatedMaxX = geometry.size.width - 53
-                                    swipeOffset = min(max(0, value.translation.width), calculatedMaxX)
+                                    swipeOffsets[trip.id] = min(max(0, value.translation.width), calculatedMaxX)
                                 }
                                 .onEnded { _ in
-                                    isSwiping = false
+                                    isSwiping[trip.id] = false
                                     let calculatedMaxX = geometry.size.width - 53
                                     if swipeOffset >= calculatedMaxX - 10 {
-                                        swipeOffset = calculatedMaxX
-                                        isDragCompleted = true
+                                        swipeOffsets[trip.id] = calculatedMaxX
+                                        isDragCompleted[trip.id] = true
                                         
                                         withAnimation(.easeOut(duration: 0.3)) {
                                             sliderOpacity = 0
                                         }
                                         
                                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                            isNavigating = true
+                                            navigatingTripId = trip.id
                                         }
                                     } else {
                                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                            swipeOffset = 0
+                                            swipeOffsets[trip.id] = 0
                                         }
                                     }
                                 }
@@ -647,7 +643,7 @@ struct DriverHomePage: View {
                         
                         Text("Slide to get Ready")
                             .font(.headline)
-                            .foregroundColor(swipeOffset > 0 || isDragCompleted ? .white : Color(.systemBlue))
+                            .foregroundColor(swipeOffset > 0 || isTripDragCompleted ? .white : Color(.systemBlue))
                             .padding(.trailing, 16)
                     }
                     .padding(.leading, 0)
@@ -667,8 +663,8 @@ struct DriverHomePage: View {
             .onAppear {
                 resetSliderState()
             }
-            .onChange(of: isNavigating) { newValue in
-                if !newValue {
+            .onChange(of: navigatingTripId) { newValue in
+                if newValue != trip.id {
                     resetSliderState()
                 }
             }
@@ -676,8 +672,8 @@ struct DriverHomePage: View {
         
         private func resetSliderState() {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                swipeOffset = 0
-                isDragCompleted = false
+                swipeOffsets[trip.id] = 0
+                isDragCompleted[trip.id] = false
                 sliderOpacity = 1.0
             }
         }
@@ -689,7 +685,7 @@ struct DriverHomePage: View {
         return VStack(spacing: 0) {
             // Card wrapper that includes the map
             ZStack(alignment: .top) {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(colorScheme == .dark ? Color(UIColor.systemGray4) : Color.white)
                     .shadow(color: colorScheme == .dark ? Color.black.opacity(0.3) : Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
                 
@@ -706,42 +702,29 @@ struct DriverHomePage: View {
                         poiAnnotations: []
                     )
                     .frame(width: 363, height: 150)
-                    .cornerRadius(16, corners: [.topLeft, .topRight]) // Removed corner radius from map since it's inside the card
+                    .cornerRadius(0) // Removed corner radius from map since it's inside the card
                     
-                    VStack(alignment: .leading, spacing: 16) { // Reduced spacing from 16 to 12
+                    VStack(alignment: .leading, spacing: 12) { // Reduced spacing from 16 to 12
                         TripLocationSection(trip: trip)
                         
                         Divider()
-                            .padding(.horizontal, -10)
                         
                         TripDetailsSection(trip: trip)
                         
                         TripActionButton(
                             trip: trip,
-                            isNavigating: Binding(
-                                get: { isNavigatingTrip[trip.id] ?? false },
-                                set: { isNavigatingTrip[trip.id] = $0 }
-                            ),
-                            swipeOffset: Binding(
-                                get: { swipeOffsets[trip.id] ?? 0 },
-                                set: { swipeOffsets[trip.id] = $0 }
-                            ),
-                            isDragCompleted: Binding(
-                                get: { isDragCompleted[trip.id] ?? false },
-                                set: { isDragCompleted[trip.id] = $0 }
-                            ),
-                            isSwiping: Binding(
-                                get: { isSwiping[trip.id] ?? false },
-                                set: { isSwiping[trip.id] = $0 }
-                            ),
+                            navigatingTripId: $navigatingTripId,
+                            swipeOffsets: $swipeOffsets,
+                            isDragCompleted: $isDragCompleted,
+                            isSwiping: $isSwiping,
                             maxX: maxX,
                             authVM: authVM,
                             gradientStart: Self.gradientStart,
                             gradientEnd: Self.gradientEnd
                         )
-                        .disabled(isNavigatingTrip.values.contains(true)) // Disable all trip buttons when any trip is being started
+                        .disabled(navigatingTripId != nil)
                     }
-                    .padding(16)
+                    .padding(10)
                 }
             }
         }
