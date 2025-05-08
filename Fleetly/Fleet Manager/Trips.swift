@@ -30,13 +30,7 @@ extension Trip {
             status: status,
             vehicleType: vehicleType,
             passengers: data["passengers"] as? Int,
-            loadWeight: data["loadWeight"] as? Double,
-            misc: data["misc"] as? Double,
-            fuelLog: data["fuelLog"] as? Double,
-            tollFees: data["tollFees"] as? Double,
-            incidental: data["incidental"] as? Double,
-            goClicked: data["goClicked"] as? String,
-            endClicked: data["endClicked"] as? String
+            loadWeight: data["loadWeight"] as? Double
         )
     }
 }
