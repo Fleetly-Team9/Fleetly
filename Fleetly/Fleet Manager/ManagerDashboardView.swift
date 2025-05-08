@@ -580,7 +580,7 @@ struct ExpenseChart: View {
                         )
                         .foregroundStyle(by: .value("Category", item.category))
                         .annotation(position: .top) {
-                            Text("$\(String(format: "%.2f", item.amount))")
+                            Text("₹\(String(format: "%.2f", item.amount))")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
