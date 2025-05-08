@@ -517,6 +517,11 @@ struct DriverProfileView: View {
                 "medicalDocUrl": downloadURL.absoluteString
             ])
             
+            // Update local user object
+            DispatchQueue.main.async {
+                self.authVM.user?.medicalDocUrl = downloadURL.absoluteString
+            }
+            
             // Cache the uploaded image
             cacheImage(image, for: "medical")
             
