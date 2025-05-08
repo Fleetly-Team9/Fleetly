@@ -4,6 +4,26 @@ import FirebaseAuth
 import FirebaseFirestore
 import FirebaseStorage
 
+// MARK: - ColorBlindModeManager
+class ColorBlindModeManager: ObservableObject {
+    @Published var isColorBlindMode: Bool {
+        didSet {
+            UserDefaults.standard.set(isColorBlindMode, forKey: "isColorBlindMode")
+            UserDefaults.standard.synchronize()
+            print("ColorBlindModeManager: isColorBlindMode set to \(isColorBlindMode)")
+        }
+    }
+    
+    init() {
+        self.isColorBlindMode = UserDefaults.standard.bool(forKey: "isColorBlindMode")
+    }
+}
+
+extension Color {
+    static let cbBlue = Color(red: 0.0, green: 114/255, blue: 178/255)   // #0072B2
+    static let cbOrange = Color(red: 230/255, green: 159/255, blue: 0.0) // #E69F00
+}
+
 struct showProfileView: View {
     @State private var profileImage: Image = Image("exampleImage")
     @State private var selectedItem: PhotosPickerItem?
@@ -14,80 +34,32 @@ struct showProfileView: View {
     @State private var isLoading = true
     @State private var showPasswordResetAlert = false
     @State private var passwordResetMessage: String?
+    @StateObject private var colorBlindManager = ColorBlindModeManager()
     
     private let db = Firestore.firestore()
     private let storage = Storage.storage().reference()
     
+    private var primaryColor: Color {
+        colorBlindManager.isColorBlindMode ? .blue : .blue
+    }
+    
+    private var accentColor: Color {
+        colorBlindManager.isColorBlindMode ? .orange : .red
+    }
+    
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    VStack(spacing: 15) {
-                        // Profile Image or Placeholder
-                        ZStack {
-                            if imageData == nil {
-                                Circle()
-                                    .fill(Color.gray.opacity(0.2))
-                                    .frame(width: 100, height: 100)
-                                    .overlay(
-                                        Image(systemName: "person.circle.fill")
-                                            .resizable()
-                                            .scaledToFit()
-                                            .frame(width: 60, height: 60)
-                                            .foregroundColor(.gray)
-                                    )
-                            } else {
-                                profileImage
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 100, height: 100)
-                                    .clipShape(Circle())
-                            }
-                            
-                            // Camera Icon Overlay for Editing
-                            PhotosPicker(selection: $selectedItem, matching: .images) {
-                                Image(systemName: "camera.fill")
-                                    .foregroundColor(.white)
-                                    .frame(width: 30, height: 30)
-                                    .background(Circle().fill(Color.blue))
-                                    .offset(x: 35, y: 35)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.vertical, 10)
-                        .onChange(of: selectedItem) { newItem in
-                            Task {
-                                if let data = try? await newItem?.loadTransferable(type: Data.self),
-                                   let uiImage = UIImage(data: data) {
-                                    profileImage = Image(uiImage: uiImage)
-                                    imageData = data
-                                    uploadProfileImage(data: data)
-                                }
-                            }
-                        }
-                        
-                        // Delete Button (if image exists)
-                        if imageData != nil {
-                            Button(action: {
-                                deleteProfileImage()
-                            }) {
-                                Text("Remove Photo")
-                                    .font(.subheadline)
-                                    .foregroundColor(.red)
-                                    .padding(.vertical, 8)
-                                    .padding(.horizontal, 16)
-                                    .background(
-                                        Capsule()
-                                            .fill(Color.red.opacity(0.1))
-                                    )
-                            }
-                            .frame(maxWidth: .infinity, alignment: .center)
-                        }
-                    }
-                    .padding(.vertical, 10)
-                }
+                ProfileImageSection(
+                    profileImage: $profileImage,
+                    selectedItem: $selectedItem,
+                    imageData: $imageData,
+                    isColorBlindMode: colorBlindManager.isColorBlindMode,
+                    uploadProfileImage: uploadProfileImage,
+                    deleteProfileImage: deleteProfileImage
+                )
                 .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets()) // Remove default padding
+                .listRowInsets(EdgeInsets())
                 
                 Section(header: Text("Fleet Manager Details")) {
                     if isLoading {
@@ -107,11 +79,21 @@ struct showProfileView: View {
                 }
                 
                 Section {
+                    Toggle("Color Blind Mode", isOn: $colorBlindManager.isColorBlindMode)
+                        .tint(primaryColor)
+                        .onChange(of: colorBlindManager.isColorBlindMode) { newValue in
+                            print("showProfileView: isColorBlindMode set to \(newValue)")
+                            UserDefaults.standard.synchronize()
+                            print("showProfileView UserDefaults isColorBlindMode: \(UserDefaults.standard.bool(forKey: "isColorBlindMode"))")
+                        }
+                }
+                
+                Section {
                     Button(action: {
                         sendPasswordResetEmail()
                     }) {
                         Text("Reset Password")
-                            .foregroundColor(.blue)
+                            .foregroundColor(primaryColor)
                             .frame(maxWidth: .infinity, alignment: .center)
                     }
                 }
@@ -128,10 +110,9 @@ struct showProfileView: View {
                         }
                     }) {
                         Text("Sign Out")
-                            .foregroundColor(.red)
+                            .foregroundColor(accentColor)
                             .frame(maxWidth: .infinity, alignment: .center)
                     }
-
                     .frame(maxWidth: .infinity)
                 }
             }
@@ -142,12 +123,14 @@ struct showProfileView: View {
                     Button("Done") {
                         dismiss()
                     }
-                    .foregroundColor(.blue)
+                    .foregroundColor(primaryColor)
                 }
             }
             .onAppear {
                 fetchUserData()
                 loadProfileImage()
+                print("showProfileView onAppear: isColorBlindMode = \(colorBlindManager.isColorBlindMode)")
+                print("showProfileView onAppear UserDefaults isColorBlindMode: \(UserDefaults.standard.bool(forKey: "isColorBlindMode"))")
             }
             .alert(isPresented: $showPasswordResetAlert) {
                 Alert(
@@ -271,4 +254,91 @@ struct showProfileView: View {
             showPasswordResetAlert = true
         }
     }
+}
+
+// MARK: - Profile Image Section
+struct ProfileImageSection: View {
+    @Binding var profileImage: Image
+    @Binding var selectedItem: PhotosPickerItem?
+    @Binding var imageData: Data?
+    let isColorBlindMode: Bool
+    let uploadProfileImage: (Data) -> Void
+    let deleteProfileImage: () -> Void
+    
+    private var primaryColor: Color {
+        isColorBlindMode ? .blue : .blue
+    }
+    
+    private var accentColor: Color {
+        isColorBlindMode ? .orange : .red
+    }
+    
+    var body: some View {
+        Section {
+            VStack(spacing: 15) {
+                ZStack {
+                    if imageData == nil {
+                        Circle()
+                            .fill(Color.gray.opacity(0.2))
+                            .frame(width: 100, height: 100)
+                            .overlay(
+                                Image(systemName: "person.circle.fill")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 60, height: 60)
+                                    .foregroundColor(.gray)
+                            )
+                    } else {
+                        profileImage
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 100, height: 100)
+                            .clipShape(Circle())
+                    }
+                    
+                    PhotosPicker(selection: $selectedItem, matching: .images) {
+                        Image(systemName: "camera.fill")
+                            .foregroundColor(.white)
+                            .frame(width: 30, height: 30)
+                            .background(Circle().fill(primaryColor))
+                            .offset(x: 35, y: 35)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 10)
+                .onChange(of: selectedItem) { newItem in
+                    Task {
+                        if let data = try? await newItem?.loadTransferable(type: Data.self),
+                           let uiImage = UIImage(data: data) {
+                            profileImage = Image(uiImage: uiImage)
+                            imageData = data
+                            uploadProfileImage(data)
+                        }
+                    }
+                }
+                
+                if imageData != nil {
+                    Button(action: {
+                        deleteProfileImage()
+                    }) {
+                        Text("Remove Photo")
+                            .font(.subheadline)
+                            .foregroundColor(accentColor)
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 16)
+                            .background(
+                                Capsule()
+                                    .fill(accentColor.opacity(0.1))
+                            )
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                }
+            }
+            .padding(.vertical, 10)
+        }
+    }
+}
+
+#Preview {
+    showProfileView()
 }
