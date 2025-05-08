@@ -15,8 +15,6 @@ struct Trip: Identifiable, Codable{
     let vehicleType: String
     let passengers: Int?
     let loadWeight: Double?
-    let goClicked: String?
-    let endClicked: String?
 
 //    enum TripStatus: String, Codable, CaseIterable, Identifiable {
 //        case assigned
@@ -66,9 +64,7 @@ struct Trip: Identifiable, Codable{
             status: status,
             vehicleType: vehicleType,
             passengers: data["passengers"] as? Int,
-            loadWeight: data["loadWeight"] as? Double,
-            goClicked: data["goClicked"] as? String,
-            endClicked: data["endClicked"] as? String
+            loadWeight: data["loadWeight"] as? Double
         )
     }
 
@@ -85,9 +81,7 @@ struct Trip: Identifiable, Codable{
         status: TripStatus,
         vehicleType: String,
         passengers: Int?,
-        loadWeight: Double?,
-        goClicked: String?,
-        endClicked: String?
+        loadWeight: Double?
     ) {
         self.id = id
         self.driverId = driverId
@@ -102,7 +96,5 @@ struct Trip: Identifiable, Codable{
         self.vehicleType = vehicleType
         self.passengers = passengers
         self.loadWeight = loadWeight
-        self.goClicked = goClicked
-        self.endClicked = endClicked
     }
 }

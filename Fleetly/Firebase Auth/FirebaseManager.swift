@@ -62,19 +62,6 @@ struct InspectionRecord: Codable {
     }
 }
 
-struct TripCharges: Codable {
-    let misc: Double
-    let fuelLog: Double
-    let tollFees: Double
-    let incidental: Double
-    
-    enum CodingKeys: String, CodingKey {
-        case misc
-        case fuelLog
-        case tollFees
-        case incidental
-    }
-}
 
 class FirebaseManager {
     static let shared = FirebaseManager()
@@ -555,16 +542,18 @@ class FirebaseManager {
         tollFees: Double,
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
+        let docRef = tripChargesCollection(for: tripId).document("charges")
+        
         let incidental = misc + fuelLog + tollFees
         
         let data: [String: Any] = [
-            "misc": misc,
+            "Misc": misc,
             "fuelLog": fuelLog,
             "tollFees": tollFees,
-            "incidental": incidental
+            "Incidental": incidental
         ]
         
-        tripChargesCollection(for: tripId).document("charges").setData(data) { error in
+        docRef.setData(data, merge: true) { error in
             if let error = error {
                 completion(.failure(error))
             } else {
@@ -575,14 +564,14 @@ class FirebaseManager {
     
     // New function to save GoClicked timestamp
     func saveGoClicked(tripId: String, timestamp: Date, completion: @escaping (Result<Void, Error>) -> Void) {
-        let docRef = tripsCollection().document(tripId)
+        let docRef = tripChargesCollection(for: tripId).document("charges")
         
         // Format the timestamp as a String (ISO 8601 format)
         let formatter = ISO8601DateFormatter()
         let timestampString = formatter.string(from: timestamp)
         
         let data: [String: Any] = [
-            "goClicked": timestampString
+            "GoClicked": timestampString
         ]
         
         docRef.setData(data, merge: true) { error in
@@ -596,14 +585,14 @@ class FirebaseManager {
     
     // New function to save EndClicked timestamp
     func saveEndClicked(tripId: String, timestamp: Date, completion: @escaping (Result<Void, Error>) -> Void) {
-        let docRef = tripsCollection().document(tripId)
+        let docRef = tripChargesCollection(for: tripId).document("charges")
         
         // Format the timestamp as a String (ISO 8601 format)
         let formatter = ISO8601DateFormatter()
         let timestampString = formatter.string(from: timestamp)
         
         let data: [String: Any] = [
-            "endClicked": timestampString
+            "EndClicked": timestampString
         ]
         
         docRef.setData(data, merge: true) { error in
@@ -611,28 +600,6 @@ class FirebaseManager {
                 completion(.failure(error))
             } else {
                 completion(.success(()))
-            }
-        }
-    }
-    
-    // Function to fetch trip charges from subcollection
-    func fetchTripCharges(tripId: String, completion: @escaping (Result<TripCharges?, Error>) -> Void) {
-        tripChargesCollection(for: tripId).document("charges").getDocument { snapshot, error in
-            if let error = error {
-                completion(.failure(error))
-                return
-            }
-            
-            guard let document = snapshot, document.exists else {
-                completion(.success(nil))
-                return
-            }
-            
-            do {
-                let charges = try document.data(as: TripCharges.self)
-                completion(.success(charges))
-            } catch {
-                completion(.failure(error))
             }
         }
     }

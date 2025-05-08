@@ -388,13 +388,7 @@ struct PreInspectionView: View {
                         status: .assigned,
                         vehicleType: "Unknown",
                         passengers: nil,
-                        loadWeight: nil,
-                        misc: nil,
-                        fuelLog: nil,
-                        tollFees: nil,
-                        incidental: nil,
-                        goClicked: nil,
-                        endClicked: nil
+                        loadWeight: nil
                     ),
                     vehicleID: vehicleID,
                     vehicleNumber: vehicleNumber,

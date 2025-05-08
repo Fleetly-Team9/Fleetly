@@ -129,28 +129,19 @@ class PastRidesViewModel: ObservableObject {
                 }
                 
                 group.enter()
-                db.collection("trips").document(tripID).getDocument { snapshot, error in
+                db.collection("trips").document(tripID).collection("trip_charges").getDocuments { snapshot, error in
                     defer { group.leave() }
                     if let error = error {
-                        self.errorMessage = "Failed to fetch trip: \(error.localizedDescription)"
-                        print("Trip error: \(error.localizedDescription)")
+                        self.errorMessage = "Failed to fetch trip charges: \(error.localizedDescription)"
+                        print("Trip charges error: \(error.localizedDescription)")
                         return
                     }
-                    if let doc = snapshot {
+                    if let doc = snapshot?.documents.first {
                         do {
-                            let trip = try doc.data(as: Trip.self)
-                            // Fetch trip charges from subcollection
-                            FirebaseManager.shared.fetchTripCharges(tripId: tripID) { result in
-                                switch result {
-                                case .success(let charges):
-                                    tempRides[index].tripCharges = charges
-                                case .failure(let error):
-                                    print("Error fetching trip charges: \(error)")
-                                }
-                            }
+                            tempRides[index].tripCharges = try doc.data(as: TripCharges.self)
                         } catch {
-                            self.errorMessage = "Error decoding trip: \(error.localizedDescription)"
-                            print("Trip decode error: \(error.localizedDescription)")
+                            self.errorMessage = "Error decoding trip charges: \(error.localizedDescription)"
+                            print("Trip charges decode error: \(error.localizedDescription)")
                         }
                     }
                 }
