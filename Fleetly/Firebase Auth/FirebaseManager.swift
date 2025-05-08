@@ -1,4 +1,5 @@
 import Foundation
+import CoreLocation
 import Firebase
 import FirebaseFirestore
 import FirebaseStorage
@@ -68,6 +69,26 @@ class FirebaseManager {
     private let storage = Storage.storage()
     
     private init() {}
+    
+    func logRouteDeviation(tripId: String, vehicleId: String, driverId: String, distance: CLLocationDistance, location: CLLocation, timestamp: Date, completion: @escaping (Result<Void, Error>) -> Void) {
+        let deviationData: [String: Any] = [
+            "tripId": tripId,
+            "vehicleId": vehicleId,
+            "driverId": driverId,
+            "distance": distance,
+            "latitude": location.coordinate.latitude,
+            "longitude": location.coordinate.longitude,
+            "timestamp": Timestamp(date: timestamp)
+        ]
+        
+        db.collection("geofence_deviations").addDocument(data: deviationData) { error in
+            if let error = error {
+                completion(.failure(error))
+            } else {
+                completion(.success(()))
+            }
+        }
+    }
     
     private func attendanceCollection(for driverId: String) -> CollectionReference {
         return db.collection("users").document(driverId).collection("attendance")
