@@ -12,7 +12,6 @@ struct MaintenanceCompletionView: View {
     @State private var showingPartSelection = false
     @State private var showingError = false
     @State private var errorMessage = ""
-    @StateObject private var colorManager = ColorManager.shared
     
     var body: some View {
         NavigationStack {
@@ -37,7 +36,7 @@ struct MaintenanceCompletionView: View {
                                     }
                                 }) {
                                     Image(systemName: "minus.circle.fill")
-                                        .foregroundColor(colorManager.accentColor)
+                                        .foregroundColor(.blue)
                                 }
                                 
                                 Text("\(partQuantities[part.id] ?? 1)")
@@ -47,7 +46,7 @@ struct MaintenanceCompletionView: View {
                                     partQuantities[part.id] = (partQuantities[part.id] ?? 1) + 1
                                 }) {
                                     Image(systemName: "plus.circle.fill")
-                                        .foregroundColor(colorManager.accentColor)
+                                        .foregroundColor(.blue)
                                 }
                             }
                         }
@@ -89,7 +88,7 @@ struct MaintenanceCompletionView: View {
                         Spacer()
                         Text("$\(String(format: "%.2f", totalCost))")
                             .font(.headline)
-                            .foregroundColor(colorManager.primaryColor)
+                            .foregroundColor(.blue)
                     }
                 }
             }
@@ -120,8 +119,6 @@ struct MaintenanceCompletionView: View {
             .onAppear {
                 viewModel.fetchInventoryItems()
             }
-            .dismissKeyboardOnTap()
-            .dismissKeyboardOnScroll()
         }
     }
     
@@ -220,7 +217,6 @@ struct PartSelectionView: View {
     @Environment(\.dismiss) private var dismiss
     @Binding var selectedParts: [Inventory.Item]
     @StateObject private var viewModel = MaintenanceCompletionViewModel()
-    @StateObject private var colorManager = ColorManager.shared
     
     var body: some View {
         NavigationStack {
@@ -245,7 +241,7 @@ struct PartSelectionView: View {
                             
                             Text("$\(String(format: "%.2f", item.price))")
                                 .font(.subheadline)
-                                .foregroundColor(colorManager.primaryColor)
+                                .foregroundColor(.blue)
                         }
                     }
                     .disabled(item.units <= 0)
@@ -325,4 +321,5 @@ class MaintenanceCompletionViewModel: ObservableObject {
             }
         }
     }
-} 
+}
+
