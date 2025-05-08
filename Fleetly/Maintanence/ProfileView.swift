@@ -4,7 +4,7 @@ import FirebaseAuth
 import FirebaseFirestore
 import FirebaseStorage
 
-// Add a clear implementation of ProfileImageManager
+// ProfileImageManager for handling profile image operations
 class ProfileImageManager: ObservableObject {
     @Published var profileImage: UIImage?
     private let storage = Storage.storage().reference()
@@ -117,7 +117,7 @@ struct ProfileView: View {
                                 .scaledToFit()
                                 .frame(width: 120, height: 120)
                                 .clipShape(Circle())
-                                .foregroundColor(.gray)
+                                .foregroundColor(.secondary)
                         }
                         Button(action: {
                             isPhotoPickerPresented = true
@@ -139,7 +139,7 @@ struct ProfileView: View {
                         }) {
                             Text("Remove Photo")
                                 .font(.system(.subheadline, design: .default, weight: .medium))
-                                .foregroundColor(colorManager.isColorblindMode ? Color(hex: "#E69F00") : Color.pink)
+                                .foregroundColor(colorManager.accentColor)
                         }
                         .padding(.bottom, 10)
                     }
@@ -148,11 +148,12 @@ struct ProfileView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("PROFILE DETAILS")
                             .font(.system(.caption, design: .default, weight: .bold))
-                            .foregroundColor(.gray)
+                            .foregroundColor(.secondary)
                             .padding(.bottom, 5)
 
                         if isLoading {
                             ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: colorManager.primaryColor))
                                 .frame(maxWidth: .infinity, alignment: .center)
                         } else {
                             let fullName = userData["name"] as? String ?? ""
@@ -220,8 +221,8 @@ struct ProfileView: View {
                     .padding(.vertical, 10)
                     .background(
                         RoundedRectangle(cornerRadius: 10)
-                            .fill(Color.white)
-                            .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+                            .fill(Color(.systemGray6)) // Profile details card background set to systemGray6
+                            .shadow(color: Color.black.opacity(0.1), radius: 3, x: 0, y: 2) // Consistent shadow
                     )
 
                     // Reset Password Button
@@ -235,7 +236,7 @@ struct ProfileView: View {
                             .padding(.vertical, 15)
                             .background(
                                 RoundedRectangle(cornerRadius: 10)
-                                    .fill(Color.gray.opacity(0.05))
+                                    .fill(Color(.systemGray6)) // Reset Password button background set to systemGray6
                             )
                     }
                     .alert(isPresented: $showResetPasswordAlert) {
@@ -264,7 +265,7 @@ struct ProfileView: View {
                             .padding(.vertical, 15)
                             .background(
                                 RoundedRectangle(cornerRadius: 10)
-                                    .fill(Color.gray.opacity(0.05))
+                                    .fill(Color(.systemGray6)) // Sign Out button background set to systemGray6
                             )
                     }
                     .padding(.bottom, 20)
@@ -330,7 +331,7 @@ struct ProfileView: View {
     }
 }
 
-// Renamed to avoid conflict with existing PhotoPicker
+// ProfilePhotoPicker for selecting profile images
 struct ProfilePhotoPicker: UIViewControllerRepresentable {
     var profileImageManager: ProfileImageManager
     @Binding var isPresented: Bool
@@ -366,7 +367,6 @@ struct ProfilePhotoPicker: UIViewControllerRepresentable {
             result.itemProvider.loadObject(ofClass: UIImage.self) { [weak self] object, error in
                 if let image = object as? UIImage {
                     DispatchQueue.main.async {
-                        // Directly use the profileImageManager passed to the picker
                         self?.parent.profileImageManager.saveImage(image)
                     }
                 }
@@ -375,13 +375,9 @@ struct ProfilePhotoPicker: UIViewControllerRepresentable {
     }
 }
 
-
 struct ProfileView_Previews: PreviewProvider {
     static var previews: some View {
         ProfileView()
+            .preferredColorScheme(.dark) // Preview in dark mode
     }
 }
-
-//hellooo
-
-// Color extension for hex support
