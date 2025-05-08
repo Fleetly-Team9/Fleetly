@@ -120,6 +120,8 @@ struct MaintenanceCompletionView: View {
             .onAppear {
                 viewModel.fetchInventoryItems()
             }
+            .dismissKeyboardOnTap()
+            .dismissKeyboardOnScroll()
         }
     }
     

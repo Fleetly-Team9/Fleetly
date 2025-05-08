@@ -12,118 +12,83 @@ struct LoginView: View {
     @State private var showForgotPassword = false
 
     var body: some View {
-        ZStack {
-            // Background Gradient
-            LinearGradient(
-                colors: [.gray.opacity(0.1), .white],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+        NavigationStack {
+            ZStack {
+                LinearGradient(colors: [.gray.opacity(0.1), .white],
+                               startPoint: .top, endPoint: .bottom)
+                    .ignoresSafeArea()
+                
+                ScrollView {
+                    VStack(spacing: 32) {
+                        Spacer(minLength: 20)
+                        
+                        VStack(spacing: 16) {
+                            // Email Field
+                            TextField("Email", text: $email)
+                                .autocapitalization(.none)
+                                .keyboardType(.emailAddress)
+                                .textFieldStyle(.plain)
+                                .padding()
+                                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
 
-            VStack(spacing: 32) {
-                // Logo / Title
-                VStack(spacing: 12) {
-                    Image(systemName: "car.front.waves.up.fill")
-                        .font(.system(size: 48, weight: .medium))
-                        .foregroundStyle(.cyan)
-                    Text("Fleetly")
-                        .font(.system(.title, design: .rounded, weight: .bold))
-                        .foregroundStyle(.primary)
-                }
-                .padding(.top, 60)
+                            // Password Field
+                            SecureField("Password", text: $password)
+                                .textFieldStyle(.plain)
+                                .padding()
+                                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
 
-                // MARK: - Login Form
-                VStack(spacing: 16) {
-                    // Email Field
-                    TextField("Email", text: $email)
-                        .autocapitalization(.none)
-                        .keyboardType(.emailAddress)
-                        .textFieldStyle(.plain)
-                        .padding()
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-
-                    // Password Field
-                    SecureField("Password", text: $password)
-                        .textFieldStyle(.plain)
-                        .padding()
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-
-                    // Forgot Password Link
-                    Button("Forgot Password?") {
-                        showForgotPassword = true
-                    }
-                    .font(.system(.subheadline, design: .rounded))
-                    .foregroundStyle(.blue)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-
-                    // Error Message
-                    if let error = error {
-                        Text(error)
+                            // Forgot Password Link
+                            Button("Forgot Password?") {
+                                showForgotPassword = true
+                            }
                             .font(.system(.subheadline, design: .rounded))
-                            .foregroundColor(.red)
-                            .multilineTextAlignment(.center)
+                            .foregroundStyle(.blue)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+
+                            // Error Message
+                            if let error = error {
+                                Text(error)
+                                    .font(.system(.subheadline, design: .rounded))
+                                    .foregroundColor(.red)
+                                    .multilineTextAlignment(.center)
+                            }
+                        }
+                        .padding(.horizontal, 24)
+
+                        // MARK: - Sign In Button
+                        Button {
+                            signIn()
+                        } label: {
+                            if isLoading {
+                                ProgressView()
+                                    .frame(maxWidth: .infinity, minHeight: 50)
+                            } else {
+                                Text("Sign In")
+                                    .frame(maxWidth: .infinity, minHeight: 50)
+                            }
+                        }
+                        .font(.system(.headline, design: .rounded, weight: .semibold))
+                        .buttonStyle(.borderedProminent)
+                        .buttonBorderShape(.capsule)
+                        .tint(.blue)
+                        .disabled(email.isEmpty || password.isEmpty || isLoading)
+                        .padding(.horizontal, 24)
+
+                        Spacer()
                     }
                 }
-                .padding(.horizontal, 24)
-
-                // MARK: - Sign In Button
-                Button(action: login) {
-                    if isLoading {
-                        ProgressView()
-                            .tint(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 50)
-                    } else {
-                        Text("Sign In")
-                            .font(.system(.headline, weight: .semibold))
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 50)
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .buttonBorderShape(.capsule)
-                .tint(.blue)
-                .padding(.horizontal, 24)
-                .disabled(email.isEmpty || password.isEmpty || isLoading)
-
-                Spacer()
-
-                // MARK: - Driver Sign Up Link
-                HStack {
-                    Text("New Driver?")
-                        .font(.system(.subheadline, design: .rounded))
-                        .foregroundStyle(.secondary)
-
-                    Button("Create Driver Account") {
-                        showSignUp = true
-                    }
-                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                    .foregroundStyle(.blue)
-                }
-                .padding(.bottom, 24)
             }
+            .navigationTitle("Welcome Back")
+            .navigationBarTitleDisplayMode(.large)
+            .sheet(isPresented: $showForgotPassword) {
+                ForgotPasswordView()
+            }
+            .dismissKeyboard() // Apply keyboard dismissal at the root level
         }
-        // MARK: - Sheets
-        .sheet(isPresented: $showSignUp) {
-            SignupView(authVM: authVM)
-        }
-        .sheet(isPresented: $showForgotPassword) {
-            ForgotPasswordView()
-        }
-        .sheet(isPresented: $authVM.isWaitingForOTP) {
-            LoginOTPView(authVM: authVM)
-        }
-        .sheet(isPresented: $authVM.showWaitingApproval) {
-                    WaitingApprovalView()
-                }
-        .sheet(isPresented: $authVM.showRejectionSheet) {
-                    RejectionView(authVM: authVM)
-                }
     }
 
     // MARK: - Actions
-    private func login() {
+    private func signIn() {
         isLoading = true
         error = nil
 

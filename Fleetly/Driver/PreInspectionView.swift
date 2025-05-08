@@ -95,6 +95,10 @@ struct PreInspectionView: View {
         }
     }
     
+    private var isAllChecked: Bool {
+        return oilCheck && hornCheck && clutchCheck && airbagsCheck && physicalDamageCheck && tyrePressureCheck && brakesCheck && selectedImages.count == 4
+    }
+    
     var body: some View {
         VStack(spacing: 0) {
             Form {
@@ -131,26 +135,51 @@ struct PreInspectionView: View {
                         Text("Oil")
                     }
                     .toggleStyle(CheckboxToggleStyle())
+                    .onChange(of: oilCheck) { _ in
+                        if !isAllChecked {
+                            overallCheckStatus = "Raise Ticket"
+                        }
+                    }
                     
                     Toggle(isOn: $hornCheck) {
                         Text("Horns")
                     }
                     .toggleStyle(CheckboxToggleStyle())
+                    .onChange(of: hornCheck) { _ in
+                        if !isAllChecked {
+                            overallCheckStatus = "Raise Ticket"
+                        }
+                    }
                     
                     Toggle(isOn: $clutchCheck) {
                         Text("Clutch")
                     }
                     .toggleStyle(CheckboxToggleStyle())
+                    .onChange(of: clutchCheck) { _ in
+                        if !isAllChecked {
+                            overallCheckStatus = "Raise Ticket"
+                        }
+                    }
                     
                     Toggle(isOn: $airbagsCheck) {
                         Text("Airbags")
                     }
                     .toggleStyle(CheckboxToggleStyle())
+                    .onChange(of: airbagsCheck) { _ in
+                        if !isAllChecked {
+                            overallCheckStatus = "Raise Ticket"
+                        }
+                    }
                     
                     Toggle(isOn: $physicalDamageCheck) {
                         Text("No Physical damage")
                     }
                     .toggleStyle(CheckboxToggleStyle())
+                    .onChange(of: physicalDamageCheck) { _ in
+                        if !isAllChecked {
+                            overallCheckStatus = "Raise Ticket"
+                        }
+                    }
                 }
                 
                 Section {
@@ -159,6 +188,11 @@ struct PreInspectionView: View {
                             Text("Tyre Pressure").font(.headline)
                         }
                         .toggleStyle(CheckboxToggleStyle())
+                        .onChange(of: tyrePressureCheck) { _ in
+                            if !isAllChecked {
+                                overallCheckStatus = "Raise Ticket"
+                            }
+                        }
                         
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Remarks:")
@@ -182,6 +216,11 @@ struct PreInspectionView: View {
                             Text("Brakes").font(.headline)
                         }
                         .toggleStyle(CheckboxToggleStyle())
+                        .onChange(of: brakesCheck) { _ in
+                            if !isAllChecked {
+                                overallCheckStatus = "Raise Ticket"
+                            }
+                        }
                         
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Remarks:")
@@ -222,6 +261,9 @@ struct PreInspectionView: View {
                                 }
                             }
                             isUploadingImages = false
+                            if !isAllChecked {
+                                overallCheckStatus = "Raise Ticket"
+                            }
                         }
                     }
                     
@@ -269,9 +311,12 @@ struct PreInspectionView: View {
                         }
                         .pickerStyle(.menu)
                         .foregroundStyle(overallCheckStatus == "Verified" ? Color.green : Color.red)
+                        .disabled(!isAllChecked)
                     }
                 }
             }
+            .dismissKeyboardOnTap()
+            .dismissKeyboardOnScroll()
             
             Button(action: {
                 if overallCheckStatus == "Verified" {
@@ -286,7 +331,7 @@ struct PreInspectionView: View {
                             .progressViewStyle(CircularProgressViewStyle(tint: .white))
                             .padding(.trailing, 8)
                     }
-                    Text(isSubmitting ? "Recording Inspection..." : (overallCheckStatus == "Verified" ? "Ready for trip" : "Wanna Raise a Ticket?"))
+                    Text(isSubmitting ? "Recording Inspection..." : (overallCheckStatus == "Verified" ? "Ready for trip" : "Raise a Ticket?"))
                         .font(.system(size: 18, weight: .semibold, design: .default))
                         .foregroundStyle(Color.white)
                 }
@@ -297,7 +342,7 @@ struct PreInspectionView: View {
             .tint(overallCheckStatus == "Verified" ? .blue : .red)
             .padding(.horizontal)
             .padding(.top, 10)
-            .disabled(selectedImages.count != 4 || isSubmitting)
+            .disabled((overallCheckStatus == "Verified" && !isAllChecked) || isSubmitting)
         }
         .navigationTitle(Text("Pre Inspection"))
         .alert("Raise a Ticket", isPresented: $showTicketConfirmation) {
