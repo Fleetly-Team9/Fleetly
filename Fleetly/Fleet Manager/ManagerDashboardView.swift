@@ -5,7 +5,7 @@ import PhotosUI
 import Firebase
 import PDFKit
 
-// Main Tab View
+// MainTabView (unchanged, no colors)
 struct MainTabView: View {
     @ObservedObject var authVM: AuthViewModel
     var body: some View {
@@ -15,13 +15,11 @@ struct MainTabView: View {
                     Image(systemName: "house.fill")
                     Text("Home")
                 }
-
             UserManagerView()
                 .tabItem {
                     Image(systemName: "person.2.fill")
                     Text("Personnel")
                 }
-
             VehicleManagementView()
                 .tabItem {
                     Image(systemName: "car.2.fill")
@@ -31,7 +29,7 @@ struct MainTabView: View {
     }
 }
 
-
+// MaintenanceView
 struct MaintenanceView: View {
     @StateObject private var viewModel = AssignTaskViewModel()
     @State private var showingNewTaskSheet = false
@@ -42,59 +40,50 @@ struct MaintenanceView: View {
     @State private var selectedPriority: String?
     @State private var selectedVehicle: String?
     @State private var dateRange: ClosedRange<Date> = Calendar.current.date(byAdding: .month, value: -1, to: Date())!...Date()
-    
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
+
     var filteredTasks: [MaintenanceTask] {
         var filtered = viewModel.maintenanceTasks
-        
         if let status = selectedStatus {
             filtered = filtered.filter { $0.status == status }
         }
-        
         if let priority = selectedPriority {
             filtered = filtered.filter { $0.priority.lowercased() == priority.lowercased() }
         }
-        
         if let vehicle = selectedVehicle {
             filtered = filtered.filter { $0.vehicleId == vehicle }
         }
-        
-        // Filter by date range
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
-        
         filtered = filtered.filter { task in
             if let taskDate = dateFormatter.date(from: task.completionDate) {
                 return dateRange.contains(taskDate)
             }
             return false
         }
-        
         return filtered
     }
-    
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    // Stats Overview
                     HStack(spacing: 16) {
                         StatCardGridView(
                             icon: "wrench.fill",
                             title: "Pending Tasks",
                             value: "\(viewModel.pendingTasks)",
-                            color: .orange
+                            color: isColorBlindMode ? .cbOrange : .orange
                         )
-                        
                         StatCardGridView(
                             icon: "checkmark.circle.fill",
                             title: "Completed",
                             value: "\(viewModel.completedTasks)",
-                            color: .green
+                            color: isColorBlindMode ? .cbOrange : .green
                         )
                     }
                     .padding(.horizontal)
-                    
-                    // Filter Bar
+
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             if selectedStatus != nil || selectedPriority != nil || selectedVehicle != nil {
@@ -110,34 +99,31 @@ struct MaintenanceView: View {
                                     .font(.subheadline)
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 6)
-                                    .background(Color.gray.opacity(0.1))
-                                    .foregroundColor(.gray)
+                                    .background(isColorBlindMode ? Color.cbBlue.opacity(0.1) : Color.gray.opacity(0.1))
+                                    .foregroundColor(isColorBlindMode ? .cbBlue : .gray)
                                     .cornerRadius(8)
                                 }
                             }
-                            
                             if let status = selectedStatus {
                                 FilterChip(
                                     title: status.rawValue.capitalized,
-                                    color: .blue
+                                    color: isColorBlindMode ? .cbBlue : .blue
                                 ) {
                                     selectedStatus = nil
                                 }
                             }
-                            
                             if let priority = selectedPriority {
                                 FilterChip(
                                     title: priority,
-                                    color: priorityColor(priority)
+                                    color: isColorBlindMode ? .cbOrange : priorityColor(priority)
                                 ) {
                                     selectedPriority = nil
                                 }
                             }
-                            
                             if let vehicle = selectedVehicle {
                                 FilterChip(
                                     title: vehicle,
-                                    color: .purple
+                                    color: isColorBlindMode ? .cbBlue : .purple
                                 ) {
                                     selectedVehicle = nil
                                 }
@@ -145,8 +131,7 @@ struct MaintenanceView: View {
                         }
                         .padding(.horizontal)
                     }
-                    
-                    // Tasks List
+
                     LazyVStack(spacing: 12) {
                         ForEach(filteredTasks) { task in
                             TaskCardView(task: task)
@@ -168,15 +153,14 @@ struct MaintenanceView: View {
                     Button(action: { showingNewTaskSheet = true }) {
                         Image(systemName: "plus.circle.fill")
                             .font(.title2)
-                            .foregroundColor(.blue)
+                            .foregroundColor(isColorBlindMode ? .cbBlue : .blue)
                     }
                 }
-                
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { showingFilters = true }) {
                         Image(systemName: "line.3.horizontal.decrease.circle.fill")
                             .font(.title2)
-                            .foregroundColor(.blue)
+                            .foregroundColor(isColorBlindMode ? .cbBlue : .blue)
                     }
                 }
             }
@@ -199,22 +183,24 @@ struct MaintenanceView: View {
             }
         }
     }
-    
+
     private func priorityColor(_ priority: String) -> Color {
         switch priority.lowercased() {
-        case "high": return .red
-        case "medium": return .orange
-        case "low": return .green
-        default: return .gray
+        case "high": return isColorBlindMode ? .cbOrange : .red
+        case "medium": return isColorBlindMode ? .cbOrange : .orange
+        case "low": return isColorBlindMode ? .cbOrange : .green
+        default: return isColorBlindMode ? .cbBlue : .gray
         }
     }
 }
 
+// TaskCardView
 struct TaskCardView: View {
     let task: MaintenanceTask
     @StateObject private var viewModel = AssignTaskViewModel()
     @State private var vehicleNumber: String = ""
-    
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -223,33 +209,28 @@ struct TaskCardView: View {
                         .font(.headline)
                     Text(task.issue)
                         .font(.subheadline)
-                        .foregroundColor(.gray)
+                        .foregroundColor(isColorBlindMode ? .cbBlue : .gray)
                 }
-                
                 Spacer()
-                
                 ManagerStatusBadge(status: task.status)
             }
-            
             HStack {
                 ManagerPriorityBadge(priority: task.priority)
-                
                 Spacer()
-                
                 Text("Due: \(task.completionDate)")
                     .font(.caption)
-                    .foregroundColor(.gray)
+                    .foregroundColor(isColorBlindMode ? .cbBlue : .gray)
             }
         }
         .padding()
         .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
-        .shadow(color: Color(.label).opacity(0.05), radius: 4, x: 0, y: 2)
+        .shadow(color: isColorBlindMode ? Color.cbBlue.opacity(0.05) : Color(.label).opacity(0.05), radius: 4, x: 0, y: 2)
         .onAppear {
             fetchVehicleNumber()
         }
     }
-    
+
     private func fetchVehicleNumber() {
         let db = Firestore.firestore()
         db.collection("vehicles").document(task.vehicleId).getDocument { document, error in
@@ -264,9 +245,11 @@ struct TaskCardView: View {
     }
 }
 
+// ManagerStatusBadge
 struct ManagerStatusBadge: View {
     let status: MaintenanceTask.TaskStatus
-    
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
+
     var body: some View {
         Text(status.rawValue.capitalized)
             .font(.caption)
@@ -277,20 +260,22 @@ struct ManagerStatusBadge: View {
             .foregroundColor(statusColor)
             .cornerRadius(8)
     }
-    
+
     private var statusColor: Color {
         switch status {
-        case .pending: return .orange
-        case .inProgress: return .blue
-        case .completed: return .green
-        case .cancelled: return .red
+        case .pending: return isColorBlindMode ? .cbOrange : .orange
+        case .inProgress: return isColorBlindMode ? .cbBlue : .blue
+        case .completed: return isColorBlindMode ? .cbOrange : .green
+        case .cancelled: return isColorBlindMode ? .cbOrange : .red
         }
     }
 }
 
+// ManagerPriorityBadge
 struct ManagerPriorityBadge: View {
     let priority: String
-    
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
+
     var body: some View {
         Text(priority)
             .font(.caption)
@@ -301,17 +286,18 @@ struct ManagerPriorityBadge: View {
             .foregroundColor(priorityColor)
             .cornerRadius(8)
     }
-    
+
     private var priorityColor: Color {
         switch priority.lowercased() {
-        case "high": return .red
-        case "medium": return .orange
-        case "low": return .green
-        default: return .gray
+        case "high": return isColorBlindMode ? .cbOrange : .red
+        case "medium": return isColorBlindMode ? .cbOrange : .orange
+        case "low": return isColorBlindMode ? .cbOrange : .green
+        default: return isColorBlindMode ? .cbBlue : .gray
         }
     }
 }
 
+// TaskDetailView
 struct TaskDetailView: View {
     let task: MaintenanceTask
     @Environment(\.dismiss) private var dismiss
@@ -320,12 +306,12 @@ struct TaskDetailView: View {
     @State private var selectedStatus: MaintenanceTask.TaskStatus?
     @State private var vehicleNumber: String = ""
     @State private var showingCompletionView = false
-    
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
-                    // Task Info Card
                     VStack(alignment: .leading, spacing: 16) {
                         InfoRow(title: "Vehicle", value: vehicleNumber)
                         InfoRow(title: "Issue", value: task.issue)
@@ -337,16 +323,15 @@ struct TaskDetailView: View {
                     .padding()
                     .background(Color(.secondarySystemBackground))
                     .cornerRadius(12)
-                    .shadow(color: Color(.label).opacity(0.05), radius: 4, x: 0, y: 2)
-                    
-                    // Action Button
+                    .shadow(color: isColorBlindMode ? Color.cbBlue.opacity(0.05) : Color(.label).opacity(0.05), radius: 4, x: 0, y: 2)
+
                     Button(action: { showingStatusSheet = true }) {
                         Label("Update Status", systemImage: "arrow.triangle.2.circlepath")
                             .font(.headline)
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(Color.blue.opacity(0.1))
-                            .foregroundColor(.blue)
+                            .background(isColorBlindMode ? Color.cbBlue.opacity(0.1) : Color.blue.opacity(0.1))
+                            .foregroundColor(isColorBlindMode ? .cbBlue : .blue)
                             .cornerRadius(10)
                     }
                 }
@@ -357,24 +342,14 @@ struct TaskDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
+                    Button("Done") { dismiss() }
                 }
             }
             .confirmationDialog("Update Status", isPresented: $showingStatusSheet) {
-                Button("Mark as Pending") {
-                    updateStatus(.pending)
-                }
-                Button("Mark as In Progress") {
-                    updateStatus(.inProgress)
-                }
-                Button("Mark as Completed") {
-                    showingCompletionView = true
-                }
-                Button("Mark as Cancelled") {
-                    updateStatus(.cancelled)
-                }
+                Button("Mark as Pending") { updateStatus(.pending) }
+                Button("Mark as In Progress") { updateStatus(.inProgress) }
+                Button("Mark as Completed") { showingCompletionView = true }
+                Button("Mark as Cancelled") { updateStatus(.cancelled) }
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("Select new status for the task")
@@ -387,7 +362,7 @@ struct TaskDetailView: View {
             }
         }
     }
-    
+
     private func updateStatus(_ newStatus: MaintenanceTask.TaskStatus) {
         viewModel.updateTaskStatus(taskId: task.id, newStatus: newStatus) { success in
             if success {
@@ -395,7 +370,7 @@ struct TaskDetailView: View {
             }
         }
     }
-    
+
     private func fetchVehicleNumber() {
         let db = Firestore.firestore()
         db.collection("vehicles").document(task.vehicleId).getDocument { document, error in
@@ -410,14 +385,16 @@ struct TaskDetailView: View {
     }
 }
 
+// InfoRow
 struct InfoRow: View {
     let title: String
     let value: String
-    
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
+
     var body: some View {
         HStack {
             Text(title)
-                .foregroundColor(.gray)
+                .foregroundColor(isColorBlindMode ? .cbBlue : .gray)
             Spacer()
             Text(value)
                 .foregroundColor(.primary)
@@ -425,6 +402,7 @@ struct InfoRow: View {
     }
 }
 
+// TrackView (unchanged, no colors)
 struct TrackView: View {
     var body: some View {
         Text("Track View")
@@ -432,6 +410,7 @@ struct TrackView: View {
     }
 }
 
+// DriverStatsViewModel (unchanged, no colors)
 class DriverStatsViewModel: ObservableObject {
     @Published var driverCount: Int = 0
     private let db = Firestore.firestore()
@@ -447,7 +426,7 @@ class DriverStatsViewModel: ObservableObject {
     }
 }
 
-// MARK: - Chart Data Models
+// Chart Data Models (unchanged, no colors)
 struct VehicleStatusData: Identifiable {
     let id = UUID()
     let status: String
@@ -473,7 +452,7 @@ struct ExpenseData: Identifiable {
     let date: Date
 }
 
-// MARK: - Chart Views
+// VehicleStatusChart
 struct VehicleStatusChart: View {
     let data: [VehicleStatusData]
     
@@ -497,6 +476,7 @@ struct VehicleStatusChart: View {
     }
 }
 
+// MaintenanceTaskChart
 struct MaintenanceTaskChart: View {
     let data: [MaintenanceTaskData]
     
@@ -521,6 +501,8 @@ struct MaintenanceTaskChart: View {
     }
 }
 
+
+// TripTrendChart
 struct TripTrendChart: View {
     let data: [TripData]
     
@@ -550,8 +532,10 @@ struct TripTrendChart: View {
     }
 }
 
+// ExpenseChart
 struct ExpenseChart: View {
     let data: [ExpenseData]
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -580,11 +564,11 @@ struct ExpenseChart: View {
                 }
                 .frame(height: 200)
                 .chartForegroundStyleScale([
-                    "Fuel": .blue,
+                    "Fuel": isColorBlindMode ? .blue : .yellow,
                     "Toll": .orange,
-                    "Miscellaneous": .purple,
-                    "Parts": .red,
-                    "Labor": .green
+                    "Miscellaneous": isColorBlindMode ? .blue : .purple,
+                    "Parts": isColorBlindMode ? .orange : .blue,
+                    "Labor": isColorBlindMode ? .blue : .green
                 ])
             }
         }
@@ -594,13 +578,21 @@ struct ExpenseChart: View {
     }
 }
 
-// Add this before the DashboardHomeView struct
+// ExpenseData (for reference)
+//struct ExpenseData: Identifiable {
+//    let id = UUID()
+//    let category: String
+//    let amount: Double
+//    let date: Date
+//}
+
+// ChartType Enum
 enum ChartType: String, CaseIterable {
     case vehicleStatus = "Vehicle Status"
     case maintenance = "Maintenance"
     case trips = "Trips"
     case expenses = "Expenses"
-    
+
     var icon: String {
         switch self {
         case .vehicleStatus: return "car.2.fill"
@@ -609,8 +601,11 @@ enum ChartType: String, CaseIterable {
         case .expenses: return "dollarsign.circle.fill"
         }
     }
-    
-    var color: Color {
+
+    func color(isColorBlindMode: Bool) -> Color {
+        if isColorBlindMode {
+            return .cbBlue
+        }
         switch self {
         case .vehicleStatus: return .blue
         case .maintenance: return .orange
@@ -620,24 +615,19 @@ enum ChartType: String, CaseIterable {
     }
 }
 
-// Update DashboardHomeView to include expense data and chart
+// DashboardHomeView
 struct DashboardHomeView: View {
     @State private var showProfile = false
     @State private var selectedAction: ActionType?
     @StateObject private var dashboardVM = DashboardViewModel()
     @StateObject private var viewModel = TripsViewModel()
     @StateObject private var driverCountViewModel = DriverStatsViewModel()
-    
-    // Add state for chart data
     @State private var vehicleStatusData: [VehicleStatusData] = []
     @State private var maintenanceTaskData: [MaintenanceTaskData] = []
     @State private var tripData: [TripData] = []
-    
-    // Add expense data state
     @State private var expenseData: [ExpenseData] = []
-    
-    // Add state for chart type selection
     @State private var selectedChart: ChartType = .vehicleStatus
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
 
     enum ActionType: Identifiable {
         case assign, maintain, track, reports
@@ -648,100 +638,80 @@ struct DashboardHomeView: View {
         NavigationView {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    // MARK: - Stat Cards Grid
-                    let columns = [
-                        GridItem(.flexible()),
-                        GridItem(.flexible())
-                    ]
-
+                    let columns = [GridItem(.flexible()), GridItem(.flexible())]
                     LazyVGrid(columns: columns, spacing: 10) {
-                        NavigationLink(destination: LogbookView()){
+                        NavigationLink(destination: LogbookView()) {
                             StatCardGridView(
                                 icon: "book.fill",
                                 title: "Driver Logbook",
                                 value: "\(driverCountViewModel.driverCount)",
-                                color: .blue
+                                color: isColorBlindMode ? .cbBlue : .blue
                             )
                         }
-                        .onAppear{
-                            driverCountViewModel.fetchDriverCount()
-                        }
-                        NavigationLink(destination: AllTripsView()) { // Link to Active Trips
+                        .onAppear { driverCountViewModel.fetchDriverCount() }
+                        NavigationLink(destination: AllTripsView()) {
                             StatCardGridView(
                                 icon: "location.fill",
                                 title: "Total Trips",
                                 value: "\(viewModel.totalTrips)",
-                                color: .teal
+                                color: isColorBlindMode ? .cbOrange : .teal
                             )
                         }
-                        .onAppear{
-                            viewModel.fetchTotalTrips()
-                        }
+                        .onAppear { viewModel.fetchTotalTrips() }
                         NavigationLink(destination: MaintenanceView()) {
                             StatCardGridView(
                                 icon: "wrench.fill",
                                 title: "Maintenance",
                                 value: "\(dashboardVM.pendingMaintenanceTasks)",
-                                color: .red
+                                color: isColorBlindMode ? .cbOrange : .red
                             )
                         }
-                        NavigationLink(destination:TicketListView()){
+                        NavigationLink(destination: TicketListView()) {
                             StatCardGridView(
                                 icon: "ticket.fill",
                                 title: "Tickets",
                                 value: "\(dashboardVM.activeTickets)",
-                                color: .orange
+                                color: isColorBlindMode ? .cbOrange : .orange
                             )
                         }
                     }
                     .padding(.horizontal)
 
-                    // MARK: - Quick Actions
                     VStack(alignment: .center, spacing: 8) {
                         Text("Quick Actions")
                             .font(.headline)
                             .padding(.horizontal)
-
                         HStack(spacing: 20) {
                             QuickActionButton(icon: "person.fill.badge.plus", title: "Assign")
                                 .onTapGesture { selectedAction = .assign }
-
                             QuickActionButton(icon: "calendar.badge.clock", title: "Maintain")
                                 .onTapGesture { selectedAction = .maintain }
                             QuickActionButton(icon: "doc.text.magnifyingglass", title: "Reports")
-                                                           .onTapGesture { selectedAction = .reports }
+                                .onTapGesture { selectedAction = .reports }
                             QuickActionButton(icon: "map.fill", title: "Track")
                                 .onTapGesture { selectedAction = .track }
-                          
                         }
                     }
                     .sheet(item: $selectedAction) { action in
                         switch action {
-                        case .reports:
-                            ReportsView()
-                        case .assign:
-                            AssignView()
-                        case .maintain:
-                            AssignTaskView()
-                        case .track:
-                            TrackView()
+                        case .reports: ReportsView()
+                        case .assign: AssignView()
+                        case .maintain: AssignTaskView()
+                        case .track: TrackView()
                         }
                     }
                     .padding(.horizontal)
                     .padding()
                     .background(Color(.secondarySystemBackground))
                     .cornerRadius(30)
-                    .shadow(color: Color(.label).opacity(0.08), radius: 4)
+                    .shadow(color: isColorBlindMode ? Color.cbBlue.opacity(0.08) : Color(.label).opacity(0.08), radius: 4)
                     .padding(.horizontal)
 
-                    // MARK: - Analytics Section
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Analytics")
                             .font(.title2)
                             .fontWeight(.bold)
                             .padding(.horizontal)
-                        
-                        // Chart Type Selector
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 12) {
                                 ForEach(ChartType.allCases, id: \.self) { type in
@@ -760,17 +730,16 @@ struct DashboardHomeView: View {
                                         .padding(.vertical, 12)
                                         .background(
                                             RoundedRectangle(cornerRadius: 12)
-                                                .fill(selectedChart == type ? type.color.opacity(0.2) : Color(.systemGray6))
+                                                .fill(selectedChart == type ? type.color(isColorBlindMode: isColorBlindMode).opacity(0.2) : Color(.systemGray6))
                                         )
-                                        .foregroundColor(selectedChart == type ? type.color : .gray)
+                                        .foregroundColor(selectedChart == type ? type.color(isColorBlindMode: isColorBlindMode) : (isColorBlindMode ? .cbBlue : .gray))
                                     }
                                 }
                             }
                             .padding(.horizontal)
                         }
                         .padding(.vertical, 8)
-                        
-                        // Selected Chart View with animation
+
                         switch selectedChart {
                         case .vehicleStatus:
                             VehicleStatusChart(data: vehicleStatusData)
@@ -791,13 +760,10 @@ struct DashboardHomeView: View {
                         }
                     }
 
-                    // MARK: - Analytics and Alerts
                     VStack(alignment: .leading, spacing: 16) {
-                        // Alerts Section
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Recent Alerts")
                                 .font(.headline)
-
                             VStack(spacing: 12) {
                                 AlertRowView(message: "Vehicle 23 speed exceeded", time: "5 mins ago")
                                 AlertRowView(message: "Vehicle 45 needs maintenance", time: "10 mins ago")
@@ -807,7 +773,7 @@ struct DashboardHomeView: View {
                         .padding()
                         .background(Color(.secondarySystemBackground))
                         .cornerRadius(30)
-                        .shadow(color: Color(.label).opacity(0.08), radius: 5)
+                        .shadow(color: isColorBlindMode ? Color.cbBlue.opacity(0.08) : Color(.label).opacity(0.08), radius: 5)
                         .padding(.horizontal)
                     }
                 }
@@ -818,13 +784,11 @@ struct DashboardHomeView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        showProfile = true
-                    }) {
+                    Button(action: { showProfile = true }) {
                         Image(systemName: "person.circle.fill")
                             .resizable()
                             .frame(width: 28, height: 28)
-                            .foregroundColor(.blue)
+                            .foregroundColor(isColorBlindMode ? .cbBlue : .blue)
                     }
                 }
             }
@@ -839,36 +803,133 @@ struct DashboardHomeView: View {
         }
     }
     
+    // Update fetchExpenseData in DashboardHomeView
+    private func fetchExpenseData() {
+            let db = Firestore.firestore()
+            let calendar = Calendar.current
+            let endDate = Date()
+            let startDate = calendar.date(byAdding: .day, value: -30, to: endDate)!
+            let group = DispatchGroup()
+            var allExpenses: [ExpenseData] = []
+
+            group.enter()
+            db.collection("trips")
+                .whereField("startTime", isGreaterThanOrEqualTo: startDate)
+                .whereField("startTime", isLessThanOrEqualTo: endDate)
+                .getDocuments { snapshot, error in
+                    defer { group.leave() }
+                    if let error = error {
+                        print("Error fetching trip expenses: \(error.localizedDescription)")
+                        return
+                    }
+                    if let documents = snapshot?.documents {
+                        for document in documents {
+                            if let tripCharges = document.data()["tripCharges"] as? [String: Any] {
+                                if let fuelAmount = tripCharges["fuelLog"] as? Double {
+                                    allExpenses.append(ExpenseData(
+                                        category: "Fuel",
+                                        amount: fuelAmount,
+                                        date: document.data()["startTime"] as? Date ?? Date()
+                                    ))
+                                }
+                                if let tollAmount = tripCharges["tollFees"] as? Double {
+                                    allExpenses.append(ExpenseData(
+                                        category: "Toll",
+                                        amount: tollAmount,
+                                        date: document.data()["startTime"] as? Date ?? Date()
+                                    ))
+                                }
+                                if let miscAmount = tripCharges["misc"] as? Double {
+                                    allExpenses.append(ExpenseData(
+                                        category: "Miscellaneous",
+                                        amount: miscAmount,
+                                        date: document.data()["startTime"] as? Date ?? Date()
+                                    ))
+                                }
+                            }
+                        }
+                    }
+                }
+
+            group.enter()
+            db.collection("maintenance_tasks")
+                .whereField("completionDate", isGreaterThanOrEqualTo: startDate)
+                .whereField("completionDate", isLessThanOrEqualTo: endDate)
+                .getDocuments { snapshot, error in
+                    defer { group.leave() }
+                    if let error = error {
+                        print("Error fetching maintenance expenses: \(error.localizedDescription)")
+                        return
+                    }
+                    if let documents = snapshot?.documents {
+                        for document in documents {
+                            if let partsCost = document.data()["partsCost"] as? Double {
+                                allExpenses.append(ExpenseData(
+                                    category: "Parts",
+                                    amount: partsCost,
+                                    date: document.data()["completionDate"] as? Date ?? Date()
+                                ))
+                            }
+                            if let laborCost = document.data()["laborCost"] as? Double {
+                                allExpenses.append(ExpenseData(
+                                    category: "Labor",
+                                    amount: laborCost,
+                                    date: document.data()["completionDate"] as? Date ?? Date()
+                                ))
+                            }
+                        }
+                    }
+                }
+
+            group.notify(queue: .main) {
+                if allExpenses.isEmpty {
+                    print("No expenses found, using sample data")
+                    self.expenseData = [
+                        ExpenseData(category: "Fuel", amount: 2500.0, date: Date()),
+                        ExpenseData(category: "Toll", amount: 800.0, date: Date()),
+                        ExpenseData(category: "Miscellaneous", amount: 500.0, date: Date()),
+                        ExpenseData(category: "Parts", amount: 1800.0, date: Date()),
+                        ExpenseData(category: "Labor", amount: 1200.0, date: Date())
+                    ]
+                } else {
+                    print("Found \(allExpenses.count) expenses")
+                    let groupedExpenses = Dictionary(grouping: allExpenses) { $0.category }
+                        .mapValues { expenses in
+                            expenses.reduce(0) { $0 + $1.amount }
+                        }
+                    self.expenseData = groupedExpenses.map { category, amount in
+                        ExpenseData(
+                            category: category.trimmingCharacters(in: .whitespacesAndNewlines).capitalized,
+                            amount: amount,
+                            date: Date()
+                        )
+                    }
+                    print("Updated expenseData with \(self.expenseData.count) categories: \(self.expenseData.map { $0.category })")
+                }
+            }
+        }
+
     private func fetchChartData() {
         let db = Firestore.firestore()
-        
-        // Fetch Vehicle Status Data
         db.collection("vehicles").getDocuments { snapshot, error in
             if let documents = snapshot?.documents {
                 let vehicles = documents.compactMap { try? $0.data(as: Vehicle.self) }
                 let statusCounts = Dictionary(grouping: vehicles) { $0.status.rawValue }
                     .mapValues { $0.count }
-                
                 vehicleStatusData = statusCounts.map { VehicleStatusData(status: $0.key, count: $0.value) }
             }
         }
-        
-        // Fetch Maintenance Task Data
         db.collection("maintenance_tasks").getDocuments { snapshot, error in
             if let documents = snapshot?.documents {
                 let tasks = documents.compactMap { try? $0.data(as: MaintenanceTask.self) }
                 let statusCounts = Dictionary(grouping: tasks) { $0.status.rawValue }
                     .mapValues { $0.count }
-                
                 maintenanceTaskData = statusCounts.map { MaintenanceTaskData(category: $0.key, count: $0.value) }
             }
         }
-        
-        // Fetch Trip Data (last 7 days)
         let calendar = Calendar.current
         let endDate = Date()
         let startDate = calendar.date(byAdding: .day, value: -7, to: endDate)!
-        
         db.collection("trips")
             .whereField("startTime", isGreaterThanOrEqualTo: startDate)
             .whereField("startTime", isLessThanOrEqualTo: endDate)
@@ -877,11 +938,9 @@ struct DashboardHomeView: View {
                     let trips = documents.compactMap { try? $0.data(as: Ride.self) }
                     let dateFormatter = DateFormatter()
                     dateFormatter.dateFormat = "yyyy-MM-dd"
-                    
                     let tripCounts = Dictionary(grouping: trips) { trip in
                         dateFormatter.string(from: trip.startTime)
                     }.mapValues { $0.count }
-                    
                     tripData = tripCounts.map { dateString, count in
                         TripData(
                             date: dateFormatter.date(from: dateString) ?? Date(),
@@ -891,148 +950,23 @@ struct DashboardHomeView: View {
                 }
             }
     }
-    
-    // Add expense data fetching function
-    private func fetchExpenseData() {
-        let db = Firestore.firestore()
-        let calendar = Calendar.current
-        let endDate = Date()
-        let startDate = calendar.date(byAdding: .day, value: -30, to: endDate)!
-        
-        print("Fetching expenses from \(startDate) to \(endDate)")
-        
-        // Create a dispatch group to handle multiple async calls
-        let group = DispatchGroup()
-        var allExpenses: [ExpenseData] = []
-        
-        // Fetch trip expenses
-        group.enter()
-        db.collection("trips")
-            .whereField("startTime", isGreaterThanOrEqualTo: startDate)
-            .whereField("startTime", isLessThanOrEqualTo: endDate)
-            .getDocuments { snapshot, error in
-                defer { group.leave() }
-                
-                if let error = error {
-                    print("Error fetching trip expenses: \(error.localizedDescription)")
-                    return
-                }
-                
-                if let documents = snapshot?.documents {
-                    for document in documents {
-                        if let tripCharges = document.data()["tripCharges"] as? [String: Any] {
-                            // Process fuel expenses
-                            if let fuelAmount = tripCharges["fuelLog"] as? Double {
-                                allExpenses.append(ExpenseData(
-                                    category: "Fuel",
-                                    amount: fuelAmount,
-                                    date: document.data()["startTime"] as? Date ?? Date()
-                                ))
-                            }
-                            
-                            // Process toll expenses
-                            if let tollAmount = tripCharges["tollFees"] as? Double {
-                                allExpenses.append(ExpenseData(
-                                    category: "Toll",
-                                    amount: tollAmount,
-                                    date: document.data()["startTime"] as? Date ?? Date()
-                                ))
-                            }
-                            
-                            // Process misc expenses
-                            if let miscAmount = tripCharges["misc"] as? Double {
-                                allExpenses.append(ExpenseData(
-                                    category: "Miscellaneous",
-                                    amount: miscAmount,
-                                    date: document.data()["startTime"] as? Date ?? Date()
-                                ))
-                            }
-                        }
-                    }
-                }
-            }
-        
-        // Fetch maintenance expenses
-        group.enter()
-        db.collection("maintenance_tasks")
-            .whereField("completionDate", isGreaterThanOrEqualTo: startDate)
-            .whereField("completionDate", isLessThanOrEqualTo: endDate)
-            .getDocuments { snapshot, error in
-                defer { group.leave() }
-                
-                if let error = error {
-                    print("Error fetching maintenance expenses: \(error.localizedDescription)")
-                    return
-                }
-                
-                if let documents = snapshot?.documents {
-                    for document in documents {
-                        if let partsCost = document.data()["partsCost"] as? Double {
-                            allExpenses.append(ExpenseData(
-                                category: "Parts",
-                                amount: partsCost,
-                                date: document.data()["completionDate"] as? Date ?? Date()
-                            ))
-                        }
-                        
-                        if let laborCost = document.data()["laborCost"] as? Double {
-                            allExpenses.append(ExpenseData(
-                                category: "Labor",
-                                amount: laborCost,
-                                date: document.data()["completionDate"] as? Date ?? Date()
-                            ))
-                        }
-                    }
-                }
-            }
-        
-        // When all fetches are complete, update the UI
-        group.notify(queue: .main) {
-            if allExpenses.isEmpty {
-                print("No expenses found, using sample data")
-                // Add sample data for testing with actual categories from our model
-                self.expenseData = [
-                    ExpenseData(category: "Fuel", amount: 2500.0, date: Date()),
-                    ExpenseData(category: "Toll", amount: 800.0, date: Date()),
-                    ExpenseData(category: "Miscellaneous", amount: 500.0, date: Date()),
-                    ExpenseData(category: "Parts", amount: 1800.0, date: Date()),
-                    ExpenseData(category: "Labor", amount: 1200.0, date: Date())
-                ]
-            } else {
-                print("Found \(allExpenses.count) expenses")
-                // Group expenses by category and sum the amounts
-                let groupedExpenses = Dictionary(grouping: allExpenses) { $0.category }
-                    .mapValues { expenses in
-                        expenses.reduce(0) { $0 + $1.amount }
-                    }
-                
-                self.expenseData = groupedExpenses.map { category, amount in
-                    ExpenseData(
-                        category: category,
-                        amount: amount,
-                        date: Date()
-                    )
-                }
-                print("Updated expenseData with \(self.expenseData.count) categories")
-            }
-        }
-    }
 }
 
-
+// FleetProfileRow
 struct FleetProfileRow: View {
     var title: String
     @Binding var value: String
     var isEditable: Bool
-    
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
+
     var body: some View {
         HStack {
             Text(title)
-                .foregroundColor(.gray)
+                .foregroundColor(isColorBlindMode ? .cbBlue : .gray)
             Spacer()
             if isEditable {
                 TextField("", text: $value)
-                    .foregroundColor(.blue) // Only characters turn blue
+                    .foregroundColor(isColorBlindMode ? .cbBlue : .blue)
                     .multilineTextAlignment(.trailing)
             } else {
                 Text(value)
@@ -1042,41 +976,44 @@ struct FleetProfileRow: View {
     }
 }
 
-
+// FleetProfileRowInt
 struct FleetProfileRowInt: View {
     var title: String
     @Binding var value: Int
     var isEditable: Bool
-    
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
+
     var body: some View {
         HStack {
             Text(title)
-                .foregroundColor(.gray)
+                .foregroundColor(isColorBlindMode ? .cbBlue : .gray)
             Spacer()
             if isEditable {
                 TextField("", value: $value, formatter: NumberFormatter())
-                    .foregroundColor(.blue) // Only characters turn blue
+                    .foregroundColor(isColorBlindMode ? .cbBlue : .blue)
                     .multilineTextAlignment(.trailing)
                     .keyboardType(.numberPad)
             } else {
-                Text("\(value)") // Placeholder, adjust based on date format
+                Text("\(value)")
                     .foregroundColor(.primary)
             }
         }
     }
 }
 
+// QuickActionButton
 struct QuickActionButton: View {
     let icon: String
     let title: String
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
 
     var body: some View {
         VStack(spacing: 4) {
             Image(systemName: icon)
                 .font(.title2)
-                .foregroundColor(.blue)
+                .foregroundColor(isColorBlindMode ? .cbBlue : .blue)
                 .frame(width: 60, height: 60)
-                .background(Color.blue.opacity(0.1))
+                .background(isColorBlindMode ? Color.cbBlue.opacity(0.1) : Color.blue.opacity(0.1))
                 .clipShape(Circle())
             Text(title)
                 .font(.caption)
@@ -1086,21 +1023,23 @@ struct QuickActionButton: View {
     }
 }
 
+// StatCardGridView
 struct StatCardGridView: View {
-    var icon: String
-    var title: String
-    var value: String
-    var color: Color
+    let icon: String
+    let title: String
+    let value: String
+    let color: Color
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 ZStack {
                     Circle()
-                        .fill(color.opacity(0.2))
+                        .fill(isColorBlindMode ? Color.cbBlue.opacity(0.2) : color.opacity(0.2))
                         .frame(width: 32, height: 32)
                     Image(systemName: icon)
-                        .foregroundColor(color)
+                        .foregroundColor(isColorBlindMode ? .cbBlue : color)
                         .font(.system(size: 16, weight: .semibold))
                 }
                 Spacer()
@@ -1108,50 +1047,51 @@ struct StatCardGridView: View {
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(.primary)
             }
-
             Text(title)
                 .font(.subheadline)
-                .foregroundColor(.gray)
+                .foregroundColor(isColorBlindMode ? .cbBlue : .gray)
         }
         .padding()
         .background(Color(.secondarySystemBackground))
         .cornerRadius(30)
-        .shadow(color: Color(.label).opacity(0.05), radius: 4, x: 0, y: 2)
+        .shadow(color: isColorBlindMode ? Color.cbBlue.opacity(0.05) : Color(.label).opacity(0.05), radius: 4, x: 0, y: 2)
     }
 }
 
+// AlertRowView
 struct AlertRowView: View {
     let message: String
     let time: String
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
 
     var body: some View {
         HStack {
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundColor(.red)
+                .foregroundColor(isColorBlindMode ? .cbOrange : .red)
                 .padding(8)
-                .background(Color.red.opacity(0.1))
+                .background(isColorBlindMode ? Color.cbOrange.opacity(0.1) : Color.red.opacity(0.1))
                 .clipShape(Circle())
-
             VStack(alignment: .leading) {
                 Text(message)
                     .font(.subheadline)
                 Text(time)
                     .font(.caption)
-                    .foregroundColor(.gray)
+                    .foregroundColor(isColorBlindMode ? .cbBlue : .gray)
             }
             Spacer()
         }
         .padding()
         .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
-        .shadow(color: Color(.label).opacity(0.05), radius: 4, x: 0, y: 2)
+        .shadow(color: isColorBlindMode ? Color.cbBlue.opacity(0.05) : Color(.label).opacity(0.05), radius: 4, x: 0, y: 2)
     }
 }
 
+// TripsViewModel (unchanged, no colors)
 class TripsViewModel: ObservableObject {
     @Published var totalTrips: Int = 0
     private let db = Firestore.firestore()
-    
+
     func fetchTotalTrips() {
         db.collection("trips").getDocuments { (querySnapshot, error) in
             if let error = error {
@@ -1163,17 +1103,13 @@ class TripsViewModel: ObservableObject {
     }
 }
 
-#Preview{
-    MainTabView(authVM: AuthViewModel())
-}
-
-//hello
-
+// FilterChip
 struct FilterChip: View {
     let title: String
     let color: Color
     let onRemove: () -> Void
-    
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
+
     var body: some View {
         HStack(spacing: 4) {
             Text(title)
@@ -1185,12 +1121,13 @@ struct FilterChip: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(color.opacity(0.1))
-        .foregroundColor(color)
+        .background(isColorBlindMode ? Color.cbBlue.opacity(0.1) : color.opacity(0.1))
+        .foregroundColor(isColorBlindMode ? .cbBlue : color)
         .cornerRadius(8)
     }
 }
 
+// FleetFilterView
 struct FleetFilterView: View {
     @Environment(\.dismiss) private var dismiss
     @Binding var selectedStatus: MaintenanceTask.TaskStatus?
@@ -1198,10 +1135,11 @@ struct FleetFilterView: View {
     @Binding var selectedVehicle: String?
     @Binding var dateRange: ClosedRange<Date>
     let vehicles: [String]
-    
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
+
     let priorities = ["High", "Medium", "Low"]
     let statuses: [MaintenanceTask.TaskStatus] = [.pending, .inProgress, .completed, .cancelled]
-    
+
     var body: some View {
         NavigationStack {
             Form {
@@ -1215,7 +1153,6 @@ struct FleetFilterView: View {
                         }
                     }
                 }
-                
                 Section("Priority") {
                     ForEach(priorities, id: \.self) { priority in
                         FilterRow(
@@ -1226,7 +1163,6 @@ struct FleetFilterView: View {
                         }
                     }
                 }
-                
                 Section("Vehicle") {
                     ForEach(vehicles, id: \.self) { vehicle in
                         FilterRow(
@@ -1237,7 +1173,6 @@ struct FleetFilterView: View {
                         }
                     }
                 }
-                
                 Section("Date Range") {
                     DatePicker(
                         "From",
@@ -1247,7 +1182,6 @@ struct FleetFilterView: View {
                         ),
                         displayedComponents: [.date]
                     )
-                    
                     DatePicker(
                         "To",
                         selection: Binding(
@@ -1262,20 +1196,20 @@ struct FleetFilterView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
+                    Button("Done") { dismiss() }
                 }
             }
         }
     }
 }
 
+// FilterRow
 struct FilterRow: View {
     let title: String
     let isSelected: Bool
     let action: () -> Void
-    
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
+
     var body: some View {
         Button(action: action) {
             HStack {
@@ -1283,10 +1217,15 @@ struct FilterRow: View {
                 Spacer()
                 if isSelected {
                     Image(systemName: "checkmark")
-                        .foregroundColor(.blue)
+                        .foregroundColor(isColorBlindMode ? .cbBlue : .blue)
                 }
             }
         }
         .foregroundColor(.primary)
     }
+}
+
+// Preview
+#Preview {
+    MainTabView(authVM: AuthViewModel())
 }
