@@ -239,7 +239,7 @@ struct PartSelectionView: View {
                             
                             Spacer()
                             
-                            Text("$\(String(format: "%.2f", item.price))")
+                            Text("₹\(String(format: "%.2f", item.price))")
                                 .font(.subheadline)
                                 .foregroundColor(.blue)
                         }
