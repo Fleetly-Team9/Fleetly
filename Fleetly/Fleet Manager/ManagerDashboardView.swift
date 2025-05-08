@@ -637,7 +637,55 @@ enum ChartType: String, CaseIterable {
     }
 }
 
-// DashboardHomeView
+// Add new AllDeviationsView
+struct AllDeviationsView: View {
+    @ObservedObject var dashboardVM: DashboardViewModel
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
+    
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 12) {
+                    ForEach(dashboardVM.recentDeviations) { deviation in
+                        AlertRowView(
+                            message: "\(deviation.driverName) deviated from route in \(deviation.vehicleNumber) (Trip: \(deviation.formattedTripId)) by \(Int(deviation.distance))m",
+                            time: timeAgoString(from: deviation.timestamp),
+                            deviation: deviation
+                        )
+                    }
+                }
+                .padding()
+            }
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle("All Deviations")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+    
+    private func timeAgoString(from date: Date) -> String {
+        let calendar = Calendar.current
+        let now = Date()
+        let components = calendar.dateComponents([.minute, .hour, .day], from: date, to: now)
+        
+        if let day = components.day, day > 0 {
+            return "\(day)d ago"
+        } else if let hour = components.hour, hour > 0 {
+            return "\(hour)h ago"
+        } else if let minute = components.minute, minute > 0 {
+            return "\(minute)m ago"
+        } else {
+            return "Just now"
+        }
+    }
+}
+
+// Update the recent alerts section in DashboardHomeView
 struct DashboardHomeView: View {
     @State private var showProfile = false
     @State private var selectedAction: ActionType?
@@ -649,6 +697,7 @@ struct DashboardHomeView: View {
     @State private var tripData: [TripData] = []
     @State private var expenseData: [ExpenseData] = []
     @State private var selectedChart: ChartType = .vehicleStatus
+    @State private var showingAllDeviations = false
     @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
 
     enum ActionType: Identifiable {
@@ -783,21 +832,31 @@ struct DashboardHomeView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 16) {
-                        VStack(alignment: .leading, spacing: 12) {
+                        HStack {
                             Text("Recent Alerts")
                                 .font(.headline)
-                            VStack(spacing: 12) {
-                                AlertRowView(message: "Vehicle 23 speed exceeded", time: "5 mins ago")
-                                AlertRowView(message: "Vehicle 45 needs maintenance", time: "10 mins ago")
-                                AlertRowView(message: "Trip delay reported on Route 8", time: "30 mins ago")
+                            Spacer()
+                            Button(action: { showingAllDeviations = true }) {
+                                Text("See All")
+                                    .font(.subheadline)
+                                    .foregroundColor(isColorBlindMode ? .cbBlue : .blue)
                             }
                         }
-                        .padding()
-                        .background(Color(.secondarySystemBackground))
-                        .cornerRadius(30)
-                        .shadow(color: isColorBlindMode ? Color.cbBlue.opacity(0.08) : Color(.label).opacity(0.08), radius: 5)
-                        .padding(.horizontal)
+                        VStack(spacing: 12) {
+                            ForEach(Array(dashboardVM.recentDeviations.prefix(5))) { deviation in
+                                AlertRowView(
+                                    message: "\(deviation.driverName) deviated from route in \(deviation.vehicleNumber) (Trip: \(deviation.formattedTripId)) by \(Int(deviation.distance))m",
+                                    time: timeAgoString(from: deviation.timestamp),
+                                    deviation: deviation
+                                )
+                            }
+                        }
                     }
+                    .padding()
+                    .background(Color(.secondarySystemBackground))
+                    .cornerRadius(30)
+                    .shadow(color: isColorBlindMode ? Color.cbBlue.opacity(0.08) : Color(.label).opacity(0.08), radius: 5)
+                    .padding(.horizontal)
                 }
                 .padding(.bottom, 20)
             }
@@ -817,8 +876,12 @@ struct DashboardHomeView: View {
             .sheet(isPresented: $showProfile) {
                 showProfileView()
             }
+            .sheet(isPresented: $showingAllDeviations) {
+                AllDeviationsView(dashboardVM: dashboardVM)
+            }
             .onAppear {
                 dashboardVM.fetchVehicleStats()
+                dashboardVM.fetchRecentDeviations()
                 fetchChartData()
                 fetchExpenseData()
             }
@@ -972,6 +1035,22 @@ struct DashboardHomeView: View {
                 }
             }
     }
+
+    private func timeAgoString(from date: Date) -> String {
+        let calendar = Calendar.current
+        let now = Date()
+        let components = calendar.dateComponents([.minute, .hour, .day], from: date, to: now)
+        
+        if let day = components.day, day > 0 {
+            return "\(day)d ago"
+        } else if let hour = components.hour, hour > 0 {
+            return "\(hour)h ago"
+        } else if let minute = components.minute, minute > 0 {
+            return "\(minute)m ago"
+        } else {
+            return "Just now"
+        }
+    }
 }
 
 // FleetProfileRow
@@ -1084,28 +1163,39 @@ struct StatCardGridView: View {
 struct AlertRowView: View {
     let message: String
     let time: String
+    let deviation: GeofenceDeviation
+    @State private var showingDetail = false
     @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
 
     var body: some View {
-        HStack {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundColor(isColorBlindMode ? .cbOrange : .red)
-                .padding(8)
-                .background(isColorBlindMode ? Color.cbOrange.opacity(0.1) : Color.red.opacity(0.1))
-                .clipShape(Circle())
-            VStack(alignment: .leading) {
-                Text(message)
-                    .font(.subheadline)
-                Text(time)
-                    .font(.caption)
+        Button(action: { showingDetail = true }) {
+            HStack {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(isColorBlindMode ? .cbOrange : .red)
+                    .padding(8)
+                    .background(isColorBlindMode ? Color.cbOrange.opacity(0.1) : Color.red.opacity(0.1))
+                    .clipShape(Circle())
+                VStack(alignment: .leading) {
+                    Text(message)
+                        .font(.subheadline)
+                    Text(time)
+                        .font(.caption)
+                        .foregroundColor(isColorBlindMode ? .cbBlue : .gray)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
                     .foregroundColor(isColorBlindMode ? .cbBlue : .gray)
+                    .font(.caption)
             }
-            Spacer()
+            .padding()
+            .background(Color(.secondarySystemBackground))
+            .cornerRadius(12)
+            .shadow(color: isColorBlindMode ? Color.cbBlue.opacity(0.05) : Color(.label).opacity(0.05), radius: 4, x: 0, y: 2)
         }
-        .padding()
-        .background(Color(.secondarySystemBackground))
-        .cornerRadius(12)
-        .shadow(color: isColorBlindMode ? Color.cbBlue.opacity(0.05) : Color(.label).opacity(0.05), radius: 4, x: 0, y: 2)
+        .buttonStyle(PlainButtonStyle())
+        .sheet(isPresented: $showingDetail) {
+            GeofenceDeviationDetailView(deviation: deviation)
+        }
     }
 }
 
@@ -1244,6 +1334,92 @@ struct FilterRow: View {
             }
         }
         .foregroundColor(.primary)
+    }
+}
+
+// Rename DetailRow to DeviationDetailRow
+struct DeviationDetailRow: View {
+    let title: String
+    let value: String
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
+    
+    var body: some View {
+        HStack {
+            Text(title)
+                .foregroundColor(isColorBlindMode ? .cbBlue : .gray)
+            Spacer()
+            Text(value)
+                .foregroundColor(.primary)
+        }
+    }
+}
+
+// Update GeofenceDeviationDetailView to use DeviationDetailRow
+struct GeofenceDeviationDetailView: View {
+    let deviation: GeofenceDeviation
+    @Environment(\.dismiss) private var dismiss
+    @State private var region: MKCoordinateRegion
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
+    
+    init(deviation: GeofenceDeviation) {
+        self.deviation = deviation
+        _region = State(initialValue: MKCoordinateRegion(
+            center: CLLocationCoordinate2D(
+                latitude: deviation.latitude,
+                longitude: deviation.longitude
+            ),
+            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+        ))
+    }
+    
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 20) {
+                    // Map View
+                    Map(coordinateRegion: $region, annotationItems: [deviation]) { item in
+                        MapMarker(
+                            coordinate: CLLocationCoordinate2D(
+                                latitude: item.latitude,
+                                longitude: item.longitude
+                            ),
+                            tint: isColorBlindMode ? .cbOrange : .red
+                        )
+                    }
+                    .frame(height: 200)
+                    .cornerRadius(12)
+                    
+                    // Details
+                    VStack(spacing: 16) {
+                        DeviationDetailRow(title: "Driver", value: deviation.driverName)
+                        DeviationDetailRow(title: "Vehicle", value: deviation.vehicleNumber)
+                        DeviationDetailRow(title: "Trip ID", value: deviation.formattedTripId)
+                        DeviationDetailRow(title: "Deviation", value: "\(Int(deviation.distance)) meters")
+                        DeviationDetailRow(title: "Time", value: formatDate(deviation.timestamp))
+                        DeviationDetailRow(title: "Location", value: "\(String(format: "%.6f", deviation.latitude)), \(String(format: "%.6f", deviation.longitude))")
+                    }
+                    .padding()
+                    .background(Color(.secondarySystemBackground))
+                    .cornerRadius(12)
+                }
+                .padding()
+            }
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle("Deviation Details")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+    
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
     }
 }
 
