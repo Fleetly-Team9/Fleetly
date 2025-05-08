@@ -680,9 +680,9 @@ struct WorkOrderCard: View {
     
     private func statusColor(_ status: MaintenanceTask.TaskStatus) -> Color {
         switch status {
-        case .completed: return .green
-        case .inProgress: return .orange
-        case .pending: return .red
+        case .completed: return Color(hex: "E69F00")
+        case .inProgress: return Color(hex: "E69F00")
+        case .pending: return Color(hex: "E69F00")
         case .cancelled: return .gray
         }
     }
@@ -698,10 +698,10 @@ struct WorkOrderCard: View {
     
     private func priorityColor(_ priority: String) -> Color {
         switch priority.lowercased() {
-        case "low": return .green
-        case "medium": return .orange
-        case "high": return .red
-        default: return .green
+        case "low": return Color(hex: "E69F00")
+        case "medium": return Color(hex: "E69F00")
+        case "high": return Color(hex: "E69F00")
+        default: return Color(hex: "E69F00")
         }
     }
     
@@ -726,9 +726,9 @@ struct WorkOrderCard: View {
     
     private func swipeActionColor(_ status: MaintenanceTask.TaskStatus) -> Color {
         switch status {
-        case .pending: return .blue
-        case .inProgress: return .blue
-        case .completed: return .green
+        case .pending: return Color(hex: "0072B2")
+        case .inProgress: return Color(hex: "0072B2")
+        case .completed: return Color(hex: "E69F00")
         case .cancelled: return .gray
         }
     }
