@@ -139,7 +139,7 @@ struct ProfileView: View {
                         }) {
                             Text("Remove Photo")
                                 .font(.system(.subheadline, design: .default, weight: .medium))
-                                .foregroundColor(colorManager.accentColor)
+                                .foregroundColor(colorManager.isColorblindMode ? Color(hex: "#E69F00") : Color.pink)
                         }
                         .padding(.bottom, 10)
                     }

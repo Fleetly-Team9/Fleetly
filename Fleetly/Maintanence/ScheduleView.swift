@@ -508,11 +508,11 @@ struct ScheduleView: View {
     func statusColor(for status: MaintenanceTask.TaskStatus) -> Color {
         switch status {
         case .completed:
-            return .green
+            return Color(hex: "E69F00") // Changed from green to yellow
         case .inProgress:
-            return .orange
+            return Color(hex: "E69F00") // Changed from orange to yellow
         case .pending:
-            return colorManager.primaryColor
+            return Color(hex: "0072B2") // Changed from primaryColor to strong blue
         case .cancelled:
             return .gray
         }
@@ -521,11 +521,11 @@ struct ScheduleView: View {
     func priorityColor(for priority: String) -> Color {
         switch priority.lowercased() {
         case "low":
-            return .green
+            return Color(hex: "E69F00") // Changed from green to yellow
         case "medium":
-            return .orange
+            return Color(hex: "E69F00") // Changed from orange to yellow
         case "high":
-            return colorManager.accentColor
+            return Color(hex: "E69F00") // Changed from accentColor to yellow
         default:
             return .gray
         }

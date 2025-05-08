@@ -356,6 +356,28 @@ struct VehicleManagementView: View {
     @State private var showingContextMenu = false
     @State private var showingError = false
     @State private var showingFilters = false
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
+
+    // Computed properties for colors
+    private var primaryColor: Color {
+        isColorBlindMode ? .cbBlue : .blue
+    }
+    
+    private var accentColor: Color {
+        isColorBlindMode ? .cbOrange : .red
+    }
+    
+    private var statusActiveColor: Color {
+        isColorBlindMode ? .cbBlue : .green
+    }
+    
+    private var statusMaintenanceColor: Color {
+        isColorBlindMode ? .cbOrange : .orange
+    }
+    
+    private var secondaryColor: Color {
+        isColorBlindMode ? .cbBlue : .gray
+    }
 
     var body: some View {
         NavigationStack {
@@ -378,6 +400,7 @@ struct VehicleManagementView: View {
                         } label: {
                             Image(systemName: "plus.circle.fill")
                                 .font(.title3)
+                                .foregroundColor(primaryColor)
                         }
                     }
                     
@@ -387,10 +410,11 @@ struct VehicleManagementView: View {
                         } label: {
                             Image(systemName: "line.3.horizontal.decrease.circle.fill")
                                 .font(.title3)
+                                .foregroundColor(primaryColor)
                                 .overlay(alignment: .topTrailing) {
                                     if !viewModel.activeFilters.isEmpty {
                                         Circle()
-                                            .fill(Color.red)
+                                            .fill(accentColor)
                                             .frame(width: 8, height: 8)
                                             .offset(x: 2, y: -2)
                                     }
@@ -454,7 +478,7 @@ struct VehicleManagementView: View {
                                         .font(.caption)
                                         .padding(.horizontal, 10)
                                         .padding(.vertical, 5)
-                                        .background(Color.blue.opacity(0.2))
+                                        .background(primaryColor.opacity(0.2))
                                         .clipShape(Capsule())
                                 }
                             }
@@ -468,7 +492,7 @@ struct VehicleManagementView: View {
                         } label: {
                             Text("Clear")
                                 .font(.caption)
-                                .foregroundColor(.blue)
+                                .foregroundColor(primaryColor)
                         }
                         .padding(.trailing)
                     }
@@ -532,7 +556,7 @@ struct VehicleManagementView: View {
         VStack(spacing: 20) {
             Image(systemName: "car.fill")
                 .font(.system(size: 50))
-                .foregroundColor(.gray.opacity(0.6))
+                .foregroundColor(secondaryColor.opacity(0.6))
 
             Text(viewModel.searchText.isEmpty ? "No Vehicles Found" : "No Results Found")
                 .font(.title2)
@@ -543,7 +567,7 @@ struct VehicleManagementView: View {
                 "Tap the button below to add a new vehicle." :
                 "No vehicles match your search criteria.")
                 .font(.subheadline)
-                .foregroundColor(.gray)
+                .foregroundColor(secondaryColor)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
 
@@ -555,7 +579,7 @@ struct VehicleManagementView: View {
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.blue)
+                        .background(primaryColor)
                         .foregroundColor(.white)
                         .clipShape(Capsule())
                 }
@@ -566,13 +590,10 @@ struct VehicleManagementView: View {
         .padding()
     }
 
-    // inside VehicleManagementView …
-
     private var vehiclesListView: some View {
         List {
             ForEach(viewModel.filteredVehicles) { vehicle in
                 VehicleCard(vehicle: vehicle)
-                    // MARK: - Leading swipe stays "Edit"
                     .swipeActions(edge: .leading) {
                         Button {
                             var updated = vehicle
@@ -581,9 +602,8 @@ struct VehicleManagementView: View {
                         } label: {
                             Label("Active", systemImage: "car.fill")
                         }
-                        .tint(.green)
+                        .tint(statusActiveColor)
                     }
-                    // MARK: - Trailing swipe now "In Maintenance"
                     .swipeActions(edge: .trailing) {
                         Button {
                             var updated = vehicle
@@ -592,7 +612,7 @@ struct VehicleManagementView: View {
                         } label: {
                             Label("In Maintenance", systemImage: "wrench.fill")
                         }
-                        .tint(.orange)
+                        .tint(statusMaintenanceColor)
                     }
                     .contextMenu {
                         Button("Edit") { editingVehicle = vehicle }
@@ -613,13 +633,24 @@ struct VehicleManagementView: View {
             viewModel.fetchVehicles()
         }
     }
-
 }
 
 // MARK: - Vehicle Detail View
 struct VehicleDetailView: View {
     let vehicle: Vehicle
-    
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
+
+    private var statusColor: Color {
+        switch vehicle.status {
+        case .deactivated:
+            return isColorBlindMode ? .cbOrange : .red
+        case .inMaintenance:
+            return isColorBlindMode ? .cbOrange : .orange
+        case .active:
+            return isColorBlindMode ? .cbBlue : .green
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -635,7 +666,7 @@ struct VehicleDetailView: View {
                         DetailRowV(label: "Year", value: vehicle.year)
                         DetailRowV(label: "Type", value: vehicle.vehicleType.rawValue)
                         DetailRowV(label: "Status", value: vehicle.status.rawValue)
-                            .foregroundColor(vehicle.status == .deactivated ? .red : vehicle.status == .inMaintenance ? .orange : .green)
+                            .foregroundColor(statusColor)
                         
                         if vehicle.vehicleType.requiresPassengerCapacity, let capacity = vehicle.passengerCapacity {
                             DetailRowV(label: "Passenger Capacity", value: "\(capacity) passengers")
@@ -671,6 +702,9 @@ struct VehicleDetailView: View {
             .navigationTitle("\(vehicle.make) \(vehicle.model)")
             .navigationBarTitleDisplayMode(.inline)
             .background(Color(.systemGroupedBackground))
+            .onChange(of: isColorBlindMode) { newValue in
+                print("VehicleDetailView isColorBlindMode changed to: \(newValue)")
+            }
         }
     }
 }
@@ -678,14 +712,22 @@ struct VehicleDetailView: View {
 struct DetailRowV: View {
     let label: String
     let value: String
-    
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
+
+    private var secondaryColor: Color {
+        isColorBlindMode ? .cbBlue : .gray
+    }
+
     var body: some View {
         HStack {
             Text(label)
-                .foregroundColor(.gray)
+                .foregroundColor(secondaryColor)
             Spacer()
             Text(value)
                 .multilineTextAlignment(.trailing)
+        }
+        .onChange(of: isColorBlindMode) { newValue in
+            print("DetailRowV isColorBlindMode changed to: \(newValue)")
         }
     }
 }
@@ -693,13 +735,33 @@ struct DetailRowV: View {
 // MARK: - Card View
 struct VehicleCard: View {
     var vehicle: Vehicle
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
+
+    private var statusColor: Color {
+        switch vehicle.status {
+        case .deactivated:
+            return isColorBlindMode ? .cbOrange : .red
+        case .inMaintenance:
+            return isColorBlindMode ? .cbOrange : .orange
+        case .active:
+            return isColorBlindMode ? .cbBlue : .green
+        }
+    }
+
+    private var primaryColor: Color {
+        isColorBlindMode ? .cbBlue : .blue
+    }
+
+    private var secondaryColor: Color {
+        isColorBlindMode ? .cbBlue : .secondary
+    }
 
     var body: some View {
         ZStack(alignment: .trailing) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Image(systemName: "car.fill")
-                        .foregroundColor(vehicle.status == .deactivated ? .red : vehicle.status == .inMaintenance ? .orange : .green)
+                        .foregroundColor(statusColor)
                         .font(.system(size: 26))
 
                     VStack(alignment: .leading, spacing: 4) {
@@ -709,16 +771,16 @@ struct VehicleCard: View {
                             .font(.subheadline)
                         Text(vehicle.licensePlate)
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(secondaryColor)
                         HStack {
                             Text(vehicle.status.rawValue)
                                 .font(.subheadline)
-                                .foregroundColor(vehicle.status == .deactivated ? .red : vehicle.status == .inMaintenance ? .orange : .green)
+                                .foregroundColor(statusColor)
                             
                             if vehicle.assignedDriverId != nil {
                                 Text("Assigned")
                                     .font(.subheadline)
-                                    .foregroundColor(.blue)
+                                    .foregroundColor(primaryColor)
                             }
                         }
                     }
@@ -731,6 +793,9 @@ struct VehicleCard: View {
                 .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
             }
         }
+        .onChange(of: isColorBlindMode) { newValue in
+            print("VehicleCard isColorBlindMode changed to: \(newValue)")
+        }
     }
 }
 
@@ -738,6 +803,7 @@ struct VehicleCard: View {
 struct VehicleFormView: View {
     @Environment(\.dismiss) var dismiss
     @ObservedObject var viewModel: VehicleManagerViewModel
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
 
     @State private var make = ""
     @State private var model = ""
@@ -752,6 +818,10 @@ struct VehicleFormView: View {
     @State private var cargoCapacity: Double = 1000.0
 
     var editingVehicle: Vehicle?
+
+    private var secondaryColor: Color {
+        isColorBlindMode ? .cbBlue : .secondary
+    }
 
     var body: some View {
         NavigationStack {
@@ -793,13 +863,11 @@ struct VehicleFormView: View {
                             TextField("Weight", value: $cargoCapacity, format: .number)
                                 .keyboardType(.decimalPad)
                             Text("kg")
-                                .foregroundColor(.secondary)
+                                .foregroundColor(secondaryColor)
                         }
                     }
                 }
             }
-            .dismissKeyboardOnTap()
-            .dismissKeyboardOnScroll()
             .alert(isPresented: $showAlert) {
                 Alert(
                     title: Text("Error"),
@@ -842,6 +910,9 @@ struct VehicleFormView: View {
                     passengerCapacity = vehicle.passengerCapacity ?? 4
                     cargoCapacity = vehicle.cargoCapacity ?? 1000.0
                 }
+            }
+            .onChange(of: isColorBlindMode) { newValue in
+                print("VehicleFormView isColorBlindMode changed to: \(newValue)")
             }
         }
     }
@@ -887,6 +958,11 @@ struct VehicleFormView: View {
 struct UndoToastV: View {
     var undoAction: () -> Void
     @State private var isVisible = true
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
+
+    private var primaryColor: Color {
+        isColorBlindMode ? .cbBlue : .blue
+    }
 
     var body: some View {
         if isVisible {
@@ -894,6 +970,7 @@ struct UndoToastV: View {
                 Text("Vehicle deleted")
                 Spacer()
                 Button("Undo", action: undoAction)
+                    .foregroundColor(primaryColor)
             }
             .padding()
             .background(.ultraThinMaterial)
@@ -905,6 +982,9 @@ struct UndoToastV: View {
                         isVisible = false
                     }
                 }
+            }
+            .onChange(of: isColorBlindMode) { newValue in
+                print("UndoToastV isColorBlindMode changed to: \(newValue)")
             }
         }
     }
