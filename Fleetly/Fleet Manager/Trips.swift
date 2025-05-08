@@ -249,7 +249,7 @@ struct AllTripsView: View {
                     }
                 }
             }
-            .navigationTitle("All Trips")
+            .navigationTitle("Overall Trips")
             .navigationBarTitleDisplayMode(.inline) // Use inline to reduce space
             .sheet(item: $selectedTrip) { trip in
                 TripDetailView(trip: trip)

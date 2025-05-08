@@ -652,7 +652,7 @@ struct DashboardHomeView: View {
                         NavigationLink(destination: AllTripsView()) {
                             StatCardGridView(
                                 icon: "location.fill",
-                                title: "Total Trips",
+                                title: "Overall Trips",
                                 value: "\(viewModel.totalTrips)",
                                 color: isColorBlindMode ? .cbOrange : .teal
                             )
