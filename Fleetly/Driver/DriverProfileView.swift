@@ -448,43 +448,78 @@ struct DriverProfileView: View {
     private func loadImage(from urlString: String, completion: @escaping (UIImage?) -> Void) {
         print("🔄 loadImage: Starting to load image from URL: \(urlString)")
         
-        // Create a storage reference from the URL
-        let storageRef = Storage.storage().reference(forURL: urlString)
-        
-        // Download the image data
-        storageRef.getData(maxSize: 5 * 1024 * 1024) { data, error in
-            if let error = error {
-                print("❌ loadImage: Firebase Storage error: \(error.localizedDescription)")
-                DispatchQueue.main.async {
-                    completion(nil)
+        // Check if the URL is a Firebase Storage URL
+        if urlString.hasPrefix("gs://") {
+            // Handle Firebase Storage URL
+            let storageRef = Storage.storage().reference(forURL: urlString)
+            
+            // Download the image data
+            storageRef.getData(maxSize: 5 * 1024 * 1024) { data, error in
+                if let error = error {
+                    print("❌ loadImage: Firebase Storage error: \(error.localizedDescription)")
+                    DispatchQueue.main.async {
+                        completion(nil)
+                    }
+                    return
                 }
-                return
+                
+                guard let data = data else {
+                    print("❌ loadImage: No data received from Firebase Storage")
+                    DispatchQueue.main.async {
+                        completion(nil)
+                    }
+                    return
+                }
+                
+                print("📦 loadImage: Received data size: \(data.count) bytes")
+                
+                if let image = UIImage(data: data) {
+                    print("✅ loadImage: Successfully created image from data")
+                    DispatchQueue.main.async {
+                        completion(image)
+                    }
+                } else {
+                    print("❌ loadImage: Failed to create image from data")
+                    DispatchQueue.main.async {
+                        completion(nil)
+                    }
+                }
             }
-            
-            guard let data = data else {
-                print("❌ loadImage: No data received from Firebase Storage")
-                DispatchQueue.main.async {
-                    completion(nil)
+        } else if let url = URL(string: urlString) {
+            // Handle regular HTTP/HTTPS URL
+            URLSession.shared.dataTask(with: url) { data, response, error in
+                if let error = error {
+                    print("❌ loadImage: URL Session error: \(error.localizedDescription)")
+                    DispatchQueue.main.async {
+                        completion(nil)
+                    }
+                    return
                 }
-                return
-            }
-            
-            print("📦 loadImage: Received data size: \(data.count) bytes")
-            
-            if let image = UIImage(data: data) {
-                print("✅ loadImage: Successfully created image from data")
-                DispatchQueue.main.async {
-                    completion(image)
+                
+                guard let data = data else {
+                    print("❌ loadImage: No data received from URL")
+                    DispatchQueue.main.async {
+                        completion(nil)
+                    }
+                    return
                 }
-            } else {
-                print("❌ loadImage: Failed to create image from data")
-                // Try to print first few bytes of data for debugging
-                let previewSize = min(data.count, 100)
-                let previewData = data.prefix(previewSize)
-                print("🔍 loadImage: Data preview (first \(previewSize) bytes): \(previewData.map { String(format: "%02x", $0) }.joined())")
-                DispatchQueue.main.async {
-                    completion(nil)
+                
+                if let image = UIImage(data: data) {
+                    print("✅ loadImage: Successfully created image from URL data")
+                    DispatchQueue.main.async {
+                        completion(image)
+                    }
+                } else {
+                    print("❌ loadImage: Failed to create image from URL data")
+                    DispatchQueue.main.async {
+                        completion(nil)
+                    }
                 }
+            }.resume()
+        } else {
+            print("❌ loadImage: Invalid URL string")
+            DispatchQueue.main.async {
+                completion(nil)
             }
         }
     }
@@ -516,6 +551,11 @@ struct DriverProfileView: View {
             try await db.collection("users").document(user.id).updateData([
                 "medicalDocUrl": downloadURL.absoluteString
             ])
+            
+            // Update local user object
+            DispatchQueue.main.async {
+                self.authVM.user?.medicalDocUrl = downloadURL.absoluteString
+            }
             
             // Cache the uploaded image
             cacheImage(image, for: "medical")

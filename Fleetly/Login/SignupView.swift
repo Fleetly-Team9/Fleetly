@@ -191,6 +191,8 @@ struct SignupView: View {
                             }
                         }
                         .padding(.horizontal, 24)
+                        .dismissKeyboardOnTap()
+                        .dismissKeyboardOnScroll()
                         
                         VStack(alignment: .leading, spacing: 16) {
                             Text("Required Documents")

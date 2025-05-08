@@ -4,5 +4,16 @@
 <dict>
 	<key>CFBundleGetInfoString</key>
 	<string></string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>We need your location to track your route and provide navigation during trips.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>We need your location to track your route and provide navigation during trips, even when the app is in the background.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>We need your location to track your route and provide navigation during trips, even when the app is in the background.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+		<string>fetch</string>
+	</array>
 </dict>
 </plist>

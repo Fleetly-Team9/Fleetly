@@ -24,6 +24,8 @@ struct ScheduleView: View {
     @State private var errorMessage: String?
     @State private var isLoaderVisible = false // For fade animation
 
+    @StateObject private var colorManager = ColorManager.shared
+
     // Initializer to allow setting initial state for previews
     init(tasksByDate: [String: [DisplayTask]] = [:]) {
         self._tasksByDate = State(initialValue: tasksByDate)
@@ -69,16 +71,16 @@ struct ScheduleView: View {
                         HStack {
                             Text(displayFormatter.string(from: startOfMonth))
                                 .font(.system(.body, design: .rounded, weight: .medium))
-                                .foregroundStyle(.blue)
+                                .foregroundStyle(colorManager.primaryColor)
                             Spacer()
                             HStack(spacing: 10) {
                                 Button(action: { withAnimation { currentMonthOffset -= 1 } }) {
                                     Image(systemName: "chevron.left")
-                                        .foregroundStyle(.blue)
+                                        .foregroundStyle(colorManager.primaryColor)
                                 }
                                 Button(action: { withAnimation { currentMonthOffset += 1 } }) {
                                     Image(systemName: "chevron.right")
-                                        .foregroundStyle(.blue)
+                                        .foregroundStyle(colorManager.primaryColor)
                                 }
                             }
                         }
@@ -104,14 +106,14 @@ struct ScheduleView: View {
                                         Text("\(day)")
                                             .frame(width: 30, height: 30)
                                             .background(
-                                                calendar.isDate(date, inSameDayAs: selectedDate) ? Color.blue.opacity(0.15) : Color.clear
+                                                calendar.isDate(date, inSameDayAs: selectedDate) ? colorManager.primaryColor.opacity(0.15) : Color.clear
                                             )
                                             .foregroundStyle(
-                                                calendar.isDate(date, inSameDayAs: today) ? .blue : .primary
+                                                calendar.isDate(date, inSameDayAs: today) ? colorManager.primaryColor : .primary
                                             )
                                             .overlay(
                                                 calendar.isDate(date, inSameDayAs: today) ?
-                                                Circle().stroke(Color.blue, lineWidth: 1) : nil
+                                                Circle().stroke(colorManager.primaryColor, lineWidth: 1) : nil
                                             )
                                             .clipShape(Circle())
                                     }
@@ -144,7 +146,7 @@ struct ScheduleView: View {
                             VStack {
                                 ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle())
-                                    .tint(.blue)
+                                    .tint(colorManager.primaryColor)
                                     .scaleEffect(1.5)
                                     .padding(.bottom, 8)
                                 Text("Loading tasks...")
@@ -235,9 +237,9 @@ struct ScheduleView: View {
                                             HStack(alignment: .top, spacing: 12) {
                                                 Image(systemName: "car.fill")
                                                     .font(.system(size: 16, weight: .medium))
-                                                    .foregroundStyle(.blue)
+                                                    .foregroundStyle(colorManager.primaryColor)
                                                     .frame(width: 24, height: 24)
-                                                    .background(Color.blue.opacity(0.1))
+                                                    .background(colorManager.primaryColor.opacity(0.1))
                                                     .clipShape(Circle())
                                                 Text("Vehicle: \(displayTask.make) \(displayTask.model)")
                                                     .font(.system(.body, design: .rounded, weight: .medium))
@@ -273,9 +275,9 @@ struct ScheduleView: View {
                                             HStack(alignment: .top, spacing: 12) {
                                                 Image(systemName: "wrench.and.screwdriver.fill")
                                                     .font(.system(size: 16, weight: .medium))
-                                                    .foregroundStyle(.blue)
+                                                    .foregroundStyle(colorManager.primaryColor)
                                                     .frame(width: 24, height: 24)
-                                                    .background(Color.blue.opacity(0.1))
+                                                    .background(colorManager.primaryColor.opacity(0.1))
                                                     .clipShape(Circle())
                                                 Text("Issue: \(task.issue)")
                                                     .font(.system(.body, design: .rounded))
@@ -506,11 +508,11 @@ struct ScheduleView: View {
     func statusColor(for status: MaintenanceTask.TaskStatus) -> Color {
         switch status {
         case .completed:
-            return .green
+            return Color(hex: "E69F00") // Changed from green to yellow
         case .inProgress:
-            return .orange
+            return Color(hex: "E69F00") // Changed from orange to yellow
         case .pending:
-            return .blue
+            return Color(hex: "0072B2") // Changed from primaryColor to strong blue
         case .cancelled:
             return .gray
         }
@@ -519,11 +521,11 @@ struct ScheduleView: View {
     func priorityColor(for priority: String) -> Color {
         switch priority.lowercased() {
         case "low":
-            return .green
+            return Color(hex: "E69F00") // Changed from green to yellow
         case "medium":
-            return .orange
+            return Color(hex: "E69F00") // Changed from orange to yellow
         case "high":
-            return .red
+            return Color(hex: "E69F00") // Changed from accentColor to yellow
         default:
             return .gray
         }

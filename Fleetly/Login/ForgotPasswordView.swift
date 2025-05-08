@@ -99,6 +99,8 @@ struct ForgotPasswordView: View {
             .padding(.horizontal, 24)
             .navigationBarBackButtonHidden(true)
         }
+        .dismissKeyboardOnTap()
+        .dismissKeyboardOnScroll()
     }
 
     private func sendResetLink() {

@@ -34,13 +34,13 @@ struct DriverHomePage: View {
     @State private var elapsedTime: TimeInterval = 0
     @State private var isStopwatchRunning = false
     @State private var startTime: Date? = nil
-    @State private var isNavigating = false
+    @State private var navigatingTripId: String? = nil
     @State private var userTrackingMode: MapUserTrackingMode = .follow
     @State private var isClockedIn = false
     @State private var currentWorkOrderIndex: Int = 0
-    @State private var swipeOffset: CGFloat = 0
-    @State private var isSwiping: Bool = false
-    @State private var isDragCompleted: Bool = false
+    @State private var swipeOffsets: [String: CGFloat] = [:]
+    @State private var isDragCompleted: [String: Bool] = [:]
+    @State private var isSwiping: [String: Bool] = [:]
     @StateObject private var assignedTripsVM = AssignedTripsViewModel()
     @State private var didStartListener = false
     @State private var profileImage: Image?
@@ -487,24 +487,16 @@ struct DriverHomePage: View {
         let label: String
         let value: String
         
-        // Get first component of address and limit to specific length
-        private var shortenedValue: String {
-            let components = value.components(separatedBy: ",")
-            if let firstComponent = components.first {
-                return firstComponent.trimmingCharacters(in: .whitespaces)
-            }
-            return value
-        }
-        
         var body: some View {
             HStack(spacing: 12) {
                 Image(systemName: icon)
                     .foregroundStyle(color)
-                VStack(alignment: .leading, spacing: 2) { // Reduced spacing from 4 to 2
+                    .frame(width: 20)
+                VStack(alignment: .leading, spacing: 2) {
                     Text(label)
                         .font(.subheadline)
                         .foregroundStyle(Color.secondary)
-                    Text(shortenedValue)
+                    Text(value)
                         .font(.headline)
                         .lineLimit(1)
                 }
@@ -546,16 +538,35 @@ struct DriverHomePage: View {
 
     struct TripActionButton: View {
         let trip: Trip
-        @Binding var isNavigating: Bool
-        @Binding var swipeOffset: CGFloat
-        @Binding var isDragCompleted: Bool
-        @Binding var isSwiping: Bool
+        @Binding var navigatingTripId: String?
+        @Binding var swipeOffsets: [String: CGFloat]
+        @Binding var isDragCompleted: [String: Bool]
+        @Binding var isSwiping: [String: Bool]
         let maxX: CGFloat
         let authVM: AuthViewModel
         let gradientStart: Color
         let gradientEnd: Color
         @Environment(\.colorScheme) var colorScheme
         @State private var sliderOpacity: Double = 1.0
+        
+        private var swipeOffset: CGFloat {
+            swipeOffsets[trip.id] ?? 0
+        }
+        
+        private var isTripDragCompleted: Bool {
+            isDragCompleted[trip.id] ?? false
+        }
+        
+        private var isTripSwiping: Bool {
+            isSwiping[trip.id] ?? false
+        }
+        
+        private var isTripDateValid: Bool {
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy-MM-dd"
+            let currentDate = dateFormatter.string(from: Date())
+            return trip.date == currentDate
+        }
         
         var body: some View {
             GeometryReader { geometry in
@@ -568,12 +579,15 @@ struct DriverHomePage: View {
                             tripID: trip.id,
                             vehicleID: trip.vehicleId
                         ),
-                        isActive: $isNavigating,
+                        isActive: Binding(
+                            get: { navigatingTripId == trip.id },
+                            set: { if !$0 { navigatingTripId = nil } }
+                        ),
                         label: {
                             LinearGradient(
                                 colors: swipeOffset == 0 ? [Color(.systemGray5), Color(.systemGray5)] : [
                                     gradientStart,
-                                    swipeOffset >= maxX - 10 || isDragCompleted ? gradientEnd : gradientStart
+                                    swipeOffset >= maxX - 10 || isTripDragCompleted ? gradientEnd : gradientStart
                                 ],
                                 startPoint: .leading,
                                 endPoint: .trailing
@@ -583,6 +597,7 @@ struct DriverHomePage: View {
                         }
                     )
                     .buttonStyle(PlainButtonStyle())
+                    .disabled(!isTripDateValid)
                     
                     HStack(spacing: 0) {
                         ZStack {
@@ -596,29 +611,29 @@ struct DriverHomePage: View {
                         .opacity(sliderOpacity)
                         .offset(x: swipeOffset)
                         .gesture(
-                            isDragCompleted ? nil : DragGesture(minimumDistance: 5)
+                            isTripDragCompleted || !isTripDateValid ? nil : DragGesture(minimumDistance: 5)
                                 .onChanged { value in
-                                    isSwiping = true
+                                    isSwiping[trip.id] = true
                                     let calculatedMaxX = geometry.size.width - 53
-                                    swipeOffset = min(max(0, value.translation.width), calculatedMaxX)
+                                    swipeOffsets[trip.id] = min(max(0, value.translation.width), calculatedMaxX)
                                 }
                                 .onEnded { _ in
-                                    isSwiping = false
+                                    isSwiping[trip.id] = false
                                     let calculatedMaxX = geometry.size.width - 53
                                     if swipeOffset >= calculatedMaxX - 10 {
-                                        swipeOffset = calculatedMaxX
-                                        isDragCompleted = true
+                                        swipeOffsets[trip.id] = calculatedMaxX
+                                        isDragCompleted[trip.id] = true
                                         
                                         withAnimation(.easeOut(duration: 0.3)) {
                                             sliderOpacity = 0
                                         }
                                         
                                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                            isNavigating = true
+                                            navigatingTripId = trip.id
                                         }
                                     } else {
                                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                            swipeOffset = 0
+                                            swipeOffsets[trip.id] = 0
                                         }
                                     }
                                 }
@@ -626,9 +641,9 @@ struct DriverHomePage: View {
                         
                         Spacer()
                         
-                        Text("Slide to get Ready")
+                        Text(isTripDateValid ? "Slide to get Ready" : "Trip not available today")
                             .font(.headline)
-                            .foregroundColor(swipeOffset > 0 || isDragCompleted ? .white : Color(.systemBlue))
+                            .foregroundColor(swipeOffset > 0 || isTripDragCompleted ? .white : Color(.systemBlue))
                             .padding(.trailing, 16)
                     }
                     .padding(.leading, 0)
@@ -648,8 +663,8 @@ struct DriverHomePage: View {
             .onAppear {
                 resetSliderState()
             }
-            .onChange(of: isNavigating) { newValue in
-                if !newValue {
+            .onChange(of: navigatingTripId) { newValue in
+                if newValue != trip.id {
                     resetSliderState()
                 }
             }
@@ -657,8 +672,8 @@ struct DriverHomePage: View {
         
         private func resetSliderState() {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                swipeOffset = 0
-                isDragCompleted = false
+                swipeOffsets[trip.id] = 0
+                isDragCompleted[trip.id] = false
                 sliderOpacity = 1.0
             }
         }
@@ -670,7 +685,7 @@ struct DriverHomePage: View {
         return VStack(spacing: 0) {
             // Card wrapper that includes the map
             ZStack(alignment: .top) {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(colorScheme == .dark ? Color(UIColor.systemGray4) : Color.white)
                     .shadow(color: colorScheme == .dark ? Color.black.opacity(0.3) : Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
                 
@@ -687,19 +702,90 @@ struct DriverHomePage: View {
                         poiAnnotations: []
                     )
                     .frame(width: 363, height: 150)
-                    .cornerRadius(0) // Removed corner radius from map since it's inside the card
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                     
-                    VStack(alignment: .leading, spacing: 12) { // Reduced spacing from 16 to 12
-                        TripLocationSection(trip: trip)
+                    VStack(alignment: .leading, spacing: 16) {
+                        // Trip Details Section
+                        VStack(alignment: .leading, spacing: 12) {
+                            // Date and Time Row
+                            HStack(spacing: 24) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "calendar")
+                                        .foregroundStyle(Color.blue)
+                                        .frame(width: 20)
+                                    Text(trip.date)
+                                        .font(.subheadline)
+                                        .foregroundStyle(Color.primary)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                
+                                HStack(spacing: 8) {
+                                    Image(systemName: "clock")
+                                        .foregroundStyle(Color.blue)
+                                        .frame(width: 20)
+                                    Text(trip.time)
+                                        .font(.subheadline)
+                                        .foregroundStyle(Color.primary)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            
+                            // Vehicle Type and Capacity Row
+                            HStack(spacing: 24) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "car.fill")
+                                        .foregroundStyle(Color.blue)
+                                        .frame(width: 20)
+                                    Text(trip.vehicleType)
+                                        .font(.subheadline)
+                                        .foregroundStyle(Color.primary)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                
+                                if trip.vehicleType == "Passenger Vehicle" {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "person.2.fill")
+                                            .foregroundStyle(Color.blue)
+                                            .frame(width: 20)
+                                        Text("\(trip.passengers ?? 0) Passengers")
+                                            .font(.subheadline)
+                                            .foregroundStyle(Color.primary)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                } else if let loadWeight = trip.loadWeight {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "shippingbox.fill")
+                                            .foregroundStyle(Color.blue)
+                                            .frame(width: 20)
+                                        Text("\(Int(loadWeight)) kg")
+                                            .font(.subheadline)
+                                            .foregroundStyle(Color.primary)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 20)
                         
                         Divider()
+                            .padding(.horizontal, 20)
                         
-                        TripDetailsSection(trip: trip)
+                        // Location Details Section
+                        VStack(alignment: .leading, spacing: 12) {
+                            LocationRow(icon: "location.fill", color: .green, label: "From", value: trip.startLocation)
+                            LocationRow(icon: "location.fill", color: .red, label: "To", value: trip.endLocation)
+                        }
+                        .padding(.horizontal, 20)
                         
+                        Divider()
+                            .padding(.horizontal, 20)
+                        
+                        // Action Button
                         TripActionButton(
                             trip: trip,
-                            isNavigating: $isNavigating,
-                            swipeOffset: $swipeOffset,
+                            navigatingTripId: $navigatingTripId,
+                            swipeOffsets: $swipeOffsets,
                             isDragCompleted: $isDragCompleted,
                             isSwiping: $isSwiping,
                             maxX: maxX,
@@ -707,8 +793,10 @@ struct DriverHomePage: View {
                             gradientStart: Self.gradientStart,
                             gradientEnd: Self.gradientEnd
                         )
+                        .disabled(navigatingTripId != nil)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 20)
                     }
-                    .padding(10)
                 }
             }
         }
@@ -727,7 +815,7 @@ struct DriverHomePage: View {
                 // Multiple trips: Use ScrollView for horizontal scrolling
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
-                        ForEach(assignedTripsVM.assignedTrips) { trip in
+                        ForEach(assignedTripsVM.assignedTrips.sorted(by: { $0.startTime < $1.startTime })) { trip in
                             tripCardView(for: trip)
                         }
                     }

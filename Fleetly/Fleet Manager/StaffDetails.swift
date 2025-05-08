@@ -1244,6 +1244,8 @@ struct UserFormView: View {
                     }
                 }
             }
+            .dismissKeyboardOnTap()
+            .dismissKeyboardOnScroll()
             .sheet(isPresented: $showingImagePicker) {
                 PhotoPicker(selectedImage: currentDocumentType == .aadhar ? $aadharImage : $licenseImage)
             }

@@ -12,6 +12,7 @@ struct HomeView: View {
     @State private var errorMessage: String?
     @State private var lastTaskId: String?
     @State private var selectedFilter: TaskFilter = .all // State for filter
+    @StateObject private var colorManager = ColorManager.shared
     
     private let db = Firestore.firestore()
     
@@ -79,14 +80,14 @@ struct HomeView: View {
                                 icon: "car.fill",
                                 title: "Total Vehicles",
                                 value: "19",
-                                color: .blue
+                                color: colorManager.primaryColor
                             )
                             
                             StatCardGridView(
                                 icon: "wrench.and.screwdriver.fill",
                                 title: "Pending Tasks",
                                 value: "\(maintenanceTasks.filter { $0.status == .pending }.count)",
-                                color: .orange
+                                color: colorManager.accentColor
                             )
                         }
                         .padding(.horizontal, 16)
@@ -111,7 +112,7 @@ struct HomeView: View {
                                             Text(filter.rawValue)
                                             if selectedFilter == filter {
                                                 Image(systemName: "checkmark")
-                                                    .foregroundStyle(.blue)
+                                                    .foregroundStyle(colorManager.primaryColor)
                                             }
                                         }
                                     }
@@ -119,12 +120,12 @@ struct HomeView: View {
                             } label: {
                                 Image(systemName: "line.3.horizontal.decrease.circle")
                                     .font(.system(size: 20, weight: .regular))
-                                    .foregroundStyle(.blue)
+                                    .foregroundStyle(colorManager.primaryColor)
                                     .padding(.vertical, 4)
                                     .padding(.horizontal, 8)
                                     .background(
                                         Circle()
-                                            .fill(Color.blue.opacity(0.1))
+                                            .fill(Color.white.opacity(0.1))
                                             .frame(width: 32, height: 32)
                                     )
                             }
@@ -139,7 +140,7 @@ struct HomeView: View {
                         } else if let errorMessage = errorMessage {
                             Text(errorMessage)
                                 .font(.system(.body, design: .rounded))
-                                .foregroundStyle(.red)
+                                .foregroundStyle(colorManager.accentColor)
                                 .padding()
                                 .frame(maxWidth: .infinity)
                         } else if filteredTasks.isEmpty {
@@ -214,7 +215,7 @@ struct HomeView: View {
                         Image(systemName: "person.crop.circle.fill")
                             .font(.system(size: 24, weight: .regular, design: .rounded))
                             .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(colorManager.primaryColor)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Profile")
@@ -679,9 +680,9 @@ struct WorkOrderCard: View {
     
     private func statusColor(_ status: MaintenanceTask.TaskStatus) -> Color {
         switch status {
-        case .completed: return .green
-        case .inProgress: return .orange
-        case .pending: return .red
+        case .completed: return Color(hex: "E69F00")
+        case .inProgress: return Color(hex: "E69F00")
+        case .pending: return Color(hex: "E69F00")
         case .cancelled: return .gray
         }
     }
@@ -697,10 +698,10 @@ struct WorkOrderCard: View {
     
     private func priorityColor(_ priority: String) -> Color {
         switch priority.lowercased() {
-        case "low": return .green
-        case "medium": return .orange
-        case "high": return .red
-        default: return .green
+        case "low": return Color(hex: "E69F00")
+        case "medium": return Color(hex: "E69F00")
+        case "high": return Color(hex: "E69F00")
+        default: return Color(hex: "E69F00")
         }
     }
     
@@ -725,9 +726,9 @@ struct WorkOrderCard: View {
     
     private func swipeActionColor(_ status: MaintenanceTask.TaskStatus) -> Color {
         switch status {
-        case .pending: return .blue
-        case .inProgress: return .blue
-        case .completed: return .green
+        case .pending: return Color(hex: "0072B2")
+        case .inProgress: return Color(hex: "0072B2")
+        case .completed: return Color(hex: "E69F00")
         case .cancelled: return .gray
         }
     }
