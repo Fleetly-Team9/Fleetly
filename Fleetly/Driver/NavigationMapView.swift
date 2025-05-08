@@ -1,4 +1,3 @@
-
 //MARK: RESUME TRIP FEATURE
 import SwiftUI
 import MapKit
@@ -709,6 +708,20 @@ struct NavigationMapView: View {
             }
             .navigationBarTitle("Navigation", displayMode: .inline)
             .toolbar(.hidden, for: .tabBar)
+            .background(
+                NavigationLink(
+                    destination: PostInspectionView(
+                        authVM: authVM,
+                        dropoffLocation: trip.endLocation,
+                        vehicleNumber: vehicleNumber,
+                        tripID: trip.id,
+                        vehicleID: trip.vehicleId
+                    ),
+                    isActive: $navigateToPostInspection
+                ) {
+                    EmptyView()
+                }
+            )
             .dismissKeyboard() // Apply keyboard dismissal at the root level
         }
     }
