@@ -18,7 +18,7 @@ struct PostInspectionView: View {
     @State private var indicatorsCheck = false
     @State private var selectedImages: [UIImage] = []
     @State private var selectedItems: [PhotosPickerItem] = []
-    @State private var overallCheckStatus: String = "Verified"
+    @State private var overallCheckStatus: String = "Raise Ticket"
     @State private var fetchedTrip: Trip?
     @State private var errorMessage: String?
     @State private var inspectionCompleted = false
@@ -134,6 +134,10 @@ struct PostInspectionView: View {
         )
     }
     
+    private var isAllChecked: Bool {
+        return oilCheck && hornCheck && clutchCheck && airbagsCheck && physicalDamageCheck && tyrePressureCheck && brakesCheck && selectedImages.count == 4
+    }
+    
     var body: some View {
         VStack(spacing: 0) {
             Form {
@@ -170,26 +174,51 @@ struct PostInspectionView: View {
                         Text("Oil")
                     }
                     .toggleStyle(CheckboxToggleStyle2())
+                    .onChange(of: oilCheck) { _ in
+                        if !isAllChecked {
+                            overallCheckStatus = "Raise Ticket"
+                        }
+                    }
                     
                     Toggle(isOn: $hornCheck) {
                         Text("Horns")
                     }
                     .toggleStyle(CheckboxToggleStyle2())
+                    .onChange(of: hornCheck) { _ in
+                        if !isAllChecked {
+                            overallCheckStatus = "Raise Ticket"
+                        }
+                    }
                     
                     Toggle(isOn: $clutchCheck) {
                         Text("Clutch")
                     }
                     .toggleStyle(CheckboxToggleStyle2())
+                    .onChange(of: clutchCheck) { _ in
+                        if !isAllChecked {
+                            overallCheckStatus = "Raise Ticket"
+                        }
+                    }
                     
                     Toggle(isOn: $airbagsCheck) {
                         Text("Airbags")
                     }
                     .toggleStyle(CheckboxToggleStyle2())
+                    .onChange(of: airbagsCheck) { _ in
+                        if !isAllChecked {
+                            overallCheckStatus = "Raise Ticket"
+                        }
+                    }
                     
                     Toggle(isOn: $physicalDamageCheck) {
                         Text("No Physical damage")
                     }
                     .toggleStyle(CheckboxToggleStyle2())
+                    .onChange(of: physicalDamageCheck) { _ in
+                        if !isAllChecked {
+                            overallCheckStatus = "Raise Ticket"
+                        }
+                    }
                     
                     // Mileage Field with KM Card
                     HStack(alignment: .center, spacing: 8) {
@@ -231,6 +260,11 @@ struct PostInspectionView: View {
                             Text("Tyre Pressure").font(.headline)
                         }
                         .toggleStyle(CheckboxToggleStyle2())
+                        .onChange(of: tyrePressureCheck) { _ in
+                            if !isAllChecked {
+                                overallCheckStatus = "Raise Ticket"
+                            }
+                        }
                         
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Remarks:")
@@ -254,6 +288,11 @@ struct PostInspectionView: View {
                             Text("Brakes").font(.headline)
                         }
                         .toggleStyle(CheckboxToggleStyle2())
+                        .onChange(of: brakesCheck) { _ in
+                            if !isAllChecked {
+                                overallCheckStatus = "Raise Ticket"
+                            }
+                        }
                         
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Remarks:")
@@ -294,6 +333,9 @@ struct PostInspectionView: View {
                                 }
                             }
                             isUploadingImages = false
+                            if !isAllChecked {
+                                overallCheckStatus = "Raise Ticket"
+                            }
                         }
                     }
                     
@@ -341,6 +383,7 @@ struct PostInspectionView: View {
                         }
                         .pickerStyle(.menu)
                         .foregroundStyle(overallCheckStatus == "Verified" ? Color.green : Color.red)
+                        .disabled(!isAllChecked)
                     }
                 }
             }
@@ -369,7 +412,7 @@ struct PostInspectionView: View {
             .tint(overallCheckStatus == "Verified" ? .blue : .red)
             .padding(.horizontal)
             .padding(.top, 10)
-            .disabled(selectedImages.count != 4 || isSubmitting)
+            .disabled((overallCheckStatus == "Verified" && !isAllChecked) || isSubmitting)
         }
         .navigationTitle(Text("Post Inspection"))
         .alert("Raise a Ticket", isPresented: $showTicketConfirmation) {
