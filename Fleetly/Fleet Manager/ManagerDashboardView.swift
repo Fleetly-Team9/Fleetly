@@ -403,12 +403,8 @@ struct InfoRow: View {
 }
 
 // TrackView (unchanged, no colors)
-struct TrackView: View {
-    var body: some View {
-        Text("Track View")
-            .font(.title)
-    }
-}
+
+
 
 // DriverStatsViewModel (unchanged, no colors)
 class DriverStatsViewModel: ObservableObject {
@@ -467,13 +463,17 @@ struct VehicleStatusChart: View {
                     y: .value("Status", item.status)
                 )
                 .foregroundStyle(by: .value("Status", item.status))
+                .annotation(position: .trailing) {
+                    Text("\(item.count)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
             .frame(height: 150)
         }
         .padding()
         .background(Color(.secondarySystemBackground))
-        .cornerRadius(20)
-        .shadow(color: .gray.opacity(0.3), radius: 10, x: 0, y: 5) // Added shadow
+        .cornerRadius(12)
     }
 }
 
@@ -493,14 +493,17 @@ struct MaintenanceTaskChart: View {
                     angularInset: 1.5
                 )
                 .foregroundStyle(by: .value("Category", item.category))
+                .annotation(position: .overlay) {
+                    Text("\(item.count)")
+                        .font(.caption)
+                        .foregroundColor(.white)
+                }
             }
             .frame(height: 200)
         }
         .padding()
         .background(Color(.secondarySystemBackground))
-        .cornerRadius(20)
-        .shadow(color: .gray.opacity(0.3), radius: 10, x: 0, y: 5) // Added shadow
-        
+        .cornerRadius(12)
     }
 }
 
@@ -526,13 +529,23 @@ struct TripTrendChart: View {
                     y: .value("Trips", item.count)
                 )
                 .foregroundStyle(.blue.opacity(0.1))
+                
+                PointMark(
+                    x: .value("Date", item.date),
+                    y: .value("Trips", item.count)
+                )
+                .foregroundStyle(.blue)
+                .annotation(position: .top) {
+                    Text("\(item.count)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
             .frame(height: 200)
         }
         .padding()
         .background(Color(.secondarySystemBackground))
-        .cornerRadius(20)
-        .shadow(color: .gray.opacity(0.3), radius: 10, x: 0, y: 5) // Added shadow
+        .cornerRadius(12)
     }
 }
 
@@ -556,7 +569,6 @@ struct ExpenseChart: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 200)
                 .background(Color(.secondarySystemBackground))
-                .cornerRadius(20)
             } else {
                 Chart {
                     ForEach(data) { item in
@@ -565,6 +577,11 @@ struct ExpenseChart: View {
                             y: .value("Amount", item.amount)
                         )
                         .foregroundStyle(by: .value("Category", item.category))
+                        .annotation(position: .top) {
+                            Text("$\(String(format: "%.2f", item.amount))")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
                 .frame(height: 200)
@@ -579,8 +596,7 @@ struct ExpenseChart: View {
         }
         .padding()
         .background(Color(.secondarySystemBackground))
-        .cornerRadius(20)
-        .shadow(color: .gray.opacity(0.3), radius: 10, x: 0, y: 5) // Added shadow
+        .cornerRadius(12)
     }
 }
 
@@ -685,7 +701,7 @@ struct DashboardHomeView: View {
     @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
 
     enum ActionType: Identifiable {
-        case assign, maintain, track, reports
+        case assign, maintain, inventory, reports
         var id: Int { hashValue }
     }
 
@@ -707,7 +723,7 @@ struct DashboardHomeView: View {
                         NavigationLink(destination: AllTripsView()) {
                             StatCardGridView(
                                 icon: "location.fill",
-                                title: "Total Trips",
+                                title: "Overall Trips",
                                 value: "\(viewModel.totalTrips)",
                                 color: isColorBlindMode ? .cbOrange : .teal
                             )
@@ -743,8 +759,8 @@ struct DashboardHomeView: View {
                                 .onTapGesture { selectedAction = .maintain }
                             QuickActionButton(icon: "doc.text.magnifyingglass", title: "Reports")
                                 .onTapGesture { selectedAction = .reports }
-                            QuickActionButton(icon: "map.fill", title: "Track")
-                                .onTapGesture { selectedAction = .track }
+                            QuickActionButton(icon: "cart", title: "Inventory")
+                                .onTapGesture { selectedAction = .inventory }
                         }
                     }
                     .sheet(item: $selectedAction) { action in
@@ -752,13 +768,12 @@ struct DashboardHomeView: View {
                         case .reports: ReportsView()
                         case .assign: AssignView()
                         case .maintain: AssignTaskView()
-                        case .track: TrackView()
+                        case .inventory: InventoryManagementView()
                         }
                     }
                     .padding(.horizontal)
                     .padding()
                     .background(Color(.secondarySystemBackground))
-                    .shadow(color: .gray.opacity(0.1), radius: 10, x: 0, y: 0)
                     .cornerRadius(30)
                     .shadow(color: isColorBlindMode ? Color.cbBlue.opacity(0.08) : Color(.label).opacity(0.08), radius: 4)
                     .padding(.horizontal)
@@ -785,12 +800,10 @@ struct DashboardHomeView: View {
                                         .frame(width: 100)
                                         .padding(.vertical, 12)
                                         .background(
-                                            RoundedRectangle(cornerRadius: 20)
+                                            RoundedRectangle(cornerRadius: 12)
                                                 .fill(selectedChart == type ? type.color(isColorBlindMode: isColorBlindMode).opacity(0.2) : Color(.systemGray6))
                                         )
                                         .foregroundColor(selectedChart == type ? type.color(isColorBlindMode: isColorBlindMode) : (isColorBlindMode ? .cbBlue : .gray))
-                                        .shadow(color: .gray.opacity(0.1), radius: 10, x: 0, y: 5) // Added shadow
-                                        
                                     }
                                 }
                             }
@@ -848,7 +861,7 @@ struct DashboardHomeView: View {
                 .padding(.bottom, 20)
             }
             .background(Color(.systemGroupedBackground))
-            .navigationTitle("Hello,Manager !")
+            .navigationTitle("Hello, Fleet!")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -1108,7 +1121,6 @@ struct QuickActionButton: View {
                 .foregroundColor(.primary)
         }
         .frame(maxWidth: .infinity)
-        
     }
 }
 
@@ -1143,7 +1155,7 @@ struct StatCardGridView: View {
         .padding()
         .background(Color(.secondarySystemBackground))
         .cornerRadius(30)
-        .shadow(color: .gray.opacity(0.3), radius: 10, x: 0, y: 5) // Added shadow
+        .shadow(color: isColorBlindMode ? Color.cbBlue.opacity(0.05) : Color(.label).opacity(0.05), radius: 4, x: 0, y: 2)
     }
 }
 
@@ -1184,13 +1196,6 @@ struct AlertRowView: View {
         .sheet(isPresented: $showingDetail) {
             GeofenceDeviationDetailView(deviation: deviation)
         }
-
-        .padding()
-        .background(Color(.secondarySystemBackground))
-        .cornerRadius(12)
-        .shadow(color: isColorBlindMode ? Color.cbBlue.opacity(0.05) : Color(.label).opacity(0.05), radius: 4, x: 0, y: 2)
-        .shadow(color: .gray.opacity(0.3), radius: 10, x: 0, y: 5) // Added shadow
-
     }
 }
 
@@ -1332,7 +1337,6 @@ struct FilterRow: View {
     }
 }
 
-
 // Rename DetailRow to DeviationDetailRow
 struct DeviationDetailRow: View {
     let title: String
@@ -1419,11 +1423,7 @@ struct GeofenceDeviationDetailView: View {
     }
 }
 
-
 // Preview
 #Preview {
     MainTabView(authVM: AuthViewModel())
 }
-
-
-
