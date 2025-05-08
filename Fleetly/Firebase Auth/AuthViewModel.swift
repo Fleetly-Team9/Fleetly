@@ -280,6 +280,7 @@ class AuthViewModel: ObservableObject {
                                 drivingLicenseNumber: licenseNumber,
                                 aadharDocUrl: aadharURL.isEmpty ? nil : aadharURL,
                                 licenseDocUrl: licenseURL.isEmpty ? nil : licenseURL,
+                                medicalDocUrl: nil,  // Initialize as nil since it's not required during signup
                                 isApproved: false
                             )
                             

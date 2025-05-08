@@ -38,9 +38,10 @@ struct DriverHomePage: View {
     @State private var userTrackingMode: MapUserTrackingMode = .follow
     @State private var isClockedIn = false
     @State private var currentWorkOrderIndex: Int = 0
-    @State private var swipeOffset: CGFloat = 0
-    @State private var isSwiping: Bool = false
-    @State private var isDragCompleted: Bool = false
+    @State private var swipeOffsets: [String: CGFloat] = [:]
+    @State private var isSwiping: [String: Bool] = [:]
+    @State private var isDragCompleted: [String: Bool] = [:]
+    @State private var isNavigatingTrip: [String: Bool] = [:]
     @StateObject private var assignedTripsVM = AssignedTripsViewModel()
     @State private var didStartListener = false
     @State private var profileImage: Image?
@@ -516,33 +517,55 @@ struct DriverHomePage: View {
         let trip: Trip
         
         var body: some View {
-            HStack(spacing: 24) {
-                DetailColumn(label: "Time", value: trip.time)
-                DetailColumn(label: "Vehicle Type", value: trip.vehicleType)
-                DetailColumn(
-                    label: trip.vehicleType == "Passenger Vehicle" ? "Passengers" : "Load",
-                    value: trip.vehicleType == "Passenger Vehicle" ?
-                        "\(trip.passengers ?? 0)" :
-                        "\(Int(trip.loadWeight ?? 0)) kg"
-                )
-            }
-        }
-    }
+
+            VStack(spacing: 12) {
+                            // Date and Time Row
+                            HStack(spacing: 24) {
+                                DetailColumn(icon: "calendar", label: "Date", value: trip.date)
+                                DetailColumn(icon: "clock", label: "Time", value: trip.time)
+                            }
+                            
+                            // Vehicle Type and Capacity Row
+                            HStack(spacing: 24) {
+                                DetailColumn(icon: "car.fill", label: "Vehicle Type", value: trip.vehicleType)
+                                DetailColumn(
+                                    icon: trip.vehicleType == "Passenger Vehicle" ? "person.2.fill" : "scalemass.fill",
+                                    label: trip.vehicleType == "Passenger Vehicle" ? "Passengers" : "Load",
+                                    value: trip.vehicleType == "Passenger Vehicle" ?
+                                        "\(trip.passengers ?? 0)" :
+                                        "\(Int(trip.loadWeight ?? 0)) kg"
+                                )
+                            }
+                        }
+                    }
+                }
+
+      
+
 
     private struct DetailColumn: View {
+        let icon: String
         let label: String
+        
         let value: String
         
         var body: some View {
-            VStack(alignment: .leading, spacing: 2) { // Reduced spacing from 4 to 2
-                Text(label)
-                    .font(.subheadline)
-                    .foregroundStyle(Color.secondary)
-                Text(value)
-                    .font(.headline)
-            }
-        }
-    }
+            HStack(spacing: 8) {
+                            Image(systemName: icon)
+                                .foregroundStyle(Color.accentColor)
+                                .frame(width: 20)
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(label)
+                                    .font(.subheadline)
+                                    .foregroundStyle(Color.secondary)
+                                Text(value)
+                                    .font(.headline)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
 
     struct TripActionButton: View {
         let trip: Trip
@@ -670,7 +693,7 @@ struct DriverHomePage: View {
         return VStack(spacing: 0) {
             // Card wrapper that includes the map
             ZStack(alignment: .top) {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(colorScheme == .dark ? Color(UIColor.systemGray4) : Color.white)
                     .shadow(color: colorScheme == .dark ? Color.black.opacity(0.3) : Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
                 
@@ -687,28 +710,42 @@ struct DriverHomePage: View {
                         poiAnnotations: []
                     )
                     .frame(width: 363, height: 150)
-                    .cornerRadius(0) // Removed corner radius from map since it's inside the card
+                    .cornerRadius(16, corners: [.topLeft, .topRight]) // Removed corner radius from map since it's inside the card
                     
-                    VStack(alignment: .leading, spacing: 12) { // Reduced spacing from 16 to 12
+                    VStack(alignment: .leading, spacing: 16) { // Reduced spacing from 16 to 12
                         TripLocationSection(trip: trip)
                         
                         Divider()
+                            .padding(.horizontal, -10)
                         
                         TripDetailsSection(trip: trip)
                         
                         TripActionButton(
                             trip: trip,
-                            isNavigating: $isNavigating,
-                            swipeOffset: $swipeOffset,
-                            isDragCompleted: $isDragCompleted,
-                            isSwiping: $isSwiping,
+                            isNavigating: Binding(
+                                get: { isNavigatingTrip[trip.id] ?? false },
+                                set: { isNavigatingTrip[trip.id] = $0 }
+                            ),
+                            swipeOffset: Binding(
+                                get: { swipeOffsets[trip.id] ?? 0 },
+                                set: { swipeOffsets[trip.id] = $0 }
+                            ),
+                            isDragCompleted: Binding(
+                                get: { isDragCompleted[trip.id] ?? false },
+                                set: { isDragCompleted[trip.id] = $0 }
+                            ),
+                            isSwiping: Binding(
+                                get: { isSwiping[trip.id] ?? false },
+                                set: { isSwiping[trip.id] = $0 }
+                            ),
                             maxX: maxX,
                             authVM: authVM,
                             gradientStart: Self.gradientStart,
                             gradientEnd: Self.gradientEnd
                         )
+                        .disabled(isNavigatingTrip.values.contains(true)) // Disable all trip buttons when any trip is being started
                     }
-                    .padding(10)
+                    .padding(16)
                 }
             }
         }
@@ -727,7 +764,7 @@ struct DriverHomePage: View {
                 // Multiple trips: Use ScrollView for horizontal scrolling
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
-                        ForEach(assignedTripsVM.assignedTrips) { trip in
+                        ForEach(assignedTripsVM.assignedTrips.sorted(by: { $0.startTime < $1.startTime })) { trip in
                             tripCardView(for: trip)
                         }
                     }
