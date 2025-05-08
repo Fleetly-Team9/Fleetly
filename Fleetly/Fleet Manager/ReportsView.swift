@@ -578,6 +578,41 @@ class ReportsViewModel: ObservableObject {
         content += "Summary:\n"
         content += "Total Trips: \(trips.count)\n"
         
+        // Expense Summary
+        var totalFuel = 0.0
+        var totalToll = 0.0
+        var totalMisc = 0.0
+        var totalIncidental = 0.0
+        
+        let group = DispatchGroup()
+        
+        for trip in trips {
+            group.enter()
+            FirebaseManager.shared.fetchTripCharges(tripId: trip.id) { result in
+                defer { group.leave() }
+                switch result {
+                case .success(let charges):
+                    if let charges = charges {
+                        totalFuel += charges.fuelLog
+                        totalToll += charges.tollFees
+                        totalMisc += charges.misc
+                        totalIncidental += charges.incidental
+                    }
+                case .failure(let error):
+                    print("Error fetching trip charges: \(error)")
+                }
+            }
+        }
+        
+        group.wait()
+        
+        content += "\nExpense Summary:\n"
+        content += "Total Fuel Expenses: $\(String(format: "%.2f", totalFuel))\n"
+        content += "Total Toll Expenses: $\(String(format: "%.2f", totalToll))\n"
+        content += "Total Miscellaneous Expenses: $\(String(format: "%.2f", totalMisc))\n"
+        content += "Total Incidental Expenses: $\(String(format: "%.2f", totalIncidental))\n"
+        content += "Total Expenses: $\(String(format: "%.2f", totalFuel + totalToll + totalMisc + totalIncidental))\n\n"
+        
         // Trip Statistics
         let totalDistance = trips.reduce(into: 0.0) { result, trip in
             result += trip.loadWeight ?? 0.0
@@ -594,7 +629,7 @@ class ReportsViewModel: ObservableObject {
         content += "Total Passengers: \(totalPassengers)\n"
         content += "Total Load Weight: \(String(format: "%.2f", totalLoadWeight)) kg\n\n"
         
-        // Detailed Trip List
+        // Detailed Trip List with Expenses
         content += "Detailed Trip List:\n"
         for trip in trips {
             content += "\nTrip ID: \(trip.id)"
@@ -610,9 +645,27 @@ class ReportsViewModel: ObservableObject {
             if let loadWeight = trip.loadWeight {
                 content += "\nLoad Weight: \(loadWeight) kg"
             }
+            content += "\nExpenses:"
+            
+            group.enter()
+            FirebaseManager.shared.fetchTripCharges(tripId: trip.id) { result in
+                defer { group.leave() }
+                switch result {
+                case .success(let charges):
+                    if let charges = charges {
+                        content += "\n  Fuel: $\(String(format: "%.2f", charges.fuelLog))"
+                        content += "\n  Toll: $\(String(format: "%.2f", charges.tollFees))"
+                        content += "\n  Miscellaneous: $\(String(format: "%.2f", charges.misc))"
+                        content += "\n  Incidental: $\(String(format: "%.2f", charges.incidental))"
+                    }
+                case .failure(let error):
+                    print("Error fetching trip charges: \(error)")
+                }
+            }
             content += "\n-------------------"
         }
         
+        group.wait()
         return content
     }
     

@@ -12,6 +12,7 @@ struct NavigationMapView: View {
     let vehicleNumber: String
     let authVM: AuthViewModel
     
+    @Environment(\.presentationMode) var presentationMode
     @StateObject private var navigationVM = NavigationViewModel()
     @State private var region = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 0, longitude: 0),
@@ -706,7 +707,17 @@ struct NavigationMapView: View {
                     .edgesIgnoringSafeArea(.all)
                 }
             }
-            .navigationBarTitle("Navigation", displayMode: .inline)
+            .navigationBarBackButtonHidden(true)
+            .navigationBarItems(leading: Button(action: {
+                if isTripStarted {
+                    // Show confirmation dialog before going back
+                    // You can add a confirmation dialog here if needed
+                }
+                presentationMode.wrappedValue.dismiss()
+            }) {
+                Image(systemName: "chevron.left")
+                    .foregroundColor(.blue)
+            })
             .toolbar(.hidden, for: .tabBar)
             .background(
                 NavigationLink(
@@ -795,6 +806,10 @@ struct NavigationMapView: View {
                     switch result {
                     case .success:
                         print("Successfully saved trip charges to Firebase")
+                        // Close the modal after successful save
+                        DispatchQueue.main.async {
+                            closeAllModals()
+                        }
                     case .failure(let error):
                         print("Error saving trip charges: \(error)")
                     }
@@ -1256,7 +1271,6 @@ struct ExpenseModalView: View {
             
             Button(action: {
                 onSave()
-                onClose()
             }) {
                 Text("Save")
                     .font(.headline)

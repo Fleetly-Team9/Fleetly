@@ -406,19 +406,21 @@ struct InfoRow: View {
 
 
 
-// DriverStatsViewModel (unchanged, no colors)
+// DriverStatsViewModel
 class DriverStatsViewModel: ObservableObject {
     @Published var driverCount: Int = 0
     private let db = Firestore.firestore()
 
     func fetchDriverCount() {
-        db.collection("users").getDocuments { (querySnapshot, error) in
-            if let error = error {
-                print("Error fetching driver count: \(error.localizedDescription)")
-                return
+        db.collection("users")
+            .whereField("role", isEqualTo: "driver")
+            .getDocuments { (querySnapshot, error) in
+                if let error = error {
+                    print("Error fetching driver count: \(error.localizedDescription)")
+                    return
+                }
+                self.driverCount = querySnapshot?.documents.count ?? 0
             }
-            self.driverCount = querySnapshot?.documents.count ?? 0
-        }
     }
 }
 
@@ -888,111 +890,120 @@ struct DashboardHomeView: View {
         }
     }
     
-    // Update fetchExpenseData in DashboardHomeView
     private func fetchExpenseData() {
-            let db = Firestore.firestore()
-            let calendar = Calendar.current
-            let endDate = Date()
-            let startDate = calendar.date(byAdding: .day, value: -30, to: endDate)!
-            let group = DispatchGroup()
-            var allExpenses: [ExpenseData] = []
+        let db = Firestore.firestore()
+        let calendar = Calendar.current
+        let endDate = Date()
+        let startDate = calendar.date(byAdding: .day, value: -30, to: endDate)!
+        let group = DispatchGroup()
+        var allExpenses: [ExpenseData] = []
 
-            group.enter()
-            db.collection("trips")
-                .whereField("startTime", isGreaterThanOrEqualTo: startDate)
-                .whereField("startTime", isLessThanOrEqualTo: endDate)
-                .getDocuments { snapshot, error in
-                    defer { group.leave() }
-                    if let error = error {
-                        print("Error fetching trip expenses: \(error.localizedDescription)")
-                        return
-                    }
-                    if let documents = snapshot?.documents {
-                        for document in documents {
-                            if let tripCharges = document.data()["tripCharges"] as? [String: Any] {
-                                if let fuelAmount = tripCharges["fuelLog"] as? Double {
-                                    allExpenses.append(ExpenseData(
-                                        category: "Fuel",
-                                        amount: fuelAmount,
-                                        date: document.data()["startTime"] as? Date ?? Date()
-                                    ))
-                                }
-                                if let tollAmount = tripCharges["tollFees"] as? Double {
-                                    allExpenses.append(ExpenseData(
-                                        category: "Toll",
-                                        amount: tollAmount,
-                                        date: document.data()["startTime"] as? Date ?? Date()
-                                    ))
-                                }
-                                if let miscAmount = tripCharges["misc"] as? Double {
-                                    allExpenses.append(ExpenseData(
-                                        category: "Miscellaneous",
-                                        amount: miscAmount,
-                                        date: document.data()["startTime"] as? Date ?? Date()
-                                    ))
-                                }
-                            }
-                        }
-                    }
+        group.enter()
+        db.collection("trips")
+            .whereField("startTime", isGreaterThanOrEqualTo: startDate)
+            .whereField("startTime", isLessThanOrEqualTo: endDate)
+            .getDocuments { snapshot, error in
+                defer { group.leave() }
+                if let error = error {
+                    print("Error fetching trip expenses: \(error.localizedDescription)")
+                    return
                 }
-
-            group.enter()
-            db.collection("maintenance_tasks")
-                .whereField("completionDate", isGreaterThanOrEqualTo: startDate)
-                .whereField("completionDate", isLessThanOrEqualTo: endDate)
-                .getDocuments { snapshot, error in
-                    defer { group.leave() }
-                    if let error = error {
-                        print("Error fetching maintenance expenses: \(error.localizedDescription)")
-                        return
-                    }
-                    if let documents = snapshot?.documents {
-                        for document in documents {
-                            if let partsCost = document.data()["partsCost"] as? Double {
-                                allExpenses.append(ExpenseData(
-                                    category: "Parts",
-                                    amount: partsCost,
-                                    date: document.data()["completionDate"] as? Date ?? Date()
-                                ))
-                            }
-                            if let laborCost = document.data()["laborCost"] as? Double {
-                                allExpenses.append(ExpenseData(
-                                    category: "Labor",
-                                    amount: laborCost,
-                                    date: document.data()["completionDate"] as? Date ?? Date()
-                                ))
+                if let documents = snapshot?.documents {
+                    for document in documents {
+                        if let trip = try? document.data(as: Trip.self) {
+                            // Fetch trip charges from subcollection
+                            FirebaseManager.shared.fetchTripCharges(tripId: trip.id) { result in
+                                switch result {
+                                case .success(let charges):
+                                    if let charges = charges {
+                                        allExpenses.append(ExpenseData(
+                                            category: "Fuel",
+                                            amount: charges.fuelLog,
+                                            date: trip.startTime
+                                        ))
+                                        allExpenses.append(ExpenseData(
+                                            category: "Toll",
+                                            amount: charges.tollFees,
+                                            date: trip.startTime
+                                        ))
+                                        allExpenses.append(ExpenseData(
+                                            category: "Miscellaneous",
+                                            amount: charges.misc,
+                                            date: trip.startTime
+                                        ))
+                                        allExpenses.append(ExpenseData(
+                                            category: "Incidental",
+                                            amount: charges.incidental,
+                                            date: trip.startTime
+                                        ))
+                                    }
+                                case .failure(let error):
+                                    print("Error fetching trip charges: \(error)")
+                                }
                             }
                         }
                     }
-                }
-
-            group.notify(queue: .main) {
-                if allExpenses.isEmpty {
-                    print("No expenses found, using sample data")
-                    self.expenseData = [
-                        ExpenseData(category: "Fuel", amount: 2500.0, date: Date()),
-                        ExpenseData(category: "Toll", amount: 800.0, date: Date()),
-                        ExpenseData(category: "Miscellaneous", amount: 500.0, date: Date()),
-                        ExpenseData(category: "Parts", amount: 1800.0, date: Date()),
-                        ExpenseData(category: "Labor", amount: 1200.0, date: Date())
-                    ]
-                } else {
-                    print("Found \(allExpenses.count) expenses")
-                    let groupedExpenses = Dictionary(grouping: allExpenses) { $0.category }
-                        .mapValues { expenses in
-                            expenses.reduce(0) { $0 + $1.amount }
-                        }
-                    self.expenseData = groupedExpenses.map { category, amount in
-                        ExpenseData(
-                            category: category.trimmingCharacters(in: .whitespacesAndNewlines).capitalized,
-                            amount: amount,
-                            date: Date()
-                        )
-                    }
-                    print("Updated expenseData with \(self.expenseData.count) categories: \(self.expenseData.map { $0.category })")
                 }
             }
+
+        group.enter()
+        db.collection("maintenance_tasks")
+            .whereField("completionDate", isGreaterThanOrEqualTo: startDate)
+            .whereField("completionDate", isLessThanOrEqualTo: endDate)
+            .getDocuments { snapshot, error in
+                defer { group.leave() }
+                if let error = error {
+                    print("Error fetching maintenance expenses: \(error.localizedDescription)")
+                    return
+                }
+                if let documents = snapshot?.documents {
+                    for document in documents {
+                        if let partsCost = document.data()["partsCost"] as? Double {
+                            allExpenses.append(ExpenseData(
+                                category: "Parts",
+                                amount: partsCost,
+                                date: document.data()["completionDate"] as? Date ?? Date()
+                            ))
+                        }
+                        if let laborCost = document.data()["laborCost"] as? Double {
+                            allExpenses.append(ExpenseData(
+                                category: "Labor",
+                                amount: laborCost,
+                                date: document.data()["completionDate"] as? Date ?? Date()
+                            ))
+                        }
+                    }
+                }
+            }
+
+        group.notify(queue: .main) {
+            if allExpenses.isEmpty {
+                print("No expenses found, using sample data")
+                self.expenseData = [
+                    ExpenseData(category: "Fuel", amount: 2500.0, date: Date()),
+                    ExpenseData(category: "Toll", amount: 800.0, date: Date()),
+                    ExpenseData(category: "Miscellaneous", amount: 500.0, date: Date()),
+                    ExpenseData(category: "Incidental", amount: 300.0, date: Date()),
+                    ExpenseData(category: "Parts", amount: 1800.0, date: Date()),
+                    ExpenseData(category: "Labor", amount: 1200.0, date: Date())
+                ]
+            } else {
+                print("Found \(allExpenses.count) expenses")
+                let groupedExpenses = Dictionary(grouping: allExpenses) { $0.category }
+                    .mapValues { expenses in
+                        expenses.reduce(0) { $0 + $1.amount }
+                    }
+                self.expenseData = groupedExpenses.map { category, amount in
+                    ExpenseData(
+                        category: category.trimmingCharacters(in: .whitespacesAndNewlines).capitalized,
+                        amount: amount,
+                        date: Date()
+                    )
+                }
+                print("Updated expenseData with \(self.expenseData.count) categories: \(self.expenseData.map { $0.category })")
+            }
         }
+    }
 
     private func fetchChartData() {
         let db = Firestore.firestore()

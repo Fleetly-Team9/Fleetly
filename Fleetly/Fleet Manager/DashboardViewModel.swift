@@ -33,7 +33,14 @@ class DashboardViewModel: ObservableObject {
     private var ticketsListener: ListenerRegistration?
     private var maintenanceTasksListener: ListenerRegistration?
     private var deviationsListener: ListenerRegistration?
-    private var lastDeviationTimestamp: Date?
+    private var lastDeviationTimestamp: Date? {
+        get {
+            UserDefaults.standard.object(forKey: "lastDeviationTimestamp") as? Date
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "lastDeviationTimestamp")
+        }
+    }
 
     init() {
         requestNotificationPermission()
@@ -205,13 +212,11 @@ class DashboardViewModel: ObservableObject {
                             )
                             newDeviations.append(deviation)
                             
-                            // Check if this is a new deviation
+                            // Only trigger notification if this is a new deviation
                             if let lastTimestamp = self.lastDeviationTimestamp {
                                 if timestamp > lastTimestamp {
                                     self.scheduleDeviationNotification(for: deviation)
                                 }
-                            } else {
-                                self.scheduleDeviationNotification(for: deviation)
                             }
                             
                             group.leave()
@@ -225,9 +230,11 @@ class DashboardViewModel: ObservableObject {
                     // Sort deviations by timestamp
                     newDeviations.sort { $0.timestamp > $1.timestamp }
                     
-                    // Update the last deviation timestamp
+                    // Update the last deviation timestamp if we have new deviations
                     if let firstDeviation = newDeviations.first {
-                        self.lastDeviationTimestamp = firstDeviation.timestamp
+                        if self.lastDeviationTimestamp == nil || firstDeviation.timestamp > (self.lastDeviationTimestamp ?? Date.distantPast) {
+                            self.lastDeviationTimestamp = firstDeviation.timestamp
+                        }
                     }
                     
                     self.recentDeviations = newDeviations
