@@ -1,3 +1,4 @@
+
 //MARK: RESUME TRIP FEATURE
 import SwiftUI
 import MapKit
@@ -708,53 +709,7 @@ struct NavigationMapView: View {
             }
             .navigationBarTitle("Navigation", displayMode: .inline)
             .toolbar(.hidden, for: .tabBar)
-            .background(
-                NavigationLink(
-                    destination: PostInspectionView(
-                        authVM: authVM,
-                        dropoffLocation: trip.endLocation,
-                        vehicleNumber: vehicleNumber,
-                        tripID: trip.id,
-                        vehicleID: trip.vehicleId
-                    ),
-                    isActive: $navigateToPostInspection
-                ) {
-                    EmptyView()
-                }
-            )
-            .alert(isPresented: Binding(
-                get: { minimizedAndReopened && isTripStarted },
-                set: { _ in }
-            )) {
-                Alert(
-                    title: Text("Continue trip?"),
-                    primaryButton: .default(Text("Resume")) {
-                        minimizedAndReopened = false
-                        print("User chose to resume trip")
-                    },
-                    secondaryButton: .destructive(Text("Cancel")) {
-                        minimizedAndReopened = false
-                        isTripStarted = false
-                        let endTime = Date()
-                        FirebaseManager.shared.saveEndClicked(tripId: trip.id, timestamp: endTime) { result in
-                            switch result {
-                            case .success:
-                                print("Successfully saved EndClicked")
-                            case .failure(let error):
-                                print("Error saving EndClicked: \(error)")
-                            }
-                        }
-                        showMainView = true
-                        print("User chose to cancel trip, presenting MainView")
-                    }
-                )
-            }
-            .fullScreenCover(isPresented: $showMainView, onDismiss: nil) {
-                MainView(authVM: authVM)
-                    .onAppear {
-                        resetRootView(to: MainView(authVM: authVM))
-                    }
-            }
+            .dismissKeyboard() // Apply keyboard dismissal at the root level
         }
     }
     
@@ -1192,7 +1147,10 @@ struct ExpenseModalView: View {
                 .padding(.horizontal, 16)
             }
             .padding(.bottom, 15)
+            .dismissKeyboardOnTap()
+            .dismissKeyboardOnScroll()
             
+            // Payment proof section
             VStack(alignment: .leading, spacing: 15) {
                 Text("Payment Proof")
                     .font(.headline)
@@ -1268,6 +1226,7 @@ struct ExpenseModalView: View {
                     }
                 }
                 
+                // Description field
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Description (Optional)")
                         .font(.subheadline)

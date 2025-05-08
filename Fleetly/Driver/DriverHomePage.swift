@@ -487,24 +487,16 @@ struct DriverHomePage: View {
         let label: String
         let value: String
         
-        // Get first component of address and limit to specific length
-        private var shortenedValue: String {
-            let components = value.components(separatedBy: ",")
-            if let firstComponent = components.first {
-                return firstComponent.trimmingCharacters(in: .whitespaces)
-            }
-            return value
-        }
-        
         var body: some View {
             HStack(spacing: 12) {
                 Image(systemName: icon)
                     .foregroundStyle(color)
-                VStack(alignment: .leading, spacing: 2) { // Reduced spacing from 4 to 2
+                    .frame(width: 20)
+                VStack(alignment: .leading, spacing: 2) {
                     Text(label)
                         .font(.subheadline)
                         .foregroundStyle(Color.secondary)
-                    Text(shortenedValue)
+                    Text(value)
                         .font(.headline)
                         .lineLimit(1)
                 }
@@ -523,7 +515,7 @@ struct DriverHomePage: View {
                     label: trip.vehicleType == "Passenger Vehicle" ? "Passengers" : "Load",
                     value: trip.vehicleType == "Passenger Vehicle" ?
                         "\(trip.passengers ?? 0)" :
-                        "\(Int(trip.loadWeight ?? 0)) kg",
+                        "\(Int(trip.loadWeight ?? 0)) kg"
                 )
             }
         }
@@ -569,6 +561,13 @@ struct DriverHomePage: View {
             isSwiping[trip.id] ?? false
         }
         
+        private var isTripDateValid: Bool {
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy-MM-dd"
+            let currentDate = dateFormatter.string(from: Date())
+            return trip.date == currentDate
+        }
+        
         var body: some View {
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
@@ -598,6 +597,7 @@ struct DriverHomePage: View {
                         }
                     )
                     .buttonStyle(PlainButtonStyle())
+                    .disabled(!isTripDateValid)
                     
                     HStack(spacing: 0) {
                         ZStack {
@@ -611,7 +611,7 @@ struct DriverHomePage: View {
                         .opacity(sliderOpacity)
                         .offset(x: swipeOffset)
                         .gesture(
-                            isTripDragCompleted ? nil : DragGesture(minimumDistance: 5)
+                            isTripDragCompleted || !isTripDateValid ? nil : DragGesture(minimumDistance: 5)
                                 .onChanged { value in
                                     isSwiping[trip.id] = true
                                     let calculatedMaxX = geometry.size.width - 53
@@ -641,7 +641,7 @@ struct DriverHomePage: View {
                         
                         Spacer()
                         
-                        Text("Slide to get Ready")
+                        Text(isTripDateValid ? "Slide to get Ready" : "Trip not available today")
                             .font(.headline)
                             .foregroundColor(swipeOffset > 0 || isTripDragCompleted ? .white : Color(.systemBlue))
                             .padding(.trailing, 16)
@@ -685,7 +685,7 @@ struct DriverHomePage: View {
         return VStack(spacing: 0) {
             // Card wrapper that includes the map
             ZStack(alignment: .top) {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(colorScheme == .dark ? Color(UIColor.systemGray4) : Color.white)
                     .shadow(color: colorScheme == .dark ? Color.black.opacity(0.3) : Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
                 
@@ -702,15 +702,86 @@ struct DriverHomePage: View {
                         poiAnnotations: []
                     )
                     .frame(width: 363, height: 150)
-                    .cornerRadius(0) // Removed corner radius from map since it's inside the card
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                     
-                    VStack(alignment: .leading, spacing: 12) { // Reduced spacing from 16 to 12
-                        TripLocationSection(trip: trip)
+                    VStack(alignment: .leading, spacing: 16) {
+                        // Trip Details Section
+                        VStack(alignment: .leading, spacing: 12) {
+                            // Date and Time Row
+                            HStack(spacing: 24) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "calendar")
+                                        .foregroundStyle(Color.blue)
+                                        .frame(width: 20)
+                                    Text(trip.date)
+                                        .font(.subheadline)
+                                        .foregroundStyle(Color.primary)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                
+                                HStack(spacing: 8) {
+                                    Image(systemName: "clock")
+                                        .foregroundStyle(Color.blue)
+                                        .frame(width: 20)
+                                    Text(trip.time)
+                                        .font(.subheadline)
+                                        .foregroundStyle(Color.primary)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            
+                            // Vehicle Type and Capacity Row
+                            HStack(spacing: 24) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "car.fill")
+                                        .foregroundStyle(Color.blue)
+                                        .frame(width: 20)
+                                    Text(trip.vehicleType)
+                                        .font(.subheadline)
+                                        .foregroundStyle(Color.primary)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                
+                                if trip.vehicleType == "Passenger Vehicle" {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "person.2.fill")
+                                            .foregroundStyle(Color.blue)
+                                            .frame(width: 20)
+                                        Text("\(trip.passengers ?? 0) Passengers")
+                                            .font(.subheadline)
+                                            .foregroundStyle(Color.primary)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                } else if let loadWeight = trip.loadWeight {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "shippingbox.fill")
+                                            .foregroundStyle(Color.blue)
+                                            .frame(width: 20)
+                                        Text("\(Int(loadWeight)) kg")
+                                            .font(.subheadline)
+                                            .foregroundStyle(Color.primary)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 20)
                         
                         Divider()
+                            .padding(.horizontal, 20)
                         
-                        TripDetailsSection(trip: trip)
+                        // Location Details Section
+                        VStack(alignment: .leading, spacing: 12) {
+                            LocationRow(icon: "location.fill", color: .green, label: "From", value: trip.startLocation)
+                            LocationRow(icon: "location.fill", color: .red, label: "To", value: trip.endLocation)
+                        }
+                        .padding(.horizontal, 20)
                         
+                        Divider()
+                            .padding(.horizontal, 20)
+                        
+                        // Action Button
                         TripActionButton(
                             trip: trip,
                             navigatingTripId: $navigatingTripId,
@@ -723,8 +794,9 @@ struct DriverHomePage: View {
                             gradientEnd: Self.gradientEnd
                         )
                         .disabled(navigatingTripId != nil)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 20)
                     }
-                    .padding(10)
                 }
             }
         }

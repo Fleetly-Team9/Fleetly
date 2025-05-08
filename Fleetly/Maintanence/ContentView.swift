@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var selectedTab: Int = 0
+    @StateObject private var colorManager = ColorManager.shared
     @State private var inventoryItems = [
         InventoryItem(id: 1, name: "Brake Pads", units: 12),
         InventoryItem(id: 2, name: "Oil Filter", units: 0),
@@ -30,7 +31,7 @@ struct ContentView: View {
                 }
                 .tag(1)
         }
-        .accentColor(.blue) // Sets the selected tab item color to blue to match the screenshot
+        .accentColor(colorManager.primaryColor) // Use ColorManager for tab bar color
     }
 }
 
