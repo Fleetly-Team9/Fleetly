@@ -12,6 +12,7 @@ struct HomeView: View {
     @State private var errorMessage: String?
     @State private var lastTaskId: String?
     @State private var selectedFilter: TaskFilter = .all // State for filter
+    @StateObject private var colorManager = ColorManager.shared
     
     private let db = Firestore.firestore()
     
@@ -79,14 +80,14 @@ struct HomeView: View {
                                 icon: "car.fill",
                                 title: "Total Vehicles",
                                 value: "19",
-                                color: .blue
+                                color: colorManager.primaryColor
                             )
                             
                             StatCardGridView(
                                 icon: "wrench.and.screwdriver.fill",
                                 title: "Pending Tasks",
                                 value: "\(maintenanceTasks.filter { $0.status == .pending }.count)",
-                                color: .orange
+                                color: colorManager.accentColor
                             )
                         }
                         .padding(.horizontal, 16)
@@ -111,7 +112,7 @@ struct HomeView: View {
                                             Text(filter.rawValue)
                                             if selectedFilter == filter {
                                                 Image(systemName: "checkmark")
-                                                    .foregroundStyle(.blue)
+                                                    .foregroundStyle(colorManager.primaryColor)
                                             }
                                         }
                                     }
@@ -119,12 +120,12 @@ struct HomeView: View {
                             } label: {
                                 Image(systemName: "line.3.horizontal.decrease.circle")
                                     .font(.system(size: 20, weight: .regular))
-                                    .foregroundStyle(.blue)
+                                    .foregroundStyle(colorManager.primaryColor)
                                     .padding(.vertical, 4)
                                     .padding(.horizontal, 8)
                                     .background(
                                         Circle()
-                                            .fill(Color.blue.opacity(0.1))
+                                            .fill(Color.white.opacity(0.1))
                                             .frame(width: 32, height: 32)
                                     )
                             }
@@ -139,7 +140,7 @@ struct HomeView: View {
                         } else if let errorMessage = errorMessage {
                             Text(errorMessage)
                                 .font(.system(.body, design: .rounded))
-                                .foregroundStyle(.red)
+                                .foregroundStyle(colorManager.accentColor)
                                 .padding()
                                 .frame(maxWidth: .infinity)
                         } else if filteredTasks.isEmpty {
@@ -214,7 +215,7 @@ struct HomeView: View {
                         Image(systemName: "person.crop.circle.fill")
                             .font(.system(size: 24, weight: .regular, design: .rounded))
                             .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(colorManager.primaryColor)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Profile")

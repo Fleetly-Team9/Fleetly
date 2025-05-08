@@ -89,6 +89,7 @@ class ProfileImageManager: ObservableObject {
 struct ProfileView: View {
     @StateObject private var authVM = AuthViewModel()
     @StateObject private var profileImageManager = ProfileImageManager()
+    @StateObject private var colorManager = ColorManager.shared
     @State private var isPhotoPickerPresented = false
     @State private var showResetPasswordAlert = false
     @State private var passwordResetMessage: String?
@@ -124,7 +125,7 @@ struct ProfileView: View {
                             Image(systemName: "camera.fill")
                                 .foregroundColor(.white)
                                 .frame(width: 30, height: 30)
-                                .background(Circle().fill(Color.blue))
+                                .background(Circle().fill(colorManager.primaryColor))
                         }
                     }
                     .padding(.top, 10)
@@ -138,7 +139,7 @@ struct ProfileView: View {
                         }) {
                             Text("Remove Photo")
                                 .font(.system(.subheadline, design: .default, weight: .medium))
-                                .foregroundColor(Color.pink)
+                                .foregroundColor(colorManager.accentColor)
                         }
                         .padding(.bottom, 10)
                     }
@@ -202,6 +203,17 @@ struct ProfileView: View {
                                     .foregroundColor(.primary)
                             }
                             .padding(.vertical, 8)
+
+                            // Colorblind Mode Toggle
+                            HStack {
+                                Text("Colorblind Mode")
+                                    .font(.system(.body, design: .default))
+                                    .foregroundColor(.gray)
+                                Spacer()
+                                Toggle("", isOn: $colorManager.isColorblindMode)
+                                    .toggleStyle(SwitchToggleStyle(tint: colorManager.primaryColor))
+                            }
+                            .padding(.vertical, 8)
                         }
                     }
                     .padding(.horizontal, 15)
@@ -218,7 +230,7 @@ struct ProfileView: View {
                     }) {
                         Text("Reset Password")
                             .font(.system(.body, design: .default, weight: .medium))
-                            .foregroundColor(.blue)
+                            .foregroundColor(colorManager.primaryColor)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 15)
                             .background(
@@ -247,7 +259,7 @@ struct ProfileView: View {
                     }) {
                         Text("Sign Out")
                             .font(.system(.body, design: .default, weight: .medium))
-                            .foregroundColor(.red)
+                            .foregroundColor(colorManager.accentColor)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 15)
                             .background(
@@ -268,7 +280,7 @@ struct ProfileView: View {
                     Button("Done") {
                         dismiss()
                     }
-                    .foregroundColor(.blue)
+                    .foregroundColor(colorManager.primaryColor)
                 }
             }
             .sheet(isPresented: $isPhotoPickerPresented) {
@@ -371,3 +383,5 @@ struct ProfileView_Previews: PreviewProvider {
 }
 
 //hellooo
+
+// Color extension for hex support

@@ -5,6 +5,7 @@ struct MaintenanceDetailView: View {
     @State private var newPart = ""
     @State private var laborCost: String = ""
     @Environment(\.presentationMode) var presentationMode
+    @StateObject private var colorManager = ColorManager.shared
 
     var body: some View {
         NavigationView {
@@ -41,7 +42,7 @@ struct MaintenanceDetailView: View {
                                 }
                             }
                             .padding(.horizontal, 10)
-                            .background(Color.blue)
+                            .background(colorManager.primaryColor)
                             .foregroundColor(.white)
                             .cornerRadius(8)
                         }
@@ -67,7 +68,7 @@ struct MaintenanceDetailView: View {
                     presentationMode.wrappedValue.dismiss()
                 }
                 .padding()
-                .background(Color.green)
+                .background(colorManager.primaryColor)
                 .foregroundColor(.white)
                 .cornerRadius(12)
 
