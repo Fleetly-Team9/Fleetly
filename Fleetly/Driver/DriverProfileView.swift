@@ -1,4 +1,3 @@
-
 //
 //  DriverProfileView 2.swift
 //  Fleetly
@@ -9,6 +8,8 @@
 
 import SwiftUI
 import PhotosUI
+import FirebaseStorage
+import FirebaseFirestore
 
 struct DriverProfileView: View {
     @ObservedObject var authVM: AuthViewModel
@@ -16,31 +17,28 @@ struct DriverProfileView: View {
     @Environment(\.colorScheme) var colorScheme
     @State private var selectedProfileItem: PhotosPickerItem?
     @State private var profileImage: Image?
-    @State private var aadharImageSelection: PhotosPickerItem?
-    @State private var licenseImageSelection: PhotosPickerItem?
-    @State private var medicalInsuranceImageSelection: PhotosPickerItem?
-    @State private var cachedAadharImage: UIImage?
-    @State private var cachedLicenseImage: UIImage?
-    @State private var cachedMedicalInsuranceImage: UIImage?
+    @State private var aadharImage: UIImage?
+    @State private var licenseImage: UIImage?
+    @State private var medicalInsuranceImage: UIImage?
+    @State private var medicalInsuranceSelection: PhotosPickerItem?
     @State private var isEditingMode: Bool = false
     @State private var showSignOutAlert: Bool = false
     @State private var selectedDocumentImage: UIImage?
-    
-    private let profileImageKey = "profileImage"
-    private let aadharImageKey = "aadharImage"
-    private let licenseImageKey = "licenseImage"
-    private let medicalInsuranceImageKey = "medicalInsuranceImage"
+    @State private var isLoadingAadhar = false
+    @State private var isLoadingLicense = false
+    @State private var isLoadingMedical = false
+    @State private var isUploadingMedical = false
     
     var body: some View {
         NavigationStack {
             ZStack {
                 // Main content
-                Color(UIColor.systemBackground) // System background for entire view
+                Color(UIColor.systemBackground)
                     .ignoresSafeArea()
                 
-                ScrollView(.vertical, showsIndicators: false) { // Smoother scrolling with hidden indicators
-                    VStack(spacing: 0) { // Reduced spacing for smoother appearance
-                        // Profile photo (no card)
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 0) {
+                        // Profile photo section
                         VStack(spacing: 12) {
                             if let profileImage = profileImage {
                                 profileImage
@@ -61,32 +59,6 @@ struct DriverProfileView: View {
                                 PhotosPicker(selection: $selectedProfileItem, matching: .images) {
                                     Text("Change Photo")
                                         .font(.subheadline)
-                                        .foregroundColor(.blue)
-                                }
-                                .onChange(of: selectedProfileItem) { newItem in
-                                    Task {
-                                        if let data = try? await newItem?.loadTransferable(type: Data.self),
-                                           let uiImage = UIImage(data: data) {
-                                            DispatchQueue.main.async {
-                                                profileImage = Image(uiImage: uiImage)
-                                                // Save to UserDefaults
-                                                if let data = uiImage.jpegData(compressionQuality: 0.8) {
-                                                    UserDefaults.standard.set(data, forKey: profileImageKey)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                
-                                if profileImage != nil {
-                                    Button(action: {
-                                        profileImage = nil
-                                        UserDefaults.standard.removeObject(forKey: profileImageKey)
-                                    }) {
-                                        Text("Remove Photo")
-                                            .font(.subheadline)
-                                            .foregroundColor(.red)
-                                    }
                                 }
                             }
                         }
@@ -123,49 +95,175 @@ struct DriverProfileView: View {
                             
                             // Documents Section
                             customSection(title: "Documents") {
-                                documentDetailRow(
-                                    title: "Aadhar Card",
-                                    image: cachedAadharImage,
-                                    selection: $aadharImageSelection,
-                                    imageKey: aadharImageKey,
-                                    onImageSelected: { newImage in
-                                        cachedAadharImage = newImage
+                                // Aadhar Card
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Text("Aadhar Card")
+                                        .font(.subheadline)
+                                        .foregroundColor(.gray)
+                                    
+                                    if let aadharImage = aadharImage {
+                                        Image(uiImage: aadharImage)
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(maxWidth: .infinity)
+                                            .frame(height: 150)
+                                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 8)
+                                                    .stroke(style: StrokeStyle(lineWidth: 1))
+                                                    .foregroundColor(Color(UIColor.separator))
+                                            )
+                                            .onTapGesture {
+                                                selectedDocumentImage = aadharImage
+                                            }
+                                    } else {
+                                        Rectangle()
+                                            .fill(Color(UIColor.secondarySystemBackground))
+                                            .frame(maxWidth: .infinity)
+                                            .frame(height: 150)
+                                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                                            .overlay(
+                                                Group {
+                                                    if isLoadingAadhar {
+                                                        VStack {
+                                                            ProgressView()
+                                                            Text("Loading Aadhar Card...")
+                                                                .foregroundColor(.gray)
+                                                        }
+                                                    } else {
+                                                        Text("No Aadhar Card uploaded")
+                                                            .foregroundColor(Color(UIColor.secondaryLabel))
+                                                    }
+                                                }
+                                            )
                                     }
-                                )
+                                }
                                 
-                                documentDetailRow(
-                                    title: "Driving License",
-                                    image: cachedLicenseImage,
-                                    selection: $licenseImageSelection,
-                                    imageKey: licenseImageKey,
-                                    onImageSelected: { newImage in
-                                        cachedLicenseImage = newImage
+                                // Driving License
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Text("Driving License")
+                                        .font(.subheadline)
+                                        .foregroundColor(.gray)
+                                    
+                                    if let licenseImage = licenseImage {
+                                        Image(uiImage: licenseImage)
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(maxWidth: .infinity)
+                                            .frame(height: 150)
+                                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 8)
+                                                    .stroke(style: StrokeStyle(lineWidth: 1))
+                                                    .foregroundColor(Color(UIColor.separator))
+                                            )
+                                            .onTapGesture {
+                                                selectedDocumentImage = licenseImage
+                                            }
+                                    } else {
+                                        Rectangle()
+                                            .fill(Color(UIColor.secondarySystemBackground))
+                                            .frame(maxWidth: .infinity)
+                                            .frame(height: 150)
+                                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                                            .overlay(
+                                                Group {
+                                                    if isLoadingLicense {
+                                                        VStack {
+                                                            ProgressView()
+                                                            Text("Loading Driving License...")
+                                                                .foregroundColor(.gray)
+                                                        }
+                                                    } else {
+                                                        Text("No Driving License uploaded")
+                                                            .foregroundColor(Color(UIColor.secondaryLabel))
+                                                    }
+                                                }
+                                            )
                                     }
-                                )
+                                }
                                 
-                                documentDetailRow(
-                                    title: "Medical Insurance",
-                                    image: cachedMedicalInsuranceImage,
-                                    selection: $medicalInsuranceImageSelection,
-                                    imageKey: medicalInsuranceImageKey,
-                                    onImageSelected: { newImage in
-                                        cachedMedicalInsuranceImage = newImage
+                                // Medical Insurance
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Text("Medical Insurance")
+                                        .font(.subheadline)
+                                        .foregroundColor(.gray)
+                                    
+                                    if let medicalInsuranceImage = medicalInsuranceImage {
+                                        Image(uiImage: medicalInsuranceImage)
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(maxWidth: .infinity)
+                                            .frame(height: 150)
+                                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 8)
+                                                    .stroke(style: StrokeStyle(lineWidth: 1))
+                                                    .foregroundColor(Color(UIColor.separator))
+                                            )
+                                            .onTapGesture {
+                                                selectedDocumentImage = medicalInsuranceImage
+                                            }
+                                    } else {
+                                        Rectangle()
+                                            .fill(Color(UIColor.secondarySystemBackground))
+                                            .frame(maxWidth: .infinity)
+                                            .frame(height: 150)
+                                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                                            .overlay(
+                                                Group {
+                                                    if isLoadingMedical {
+                                                        VStack {
+                                                            ProgressView()
+                                                            Text("Loading Medical Insurance...")
+                                                                .foregroundColor(.gray)
+                                                        }
+                                                    } else if isUploadingMedical {
+                                                        VStack {
+                                                            ProgressView()
+                                                            Text("Uploading...")
+                                                                .foregroundColor(.gray)
+                                                        }
+                                                    } else if isEditingMode {
+                                                        PhotosPicker(selection: $medicalInsuranceSelection, matching: .images) {
+                                                            VStack {
+                                                                Image(systemName: "plus.circle.fill")
+                                                                    .font(.system(size: 30))
+                                                                    .foregroundColor(.blue)
+                                                                Text("Upload Medical Insurance")
+                                                                    .foregroundColor(.blue)
+                                                            }
+                                                        }
+                                                        .onChange(of: medicalInsuranceSelection) { newItem in
+                                                            Task {
+                                                                if let data = try? await newItem?.loadTransferable(type: Data.self),
+                                                                   let image = UIImage(data: data) {
+                                                                    await uploadMedicalInsurance(image: image)
+                                                                }
+                                                            }
+                                                        }
+                                                    } else {
+                                                        Text("No Medical Insurance uploaded")
+                                                            .foregroundColor(Color(UIColor.secondaryLabel))
+                                                    }
+                                                }
+                                            )
                                     }
-                                )
+                                }
                             }
                             
-                            // iOS native Sign Out Button in distinct container
+                            // Sign Out Button
                             Button(action: {
                                 showSignOutAlert = true
                             }) {
                                 Text("Sign Out")
-                                    .foregroundColor(Color(.systemRed)) // iOS native red color
+                                    .foregroundColor(Color(.systemRed))
                                     .fontWeight(.regular)
                                     .frame(maxWidth: .infinity)
                                     .padding()
                                     .background(
                                         RoundedRectangle(cornerRadius: 10)
-                                            .fill(Color(UIColor.secondarySystemGroupedBackground)) // Same as cards for consistency
+                                            .fill(Color(UIColor.secondarySystemGroupedBackground))
                                     )
                                     .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
                                     .padding(.horizontal)
@@ -185,32 +283,42 @@ struct DriverProfileView: View {
                     Text("Do you want to sign out?")
                 }
                 
-                // Simplified expanded document image view - no close button
+                // Document Preview Overlay
                 if let selectedImage = selectedDocumentImage {
                     ZStack {
-                        // Full screen blur background
                         Rectangle()
-                            .fill(Material.ultraThinMaterial) // iOS native blur effect
+                            .fill(Material.ultraThinMaterial)
                             .ignoresSafeArea()
                             .onTapGesture {
                                 withAnimation(.easeOut(duration: 0.2)) {
-                                    selectedDocumentImage = nil // Dismiss on tap
+                                    selectedDocumentImage = nil
                                 }
                             }
                         
-                        Image(uiImage: selectedImage)
-                            .resizable()
-                            .scaledToFit() // Maintain aspect ratio, fill screen height
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .padding(20)
-                            .contentShape(Rectangle()) // Ensures the whole area is tappable
-                            .onTapGesture {
-                                withAnimation(.easeOut(duration: 0.2)) {
-                                    selectedDocumentImage = nil // Dismiss on tap
+                        VStack {
+                            Image(uiImage: selectedImage)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .padding(20)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    withAnimation(.easeOut(duration: 0.2)) {
+                                        selectedDocumentImage = nil
+                                    }
+                                }
+                            
+                            // Only show edit option for Medical Insurance
+                            if selectedImage == medicalInsuranceImage && isEditingMode {
+                                PhotosPicker(selection: $medicalInsuranceSelection, matching: .images) {
+                                    Text("Change Medical Insurance")
+                                        .foregroundColor(.blue)
+                                        .padding()
                                 }
                             }
+                        }
                     }
-                    .transition(.opacity) // Smooth fade transition
+                    .transition(.opacity)
                 }
             }
             .navigationTitle("Profile")
@@ -230,24 +338,199 @@ struct DriverProfileView: View {
                 }
             }
             .onAppear {
-                // Load profile image from UserDefaults
-                if let data = UserDefaults.standard.data(forKey: profileImageKey),
-                   let uiImage = UIImage(data: data) {
-                    profileImage = Image(uiImage: uiImage)
+                loadDocuments()
+            }
+        }
+    }
+    
+    private func getCacheDirectory() -> URL {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+    }
+    
+    private func getCachedImage(for documentType: String) -> UIImage? {
+        let cacheURL = getCacheDirectory().appendingPathComponent("\(authVM.user?.id ?? "")_\(documentType).jpg")
+        if let data = try? Data(contentsOf: cacheURL) {
+            return UIImage(data: data)
+        }
+        return nil
+    }
+    
+    private func cacheImage(_ image: UIImage, for documentType: String) {
+        let cacheURL = getCacheDirectory().appendingPathComponent("\(authVM.user?.id ?? "")_\(documentType).jpg")
+        if let data = image.jpegData(compressionQuality: 0.7) {
+            try? data.write(to: cacheURL)
+        }
+    }
+    
+    private func loadDocuments() {
+        guard let user = authVM.user else {
+            print("❌ loadDocuments: No user found in authVM")
+            return
+        }
+        print("📱 loadDocuments: Starting to load documents for user: \(user.name)")
+        
+        // Load Aadhar Card
+        if let aadharUrl = user.aadharDocUrl {
+            print("📄 loadDocuments: Found Aadhar URL: \(aadharUrl)")
+            
+            // Try to load from cache first
+            if let cachedImage = getCachedImage(for: "aadhar") {
+                print("✅ loadDocuments: Loaded Aadhar from cache")
+                self.aadharImage = cachedImage
+            } else {
+                isLoadingAadhar = true
+                loadImage(from: aadharUrl) { image in
+                    if let image = image {
+                        print("✅ loadDocuments: Successfully loaded Aadhar image")
+                        self.cacheImage(image, for: "aadhar")
+                    } else {
+                        print("❌ loadDocuments: Failed to load Aadhar image")
+                    }
+                    self.aadharImage = image
+                    self.isLoadingAadhar = false
                 }
-                // Load document images from UserDefaults
-                if let data = UserDefaults.standard.data(forKey: aadharImageKey),
-                   let uiImage = UIImage(data: data) {
-                    cachedAadharImage = uiImage
+            }
+        } else {
+            print("⚠️ loadDocuments: No Aadhar URL found for user")
+        }
+        
+        // Load Driving License
+        if let licenseUrl = user.licenseDocUrl {
+            print("📄 loadDocuments: Found License URL: \(licenseUrl)")
+            
+            // Try to load from cache first
+            if let cachedImage = getCachedImage(for: "license") {
+                print("✅ loadDocuments: Loaded License from cache")
+                self.licenseImage = cachedImage
+            } else {
+                isLoadingLicense = true
+                loadImage(from: licenseUrl) { image in
+                    if let image = image {
+                        print("✅ loadDocuments: Successfully loaded License image")
+                        self.cacheImage(image, for: "license")
+                    } else {
+                        print("❌ loadDocuments: Failed to load License image")
+                    }
+                    self.licenseImage = image
+                    self.isLoadingLicense = false
                 }
-                if let data = UserDefaults.standard.data(forKey: licenseImageKey),
-                   let uiImage = UIImage(data: data) {
-                    cachedLicenseImage = uiImage
+            }
+        } else {
+            print("⚠️ loadDocuments: No License URL found for user")
+        }
+        
+        // Load Medical Insurance
+        if let medicalUrl = user.medicalDocUrl {
+            print("📄 loadDocuments: Found Medical Insurance URL: \(medicalUrl)")
+            
+            // Try to load from cache first
+            if let cachedImage = getCachedImage(for: "medical") {
+                print("✅ loadDocuments: Loaded Medical Insurance from cache")
+                self.medicalInsuranceImage = cachedImage
+            } else {
+                isLoadingMedical = true
+                loadImage(from: medicalUrl) { image in
+                    if let image = image {
+                        print("✅ loadDocuments: Successfully loaded Medical Insurance image")
+                        self.cacheImage(image, for: "medical")
+                    } else {
+                        print("❌ loadDocuments: Failed to load Medical Insurance image")
+                    }
+                    self.medicalInsuranceImage = image
+                    self.isLoadingMedical = false
                 }
-                if let data = UserDefaults.standard.data(forKey: medicalInsuranceImageKey),
-                   let uiImage = UIImage(data: data) {
-                    cachedMedicalInsuranceImage = uiImage
+            }
+        } else {
+            print("⚠️ loadDocuments: No Medical Insurance URL found for user")
+        }
+    }
+    
+    private func loadImage(from urlString: String, completion: @escaping (UIImage?) -> Void) {
+        print("🔄 loadImage: Starting to load image from URL: \(urlString)")
+        
+        // Create a storage reference from the URL
+        let storageRef = Storage.storage().reference(forURL: urlString)
+        
+        // Download the image data
+        storageRef.getData(maxSize: 5 * 1024 * 1024) { data, error in
+            if let error = error {
+                print("❌ loadImage: Firebase Storage error: \(error.localizedDescription)")
+                DispatchQueue.main.async {
+                    completion(nil)
                 }
+                return
+            }
+            
+            guard let data = data else {
+                print("❌ loadImage: No data received from Firebase Storage")
+                DispatchQueue.main.async {
+                    completion(nil)
+                }
+                return
+            }
+            
+            print("📦 loadImage: Received data size: \(data.count) bytes")
+            
+            if let image = UIImage(data: data) {
+                print("✅ loadImage: Successfully created image from data")
+                DispatchQueue.main.async {
+                    completion(image)
+                }
+            } else {
+                print("❌ loadImage: Failed to create image from data")
+                // Try to print first few bytes of data for debugging
+                let previewSize = min(data.count, 100)
+                let previewData = data.prefix(previewSize)
+                print("🔍 loadImage: Data preview (first \(previewSize) bytes): \(previewData.map { String(format: "%02x", $0) }.joined())")
+                DispatchQueue.main.async {
+                    completion(nil)
+                }
+            }
+        }
+    }
+    
+    private func uploadMedicalInsurance(image: UIImage) async {
+        guard let user = authVM.user else { return }
+        isUploadingMedical = true
+        
+        do {
+            // Convert image to data
+            guard let imageData = image.jpegData(compressionQuality: 0.7) else {
+                print("❌ Failed to convert image to data")
+                isUploadingMedical = false
+                return
+            }
+            
+            // Create storage reference
+            let storageRef = Storage.storage().reference()
+            let medicalRef = storageRef.child("users/\(user.id)/medical.jpg")
+            
+            // Upload image
+            _ = try await medicalRef.putDataAsync(imageData)
+            
+            // Get download URL
+            let downloadURL = try await medicalRef.downloadURL()
+            
+            // Update user document in Firestore
+            let db = Firestore.firestore()
+            try await db.collection("users").document(user.id).updateData([
+                "medicalDocUrl": downloadURL.absoluteString
+            ])
+            
+            // Cache the uploaded image
+            cacheImage(image, for: "medical")
+            
+            // Update local state
+            DispatchQueue.main.async {
+                self.medicalInsuranceImage = image
+                self.isUploadingMedical = false
+            }
+            
+            print("✅ Successfully uploaded medical insurance document")
+        } catch {
+            print("❌ Error uploading medical insurance: \(error.localizedDescription)")
+            DispatchQueue.main.async {
+                self.isUploadingMedical = false
             }
         }
     }
@@ -266,7 +549,7 @@ struct DriverProfileView: View {
             .padding()
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(UIColor.secondarySystemGroupedBackground)) // Card color that stands out from background
+                    .fill(Color(UIColor.secondarySystemGroupedBackground))
                     .shadow(color: Color.black.opacity(0.07), radius: 3, x: 0, y: 1)
             )
             .padding(.horizontal)
@@ -280,99 +563,17 @@ struct DriverProfileView: View {
     ) -> some View {
         HStack {
             Text(label)
-                .foregroundColor(Color(UIColor.label)) // Primary text color that adapts to theme
+                .foregroundColor(Color(UIColor.label))
                 .fontWeight(.medium)
             Spacer()
             Text(value)
-                .foregroundColor(Color(UIColor.secondaryLabel)) // Secondary text color that adapts to theme
+                .foregroundColor(Color(UIColor.secondaryLabel))
         }
     }
-    
-    private func documentDetailRow(
-        title: String,
-        image: UIImage?,
-        selection: Binding<PhotosPickerItem?>,
-        imageKey: String,
-        onImageSelected: @escaping (UIImage?) -> Void
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(title)
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
-                
-                Spacer()
-                
-                if isEditingMode && image == nil {
-                    PhotosPicker(selection: selection, matching: .images) {
-                        Image(systemName: "plus.circle.fill")
-                            .foregroundColor(.blue)
-                            .font(.system(size: 24))
-                    }
-                    .onChange(of: selection.wrappedValue) { newItem in
-                        Task {
-                            if let data = try? await newItem?.loadTransferable(type: Data.self),
-                               let uiImage = UIImage(data: data) {
-                                DispatchQueue.main.async {
-                                    onImageSelected(uiImage)
-                                    // Save to UserDefaults
-                                    if let jpegData = uiImage.jpegData(compressionQuality: 0.8) {
-                                        UserDefaults.standard.set(jpegData, forKey: imageKey)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            
-            ZStack(alignment: .topTrailing) {
-                if let docImage = image {
-                    Image(uiImage: docImage)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 150)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(style: StrokeStyle(lineWidth: 1))
-                                .foregroundColor(Color(UIColor.separator)) // iOS native separator color
-                        )
-                        .onTapGesture {
-                            if !isEditingMode {
-                                selectedDocumentImage = docImage
-                            }
-                        }
-                } else {
-                    Rectangle()
-                        .fill(Color(UIColor.secondarySystemBackground)) // Secondary system background color
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 150)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .overlay(
-                            Text("No document uploaded")
-                                .foregroundColor(Color(UIColor.secondaryLabel)) // Secondary label color
-                        )
-                }
-                
-                // Smaller, simpler iOS-native style delete button
-                if isEditingMode && image != nil {
-                    Button {
-                        // Direct deletion with animation
-                        withAnimation {
-                            onImageSelected(nil)
-                            UserDefaults.standard.removeObject(forKey: imageKey)
-                        }
-                    } label: {
-                        Image(systemName: "minus.circle.fill")
-                            .font(.system(size: 22)) // Smaller size
-                            .foregroundColor(.red)
-                    }
-                    .offset(x: 5, y: -5) // Positioned in the corner
-                    .padding(8)
-                }
-            }
-        }
+}
+
+struct DriverProfileView_Previews: PreviewProvider {
+    static var previews: some View {
+        DriverProfileView(authVM: AuthViewModel())
     }
 }

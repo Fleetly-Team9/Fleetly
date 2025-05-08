@@ -289,30 +289,41 @@ struct RideCard: View {
                 .padding(.top)
             
             HStack(spacing: 0) {
-                VStack(alignment: .leading) {
+                // Start Column
+                VStack(spacing: 4) {
                     Text(timeFormatter.string(from: ride.startTime))
                         .font(.headline)
                         .foregroundColor(valueTextColor)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    
                     Text(ride.startLocation)
                         .font(.subheadline)
                         .foregroundColor(.gray)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                
-                Spacer()
+                .frame(maxWidth: .infinity)
                 
                 Image(systemName: "arrow.right")
                     .foregroundColor(.gray)
+                    .frame(width: 30)
                 
-                Spacer()
-                
-                VStack(alignment: .trailing) {
+                // End Column
+                VStack(spacing: 4) {
                     Text(timeFormatter.string(from: ride.endTime))
                         .font(.headline)
                         .foregroundColor(valueTextColor)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                    
                     Text(ride.endLocation.isEmpty ? "Not available" : ride.endLocation)
                         .font(.subheadline)
                         .foregroundColor(.gray)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.trailing)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
+                .frame(maxWidth: .infinity)
             }
             .padding()
             
