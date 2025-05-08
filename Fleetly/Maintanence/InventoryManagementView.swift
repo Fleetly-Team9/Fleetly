@@ -505,6 +505,8 @@ struct UpdateSheet: View {
                     )
             }
             .padding(.vertical, 16)
+            .dismissKeyboardOnTap()
+            .dismissKeyboardOnScroll()
             
             HStack(spacing: 16) {
                 Button(action: {
