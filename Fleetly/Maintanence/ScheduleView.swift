@@ -506,28 +506,32 @@ struct ScheduleView: View {
     }
 
     func statusColor(for status: MaintenanceTask.TaskStatus) -> Color {
-        switch status {
-        case .completed:
-            return Color(hex: "E69F00") // Changed from green to yellow
-        case .inProgress:
-            return Color(hex: "E69F00") // Changed from orange to yellow
-        case .pending:
-            return Color(hex: "0072B2") // Changed from primaryColor to strong blue
-        case .cancelled:
-            return .gray
+        if colorManager.isColorblindMode {
+            switch status {
+            case .completed: return colorManager.accentColor // Yellow (#E69F00)
+            case .inProgress, .pending: return colorManager.primaryColor // Blue (#0072B2)
+            case .cancelled: return .gray
+            }
+        } else {
+            switch status {
+            case .completed: return .green
+            case .inProgress: return .yellow
+            case .pending: return .blue
+            case .cancelled: return .gray
+            }
         }
     }
 
     func priorityColor(for priority: String) -> Color {
-        switch priority.lowercased() {
-        case "low":
-            return Color(hex: "E69F00") // Changed from green to yellow
-        case "medium":
-            return Color(hex: "E69F00") // Changed from orange to yellow
-        case "high":
-            return Color(hex: "E69F00") // Changed from accentColor to yellow
-        default:
-            return .gray
+        if colorManager.isColorblindMode {
+            return colorManager.accentColor // Yellow (#E69F00)
+        } else {
+            switch priority.lowercased() {
+            case "low": return .blue
+            case "medium": return .yellow
+            case "high": return .red
+            default: return .blue
+            }
         }
     }
 }

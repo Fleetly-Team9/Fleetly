@@ -499,6 +499,7 @@ struct WorkOrderCard: View {
     @Binding var task: MaintenanceTask
     let vehicle: Vehicle
     var onStatusChange: (MaintenanceTask.TaskStatus) -> Void
+    @StateObject private var colorManager = ColorManager.shared // Access shared ColorManager
     
     @State private var dragOffset: CGFloat = 0
     @State private var showAnimation: Bool = false
@@ -546,9 +547,9 @@ struct WorkOrderCard: View {
                 HStack(alignment: .top, spacing: 12) {
                     Image(systemName: "wrench.and.screwdriver.fill")
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(colorManager.primaryColor) // Use colorManager
                         .frame(width: 24, height: 24)
-                        .background(Color.blue.opacity(0.1))
+                        .background(colorManager.primaryColor.opacity(0.1))
                         .clipShape(Circle())
                     
                     Text(task.issue)
@@ -674,11 +675,19 @@ struct WorkOrderCard: View {
     }
     
     private func statusColor(_ status: MaintenanceTask.TaskStatus) -> Color {
-        switch status {
-        case .completed: return Color(hex: "E69F00")
-        case .inProgress: return Color(hex: "E69F00")
-        case .pending: return Color(hex: "E69F00")
-        case .cancelled: return .gray
+        if colorManager.isColorblindMode {
+            switch status {
+            case .completed: return colorManager.accentColor // Yellow in colorblind mode
+            case .inProgress, .pending: return colorManager.primaryColor // Blue in colorblind mode
+            case .cancelled: return .gray
+            }
+        } else {
+            switch status {
+            case .completed: return .green
+            case .inProgress: return .yellow
+            case .pending: return .blue
+            case .cancelled: return .gray
+            }
         }
     }
     
@@ -692,11 +701,15 @@ struct WorkOrderCard: View {
     }
     
     private func priorityColor(_ priority: String) -> Color {
-        switch priority.lowercased() {
-        case "low": return Color(hex: "E69F00")
-        case "medium": return Color(hex: "E69F00")
-        case "high": return Color(hex: "E69F00")
-        default: return Color(hex: "E69F00")
+        if colorManager.isColorblindMode {
+            return colorManager.accentColor // Yellow in colorblind mode
+        } else {
+            switch priority.lowercased() {
+            case "low": return .blue
+            case "medium": return .yellow
+            case "high": return .red
+            default: return .blue
+            }
         }
     }
     
@@ -720,11 +733,19 @@ struct WorkOrderCard: View {
     }
     
     private func swipeActionColor(_ status: MaintenanceTask.TaskStatus) -> Color {
-        switch status {
-        case .pending: return Color(hex: "0072B2")
-        case .inProgress: return Color(hex: "0072B2")
-        case .completed: return Color(hex: "E69F00")
-        case .cancelled: return .gray
+        if colorManager.isColorblindMode {
+            switch status {
+            case .completed: return colorManager.accentColor // Yellow in colorblind mode
+            case .inProgress, .pending: return colorManager.primaryColor // Blue in colorblind mode
+            case .cancelled: return .gray
+            }
+        } else {
+            switch status {
+            case .completed: return .green
+            case .inProgress: return .yellow
+            case .pending: return .blue
+            case .cancelled: return .gray
+            }
         }
     }
     
