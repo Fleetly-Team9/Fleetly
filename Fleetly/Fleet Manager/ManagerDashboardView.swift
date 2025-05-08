@@ -403,12 +403,8 @@ struct InfoRow: View {
 }
 
 // TrackView (unchanged, no colors)
-struct TrackView: View {
-    var body: some View {
-        Text("Track View")
-            .font(.title)
-    }
-}
+
+
 
 // DriverStatsViewModel (unchanged, no colors)
 class DriverStatsViewModel: ObservableObject {
@@ -467,6 +463,11 @@ struct VehicleStatusChart: View {
                     y: .value("Status", item.status)
                 )
                 .foregroundStyle(by: .value("Status", item.status))
+                .annotation(position: .trailing) {
+                    Text("\(item.count)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
             .frame(height: 150)
         }
@@ -492,6 +493,11 @@ struct MaintenanceTaskChart: View {
                     angularInset: 1.5
                 )
                 .foregroundStyle(by: .value("Category", item.category))
+                .annotation(position: .overlay) {
+                    Text("\(item.count)")
+                        .font(.caption)
+                        .foregroundColor(.white)
+                }
             }
             .frame(height: 200)
         }
@@ -523,6 +529,17 @@ struct TripTrendChart: View {
                     y: .value("Trips", item.count)
                 )
                 .foregroundStyle(.blue.opacity(0.1))
+                
+                PointMark(
+                    x: .value("Date", item.date),
+                    y: .value("Trips", item.count)
+                )
+                .foregroundStyle(.blue)
+                .annotation(position: .top) {
+                    Text("\(item.count)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
             .frame(height: 200)
         }
@@ -560,6 +577,11 @@ struct ExpenseChart: View {
                             y: .value("Amount", item.amount)
                         )
                         .foregroundStyle(by: .value("Category", item.category))
+                        .annotation(position: .top) {
+                            Text("$\(String(format: "%.2f", item.amount))")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
                 .frame(height: 200)
@@ -630,7 +652,7 @@ struct DashboardHomeView: View {
     @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
 
     enum ActionType: Identifiable {
-        case assign, maintain, track, reports
+        case assign, maintain, inventory, reports
         var id: Int { hashValue }
     }
 
@@ -652,7 +674,7 @@ struct DashboardHomeView: View {
                         NavigationLink(destination: AllTripsView()) {
                             StatCardGridView(
                                 icon: "location.fill",
-                                title: "Total Trips",
+                                title: "Overall Trips",
                                 value: "\(viewModel.totalTrips)",
                                 color: isColorBlindMode ? .cbOrange : .teal
                             )
@@ -688,8 +710,8 @@ struct DashboardHomeView: View {
                                 .onTapGesture { selectedAction = .maintain }
                             QuickActionButton(icon: "doc.text.magnifyingglass", title: "Reports")
                                 .onTapGesture { selectedAction = .reports }
-                            QuickActionButton(icon: "map.fill", title: "Track")
-                                .onTapGesture { selectedAction = .track }
+                            QuickActionButton(icon: "cart", title: "Inventory")
+                                .onTapGesture { selectedAction = .inventory }
                         }
                     }
                     .sheet(item: $selectedAction) { action in
@@ -697,7 +719,7 @@ struct DashboardHomeView: View {
                         case .reports: ReportsView()
                         case .assign: AssignView()
                         case .maintain: AssignTaskView()
-                        case .track: TrackView()
+                        case .inventory: InventoryManagementView()
                         }
                     }
                     .padding(.horizontal)

@@ -150,12 +150,7 @@ struct HomeView: View {
                                     .font(.system(.title3, design: .rounded, weight: .medium))
                                     .foregroundStyle(.secondary)
                                     .padding()
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .fill(Color.white)
-                                            .overlay(.ultraThinMaterial)
-                                            .shadow(radius: 2)
-                                    )
+                                    
                                     .padding(.horizontal, 24)
                                 Spacer()
                             }

@@ -14,6 +14,7 @@ struct User: Identifiable, Codable,Equatable {
     var aadharDocUrl: String?          // Storage download URL
     var licenseDocUrl: String?
     var medicalDocUrl: String?         // Medical insurance document URL
+    var profileImageUrl: String?       // Profile image download URL
     var isApproved: Bool?              // New field for manager approval
     var isAvailable: Bool?
     // Default initializer with isApproved set to false
@@ -30,6 +31,7 @@ struct User: Identifiable, Codable,Equatable {
          aadharDocUrl: String? = nil,
          licenseDocUrl: String? = nil,
          medicalDocUrl: String? = nil,
+         profileImageUrl: String? = nil,
          isApproved: Bool? = false,
          isAvailable: Bool? = true) {
         self.id = id
@@ -45,6 +47,7 @@ struct User: Identifiable, Codable,Equatable {
         self.aadharDocUrl = aadharDocUrl
         self.licenseDocUrl = licenseDocUrl
         self.medicalDocUrl = medicalDocUrl
+        self.profileImageUrl = profileImageUrl
         self.isApproved = isApproved
         self.isAvailable = isAvailable
     }
@@ -53,7 +56,7 @@ struct User: Identifiable, Codable,Equatable {
         case id = "uid"
         case name, email, phone, role, gender, age, disability
         case aadharNumber, drivingLicenseNumber
-        case aadharDocUrl, licenseDocUrl, medicalDocUrl
+        case aadharDocUrl, licenseDocUrl, medicalDocUrl, profileImageUrl
         case isApproved, isAvailable               // New coding key
     }
 }
