@@ -6,6 +6,7 @@ struct LogbookView: View {
     @StateObject private var viewModel = LogbookViewModel()
     @State private var selectedDate = Date() // Use today's current date
     @State private var isDatePickerVisible = false // State to toggle DatePicker visibility
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
 
     // Computed property: always returns the current date
     private var maxDate: Date {
@@ -36,10 +37,10 @@ struct LogbookView: View {
                         HStack {
                             Image(systemName: "calendar")
                                 .font(.title3)
-                                .foregroundColor(.blue)
+                                .foregroundColor(isColorBlindMode ? Color(hex: "0072B2") : .blue)
                             Text("Change Date")
                                 .font(.subheadline)
-                                .foregroundColor(.blue)
+                                .foregroundColor(isColorBlindMode ? Color(hex: "0072B2") : .blue)
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
@@ -107,11 +108,12 @@ struct LogbookView: View {
 
 struct DriverCard: View {
     let driver: Driver
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
     
     var body: some View {
         HStack(alignment: .center, spacing: 15) {
             Circle()
-                .fill(driver.wasPresent ? Color.green : Color.red)
+                .fill(driver.wasPresent ? (isColorBlindMode ? Color(hex: "E69F00") : Color.green) : (isColorBlindMode ? Color(hex: "E69F00") : Color.red))
                 .frame(width: 12, height: 12)
                 .padding(.leading, 15)
             

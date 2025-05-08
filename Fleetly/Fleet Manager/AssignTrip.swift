@@ -343,6 +343,8 @@ struct AssignView: View {
     @State private var showDateWarning: Bool = false
     @State private var dateWarningMessage: String = ""
     
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
+    
     enum VehicleType: String, CaseIterable {
         case passenger = "Passenger Vehicle"
         case cargo = "Cargo Vehicle"
@@ -359,7 +361,7 @@ struct AssignView: View {
                     // FROM Location Row (OUTSIDE Section)
                     HStack(spacing: 12) {
                         Image(systemName: "location.fill")
-                            .foregroundColor(.green)
+                            .foregroundColor(isColorBlindMode ? Color(hex: "E69F00") : .green)
                             .frame(width: 24, height: 24)
                         
                         ClearableTextField(text: $fromLocation, placeholder: "From Location")
@@ -386,7 +388,7 @@ struct AssignView: View {
                                 }) {
                                     HStack(spacing: 12) {
                                         Image(systemName: "mappin.and.ellipse")
-                                            .foregroundColor(.blue)
+                                            .foregroundColor(isColorBlindMode ? Color(hex: "0072B2") : .blue)
                                             .frame(width: 24, height: 24)
                                             .padding(.trailing, 4)
                                         
@@ -420,7 +422,7 @@ struct AssignView: View {
                     // TO Location Row (OUTSIDE Section)
                     HStack(spacing: 12) {
                         Image(systemName: "location.fill")
-                            .foregroundColor(.red)
+                            .foregroundColor(isColorBlindMode ? Color(hex: "E69F00") : .red)
                             .frame(width: 24, height: 24)
                         
                         ClearableTextField(text: $toLocation, placeholder: "To Location")
@@ -448,7 +450,7 @@ struct AssignView: View {
                                 }) {
                                     HStack(spacing: 12) {
                                         Image(systemName: "mappin.and.ellipse")
-                                            .foregroundColor(.green)
+                                            .foregroundColor(isColorBlindMode ? Color(hex: "0072B2") : .green)
                                             .frame(width: 24, height: 24)
                                             .padding(.trailing, 4)
                                         
@@ -508,7 +510,7 @@ struct AssignView: View {
                     // Time of Journey
                     HStack(spacing: 12) {
                         Image(systemName: "clock")
-                            .foregroundColor(.orange)
+                            .foregroundColor(isColorBlindMode ? Color(hex: "E69F00") : .orange)
                             .frame(width: 24, height: 24)
                         
                         DatePicker(
@@ -595,7 +597,7 @@ struct AssignView: View {
                                     .frame(width: 30, height: 30)
                                 Image(systemName: "car.fill")
                                     .font(.system(size: 20, weight: .medium))
-                                    .foregroundColor(.blue)
+                                    .foregroundColor(isColorBlindMode ? Color(hex: "0072B2") : .blue)
                             }
                             
                             VStack(alignment: .leading, spacing: 2) {
@@ -642,7 +644,7 @@ struct AssignView: View {
                                     .frame(width: 30, height: 30)
                                 Image(systemName: "person.fill")
                                     .font(.system(size: 20, weight: .medium))
-                                    .foregroundColor(.green)
+                                    .foregroundColor(isColorBlindMode ? Color(hex: "0072B2") : .green)
                             }
                             
                             VStack(alignment: .leading, spacing: 2) {
@@ -857,9 +859,11 @@ struct TaskVehicleListView: View {
     let vehicles: [Vehicle]
     @ObservedObject var viewModel: AssignTripViewModel
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
 
     var body: some View {
         NavigationStack {
+
             List {
                 ForEach(vehicles) { vehicle in
                     Button(action: {
@@ -874,6 +878,7 @@ struct TaskVehicleListView: View {
                                     .frame(width: 44, height: 44)
                                     .background(Color.blue.opacity(0.1))
                                     .clipShape(Circle())
+
 
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("\(vehicle.make) \(vehicle.model)")
@@ -936,23 +941,27 @@ struct DriverListView: View {
     let drivers: [User]
     @ObservedObject var viewModel: AssignTripViewModel
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
 
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(drivers) { driver in
-                    Button(action: {
-                        selectedDriver = driver
-                        dismiss()
-                    }) {
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack(spacing: 16) {
-                                Image(systemName: "person.fill")
-                                    .font(.system(size: 24))
-                                    .foregroundColor(.green)
-                                    .frame(width: 44, height: 44)
-                                    .background(Color.green.opacity(0.1))
-                                    .clipShape(Circle())
+
+            ScrollView {
+                LazyVStack(spacing: 16) {
+                    ForEach(drivers) { driver in
+                        Button(action: {
+                            selectedDriver = driver
+                            dismiss()
+                        }) {
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack(spacing: 16) {
+                                    Image(systemName: "person.fill")
+                                        .font(.system(size: 24))
+                                        .foregroundColor(isColorBlindMode ? Color(hex: "0072B2") : .green)
+                                        .frame(width: 44, height: 44)
+                                        .background(Color.green.opacity(0.1))
+                                        .clipShape(Circle())
+
 
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(driver.name)

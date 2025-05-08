@@ -223,6 +223,7 @@ struct AssignTaskView: View {
     @State private var validationMessage = ""
     @State private var showingConfirmation = false
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
     
     let genericIssues = ["Engine Overheating", "Brake Failure", "Tire Puncture", "Oil Leak", "Other"]
     let priorities = ["High", "Medium", "Low"]
@@ -265,7 +266,7 @@ struct AssignTaskView: View {
                                 Spacer()
                                 Button(action: { showVehicleSheet = true }) {
                                     Text(selectedVehicle.isEmpty ? "Select Vehicle" : selectedVehicle)
-                                        .foregroundColor(selectedVehicle.isEmpty ? .gray : .blue)
+                                        .foregroundColor(selectedVehicle.isEmpty ? .gray : (isColorBlindMode ? Color(hex: "0072B2") : .blue))
                                 }
                             }
                             
@@ -301,7 +302,7 @@ struct AssignTaskView: View {
                                 Spacer()
                                 Button(action: { showPersonnelSheet = true }) {
                                     Text(selectedPersonnel.isEmpty ? "Select Personnel" : selectedPersonnel)
-                                        .foregroundColor(selectedPersonnel.isEmpty ? .gray : .blue)
+                                        .foregroundColor(selectedPersonnel.isEmpty ? .gray : (isColorBlindMode ? Color(hex: "0072B2") : .blue))
                                 }
                             }
                         }
@@ -319,7 +320,7 @@ struct AssignTaskView: View {
                             .font(.headline)
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(Color.blue)
+                            .background(isColorBlindMode ? Color(hex: "0072B2") : Color.blue)
                             .foregroundColor(.white)
                             .cornerRadius(10)
                     }
@@ -346,7 +347,7 @@ struct AssignTaskView: View {
                     VStack(spacing: 24) {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 60))
-                            .foregroundColor(.green)
+                            .foregroundColor(isColorBlindMode ? Color(hex: "E69F00") : .green)
                         
                         Text("Confirm Assignment")
                             .font(.title2.bold())
@@ -383,7 +384,7 @@ struct AssignTaskView: View {
                                     .font(.headline)
                                     .frame(maxWidth: .infinity)
                                     .padding()
-                                    .background(Color.blue)
+                                    .background(isColorBlindMode ? Color(hex: "0072B2") : Color.blue)
                                     .foregroundColor(.white)
                                     .cornerRadius(12)
                             }

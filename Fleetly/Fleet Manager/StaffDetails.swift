@@ -35,6 +35,7 @@ class UserManagerViewModel: ObservableObject {
     @Published var availabilityFilter: Bool? = nil
     @Published var activeFilters: [String] = []
     @Published var selectedUser: User? = nil
+    @AppStorage("isColorBlindMode") var colorBlindMode: Bool = false
     
     private var db = Firestore.firestore()
     
@@ -514,18 +515,20 @@ struct UserManagerView: View {
                     usersListView
                 }
             }
-            .environmentObject(viewModel)
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Staff Details")
             .toolbar {
                 if !viewModel.isLoading {
                     ToolbarItem(placement: .navigationBarTrailing) {
-                        Button {
-                            showingAddUser = true
-                        } label: {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.title3)
+                        HStack {
+                            Button {
+                                showingAddUser = true
+                            } label: {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.title3)
+                            }
                         }
+                        .background(viewModel.colorBlindMode ? Color.colorBlindBlue.opacity(0.2) : Color.blue.opacity(0.2))
                     }
                     
                     ToolbarItem(placement: .navigationBarLeading) {
@@ -543,6 +546,7 @@ struct UserManagerView: View {
                                     }
                                 }
                         }
+                        .foregroundColor(viewModel.colorBlindMode ? .colorBlindBlue : .blue)
                     }
                 }
             }
@@ -619,7 +623,7 @@ struct UserManagerView: View {
                         } label: {
                             Text("Clear")
                                 .font(.caption)
-                                .foregroundColor(.blue)
+                                .foregroundColor(viewModel.colorBlindMode ? .colorBlindBlue : .blue)
                         }
                         .padding(.trailing)
                     }
@@ -672,6 +676,7 @@ struct UserManagerView: View {
                 }
             }
         }
+        .environmentObject(viewModel)
     }
 
     private var loadingView: some View {
@@ -706,7 +711,7 @@ struct UserManagerView: View {
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.blue)
+                        .background(viewModel.colorBlindMode ? Color.colorBlindBlue : Color.blue)
                         .foregroundColor(.white)
                         .clipShape(Capsule())
                 }
@@ -730,7 +735,7 @@ struct UserManagerView: View {
                                 systemImage: user.isAvailable == true ? "person.fill.xmark" : "person.fill.checkmark"
                             )
                         }
-                        .tint(user.isAvailable == true ? .red : .green)
+                        .tint(user.isAvailable == true ? (viewModel.colorBlindMode ? .colorBlindYellow : .red) : (viewModel.colorBlindMode ? .colorBlindYellow : .green))
                     }
                     .swipeActions(edge: .leading) {
                         Button {
@@ -738,7 +743,7 @@ struct UserManagerView: View {
                         } label: {
                             Label("Edit", systemImage: "pencil")
                         }
-                        .tint(.blue)
+                        .tint(viewModel.colorBlindMode ? .colorBlindBlue : .blue)
                     }
                     .contextMenu {
                         Button {
@@ -770,6 +775,7 @@ struct UserManagerView: View {
 
 struct UserCard: View {
     var user: User
+    @EnvironmentObject var viewModel: UserManagerViewModel
     var onDelete: (() -> Void)? = nil
 
     var body: some View {
@@ -777,7 +783,7 @@ struct UserCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Image(systemName: "person.fill")
-                        .foregroundColor(user.isApproved == false ? .orange : (user.isAvailable == true ? .green : .red))
+                        .foregroundColor(viewModel.colorBlindMode ? Color.colorBlindBlue : getStatusColor())
                         .font(.system(size: 26))
 
                     VStack(alignment: .leading, spacing: 4) {
@@ -787,7 +793,7 @@ struct UserCard: View {
                             
                             if user.isApproved == false {
                                 Image(systemName: "exclamationmark.triangle.fill")
-                                    .foregroundColor(.orange)
+                                    .foregroundColor(viewModel.colorBlindMode ? .colorBlindYellow : .orange)
                                     .font(.caption)
                             }
                         }
@@ -799,18 +805,10 @@ struct UserCard: View {
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
-                        if user.isApproved == true {
-                                                    HStack {
-                                                        Text(user.isAvailable == true ? "Available" : "Not Available")
-                                                            .font(.subheadline)
-                                                            .foregroundColor(user.isAvailable == true ? .green : .red)
-                                                    }
-                                                } else {
-                                                    Text("Pending Approval")
-                                                        .font(.subheadline)
-                                                        .foregroundColor(.orange)
-                                                }
-                                            }
+                        Text(user.isAvailable == true ? "Available" : "Not Available")
+                            .font(.subheadline)
+                            .foregroundColor(getStatusColor())
+                    }
 
                     Spacer()
                 }
@@ -818,6 +816,22 @@ struct UserCard: View {
                 .background(.ultraThinMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: 20))
                 .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
+            }
+        }
+    }
+    
+    private func getStatusColor() -> Color {
+        if viewModel.colorBlindMode {
+            if user.isAvailable == true {
+                return .colorBlindBlue // Always strong blue for available
+            } else {
+                return .colorBlindYellow // Yellow for not available or pending
+            }
+        } else {
+            if user.isAvailable == true {
+                return .green
+            } else {
+                return .red
             }
         }
     }
@@ -830,6 +844,27 @@ struct UserDetailView: View {
     @Environment(\.dismiss) var dismiss
     @State private var showRejectConfirmation = false
     @State private var showApproveConfirmation = false
+    
+    private func getStatusColor() -> Color {
+        if viewModel.colorBlindMode {
+            if user.isApproved == false {
+                return .colorBlindYellow
+            } else if user.isAvailable == true {
+                return .colorBlindBlue
+            } else {
+                return .colorBlindYellow
+            }
+        } else {
+            if user.isApproved == false {
+                return .orange
+            } else if user.isAvailable == true {
+                return .green
+            } else {
+                return .red
+            }
+        }
+    }
+    
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -848,7 +883,9 @@ struct UserDetailView: View {
                         DetailRow(label: "Age", value: user.age?.description ?? "Not specified")
                         DetailRow(label: "Disability", value: user.disability ?? "None")
                         DetailRow(label: "Status", value: user.isApproved == false ? "Pending Approval" : "Approved")
+                            .foregroundColor(getStatusColor())
                         DetailRow(label: "Availability", value: user.isAvailable == true ? "Available" : "Not Available")
+                            .foregroundColor(getStatusColor())
                     }
                     .padding()
                     .background(Color(.systemBackground))
@@ -1559,4 +1596,9 @@ struct UndoToast: View {
 
 #Preview {
     UserManagerView()
+}
+
+extension Color {
+    static let colorBlindBlue = Color(hex: "0072B2")
+    static let colorBlindYellow = Color(hex: "E69F00")
 }

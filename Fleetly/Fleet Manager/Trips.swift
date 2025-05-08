@@ -46,6 +46,8 @@ class TripViewModel: ObservableObject {
     @Published var activeFilters: [String] = []
     @Published var showFilterSheet: Bool = false
 
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
+
     private let db = Firestore.firestore()
 
     // Modified to filter trips based on search text and filters
@@ -489,6 +491,7 @@ struct TripCard: View {
     let trip: Trip
     let onTap: () -> Void
     @StateObject private var viewModel = TripDetailViewModel()
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
 
     var body: some View {
         Button(action: onTap) {
@@ -548,6 +551,7 @@ struct TripDetailView: View {
     @StateObject private var viewModel = TripDetailViewModel()
     @State private var isUpdating = false // To show loading state
     @State private var showErrorAlert = false // To show error alert
+    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
 
     var body: some View {
         NavigationStack {
@@ -617,13 +621,13 @@ struct TripDetailView: View {
                                     ProgressView()
                                         .frame(maxWidth: .infinity)
                                         .padding()
-                                        .background(Color.green)
+                                        .background(isColorBlindMode ? Color(hex: "E69F00") : Color.green)
                                         .cornerRadius(12)
                                 } else {
                                     Text("Mark as Completed")
                                         .frame(maxWidth: .infinity)
                                         .padding()
-                                        .background(Color.green)
+                                        .background(isColorBlindMode ? Color(hex: "E69F00") : Color.green)
                                         .foregroundColor(.white)
                                         .cornerRadius(12)
                                 }
@@ -645,13 +649,13 @@ struct TripDetailView: View {
                                     ProgressView()
                                         .frame(maxWidth: .infinity)
                                         .padding()
-                                        .background(Color.red)
+                                        .background(isColorBlindMode ? Color(hex: "E69F00") : Color.red)
                                         .cornerRadius(12)
                                 } else {
                                     Text("Cancel Trip")
                                         .frame(maxWidth: .infinity)
                                         .padding()
-                                        .background(Color.red)
+                                        .background(isColorBlindMode ? Color(hex: "E69F00") : Color.red)
                                         .foregroundColor(.white)
                                         .cornerRadius(12)
                                 }
