@@ -1,11 +1,24 @@
 import CoreLocation
 import MapKit
 
+// MARK: - Utility Functions
+struct CoordinateUtils {
+    static func metersPerDegreeLatitude() -> Double {
+        return 111_000.0 // Approximate meters per degree latitude
+    }
+    
+    static func metersPerDegreeLongitude(atLatitude latitude: Double) -> Double {
+        return 111_000.0 * cos(latitude * .pi / 180.0)
+    }
+}
+
 class RouteGeofenceManager {
     private let maxDeviationDistance: CLLocationDistance = 100 // meters
-    private var routeCorridor: MKPolygon?
+    private var leftCorridor: MKPolyline? // Left side of the corridor
+    private var rightCorridor: MKPolyline? // Right side of the corridor
     private var isMonitoring = false
     private var lastKnownLocation: CLLocation?
+    private var hasDeviated = false
     
     // Callback for deviation events
     var onDeviationDetected: ((CLLocation, CLLocationDistance) -> Void)?
@@ -13,25 +26,41 @@ class RouteGeofenceManager {
     func startMonitoring(route: MKRoute) {
         guard !isMonitoring else { return }
         
-        // Create corridor polygon from route
+        // Create corridor polylines from route
         createRouteCorridor(from: route)
         isMonitoring = true
+        hasDeviated = false
+        print("Started monitoring route with geofence corridor")
     }
     
     func stopMonitoring() {
         isMonitoring = false
-        routeCorridor = nil
+        leftCorridor = nil
+        rightCorridor = nil
+        hasDeviated = false
+        print("Stopped monitoring route")
     }
     
     func updateLocation(_ location: CLLocation) {
-        guard isMonitoring, let corridor = routeCorridor else { return }
+        guard isMonitoring, let leftCorridor = leftCorridor, let rightCorridor = rightCorridor else { return }
         
-        // Calculate distance to route
-        let distance = calculateDistanceToRoute(location, corridor: corridor)
+        // Calculate distance to the route corridor
+        let distance = calculateDistanceToRoute(location, leftCorridor: leftCorridor, rightCorridor: rightCorridor)
         
         // Check if vehicle has deviated
         if distance > maxDeviationDistance {
-            onDeviationDetected?(location, distance)
+            if !hasDeviated {
+                hasDeviated = true
+                print("⚠️ VEHICLE HAS DEVIATED FROM ROUTE!")
+                print("Deviation distance: \(Int(distance)) meters")
+                print("Current location: \(location.coordinate.latitude), \(location.coordinate.longitude)")
+                onDeviationDetected?(location, distance)
+            }
+        } else {
+            if hasDeviated {
+                hasDeviated = false
+                print("✅ Vehicle has returned to the route")
+            }
         }
         
         lastKnownLocation = location
@@ -39,48 +68,121 @@ class RouteGeofenceManager {
     
     private func createRouteCorridor(from route: MKRoute) {
         let coordinates = route.polyline.coordinates
-        var corridorPoints: [CLLocationCoordinate2D] = []
+        guard coordinates.count >= 2 else { return }
         
-        // Create points for both sides of the corridor
-        for i in 0..<coordinates.count - 1 {
-            let current = coordinates[i]
-            let next = coordinates[i + 1]
+        let avgLat = coordinates.reduce(0) { $0 + $1.latitude } / Double(coordinates.count)
+        let metersToLatDegrees = 1.0 / CoordinateUtils.metersPerDegreeLatitude()
+        let metersToLonDegrees = 1.0 / CoordinateUtils.metersPerDegreeLongitude(atLatitude: avgLat)
+        
+        let halfWidthLat = (maxDeviationDistance / 2.0) * metersToLatDegrees
+        let halfWidthLon = (maxDeviationDistance / 2.0) * metersToLonDegrees
+        
+        var leftSide: [CLLocationCoordinate2D] = []
+        var rightSide: [CLLocationCoordinate2D] = []
+        
+        for i in 0..<coordinates.count-1 {
+            let p1 = coordinates[i]
+            let p2 = coordinates[i+1]
             
-            // Calculate perpendicular offset
-            let bearing = calculateBearing(from: current, to: next)
-            let offset = maxDeviationDistance / 111000 // Convert meters to degrees (approximate)
+            let dx = p2.longitude - p1.longitude
+            let dy = p2.latitude - p1.latitude
+            let length = sqrt(dx*dx + dy*dy)
             
-            // Add points for both sides of the corridor
-            let leftPoint = calculateOffsetPoint(from: current, bearing: bearing - 90, distance: offset)
-            let rightPoint = calculateOffsetPoint(from: current, bearing: bearing + 90, distance: offset)
+            if length < 1e-6 { continue }
             
-            corridorPoints.append(leftPoint)
-            corridorPoints.append(rightPoint)
+            let perpX = -dy / length
+            let perpY = dx / length
+            
+            let offsetLat = perpY * halfWidthLat
+            let offsetLon = perpX * halfWidthLon
+            
+            let leftPoint1 = CLLocationCoordinate2D(
+                latitude: p1.latitude + offsetLat,
+                longitude: p1.longitude + offsetLon
+            )
+            let rightPoint1 = CLLocationCoordinate2D(
+                latitude: p1.latitude - offsetLat,
+                longitude: p1.longitude - offsetLon
+            )
+            
+            if i == 0 {
+                leftSide.append(leftPoint1)
+                rightSide.append(rightPoint1)
+            }
+            
+            if i == coordinates.count - 2 {
+                let leftPoint2 = CLLocationCoordinate2D(
+                    latitude: p2.latitude + offsetLat,
+                    longitude: p2.longitude + offsetLon
+                )
+                let rightPoint2 = CLLocationCoordinate2D(
+                    latitude: p2.latitude - offsetLat,
+                    longitude: p2.longitude - offsetLon
+                )
+                leftSide.append(leftPoint2)
+                rightSide.append(rightPoint2)
+            }
+            
+            if i < coordinates.count - 2 {
+                let p3 = coordinates[i+2]
+                
+                let dx2 = p3.longitude - p2.longitude
+                let dy2 = p3.latitude - p2.latitude
+                let length2 = sqrt(dx2*dx2 + dy2*dy2)
+                
+                if length2 > 1e-6 {
+                    let perpX2 = -dy2 / length2
+                    let perpY2 = dx2 / length2
+                    
+                    let offsetLat2 = perpY2 * halfWidthLat
+                    let offsetLon2 = perpX2 * halfWidthLon
+                    
+                    let avgOffsetLat = (offsetLat + offsetLat2) / 2
+                    let avgOffsetLon = (offsetLon + offsetLon2) / 2
+                    
+                    let leftJunction = CLLocationCoordinate2D(
+                        latitude: p2.latitude + avgOffsetLat,
+                        longitude: p2.longitude + avgOffsetLon
+                    )
+                    let rightJunction = CLLocationCoordinate2D(
+                        latitude: p2.latitude - avgOffsetLat,
+                        longitude: p2.longitude - avgOffsetLon
+                    )
+                    
+                    leftSide.append(leftJunction)
+                    rightSide.append(rightJunction)
+                }
+            }
         }
         
-        // Create polygon from corridor points
-        routeCorridor = MKPolygon(coordinates: corridorPoints, count: corridorPoints.count)
+        // Create two separate polylines for the left and right sides of the corridor
+        leftCorridor = MKPolyline(coordinates: leftSide, count: leftSide.count)
+        rightCorridor = MKPolyline(coordinates: rightSide, count: rightSide.count)
+        
+        print("Created geofence corridor with \(leftSide.count + rightSide.count) points")
     }
     
-    private func calculateDistanceToRoute(_ location: CLLocation, corridor: MKPolygon) -> CLLocationDistance {
-        // Convert location to coordinate
+    private func calculateDistanceToRoute(_ location: CLLocation, leftCorridor: MKPolyline, rightCorridor: MKPolyline) -> CLLocationDistance {
         let coordinate = location.coordinate
         
-        // Check if point is inside corridor using ray casting algorithm
-        if isPointInPolygon(coordinate, polygon: corridor) {
-            return 0
-        }
+        // Calculate the minimum distance to either the left or right corridor boundary
+        let distanceToLeft = calculateDistanceToPolyline(coordinate, polyline: leftCorridor)
+        let distanceToRight = calculateDistanceToPolyline(coordinate, polyline: rightCorridor)
         
-        // Calculate minimum distance to corridor edges
+        // The relevant distance is the smaller of the two, as it represents the nearest boundary
+        return min(distanceToLeft, distanceToRight)
+    }
+    
+    private func calculateDistanceToPolyline(_ point: CLLocationCoordinate2D, polyline: MKPolyline) -> CLLocationDistance {
         var minDistance = Double.infinity
-        let points = corridor.points()
+        let points = polyline.points()
         
-        for i in 0..<corridor.pointCount {
+        for i in 0..<polyline.pointCount-1 {
             let point1 = points[i]
-            let point2 = points[(i + 1) % corridor.pointCount]
+            let point2 = points[i + 1]
             
             let distance = distanceToLineSegment(
-                point: coordinate,
+                point: point,
                 lineStart: point1.coordinate,
                 lineEnd: point2.coordinate
             )
@@ -89,50 +191,6 @@ class RouteGeofenceManager {
         }
         
         return minDistance
-    }
-    
-    private func isPointInPolygon(_ point: CLLocationCoordinate2D, polygon: MKPolygon) -> Bool {
-        let points = polygon.points()
-        var isInside = false
-        var j = polygon.pointCount - 1
-        
-        for i in 0..<polygon.pointCount {
-            if ((points[i].coordinate.latitude > point.latitude) != (points[j].coordinate.latitude > point.latitude)) &&
-                (point.longitude < (points[j].coordinate.longitude - points[i].coordinate.longitude) * (point.latitude - points[i].coordinate.latitude) / (points[j].coordinate.latitude - points[i].coordinate.latitude) + points[i].coordinate.longitude) {
-                isInside = !isInside
-            }
-            j = i
-        }
-        
-        return isInside
-    }
-    
-    private func calculateBearing(from start: CLLocationCoordinate2D, to end: CLLocationCoordinate2D) -> Double {
-        let lat1 = start.latitude * .pi / 180
-        let lon1 = start.longitude * .pi / 180
-        let lat2 = end.latitude * .pi / 180
-        let lon2 = end.longitude * .pi / 180
-        
-        let dLon = lon2 - lon1
-        let y = sin(dLon) * cos(lat2)
-        let x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon)
-        let bearing = atan2(y, x)
-        
-        return bearing * 180 / .pi
-    }
-    
-    private func calculateOffsetPoint(from point: CLLocationCoordinate2D, bearing: Double, distance: Double) -> CLLocationCoordinate2D {
-        let bearingRad = bearing * .pi / 180
-        let lat1 = point.latitude * .pi / 180
-        let lon1 = point.longitude * .pi / 180
-        
-        let lat2 = asin(sin(lat1) * cos(distance) + cos(lat1) * sin(distance) * cos(bearingRad))
-        let lon2 = lon1 + atan2(sin(bearingRad) * sin(distance) * cos(lat1), cos(distance) - sin(lat1) * sin(lat2))
-        
-        return CLLocationCoordinate2D(
-            latitude: lat2 * 180 / .pi,
-            longitude: lon2 * 180 / .pi
-        )
     }
     
     private func distanceToLineSegment(point: CLLocationCoordinate2D, lineStart: CLLocationCoordinate2D, lineEnd: CLLocationCoordinate2D) -> CLLocationDistance {
@@ -157,4 +215,16 @@ class RouteGeofenceManager {
         return CLLocation(latitude: point.latitude, longitude: point.longitude)
             .distance(from: CLLocation(latitude: projection.latitude, longitude: projection.longitude))
     }
-} 
+    
+    // Helper method to get the corridor polylines for rendering on the map
+    func getCorridorPolylines() -> [MKPolyline] {
+        var polylines: [MKPolyline] = []
+        if let left = leftCorridor {
+            polylines.append(left)
+        }
+        if let right = rightCorridor {
+            polylines.append(right)
+        }
+        return polylines
+    }
+}
