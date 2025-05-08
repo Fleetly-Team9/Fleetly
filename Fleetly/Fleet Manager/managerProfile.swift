@@ -4,6 +4,75 @@ import FirebaseAuth
 import FirebaseFirestore
 import FirebaseStorage
 
+// MARK: - ImageCacheManager
+class ImageCacheManager {
+    static let shared = ImageCacheManager()
+    private let cache = NSCache<NSString, UIImage>()
+    private let fileManager = FileManager.default
+    
+    private init() {
+        // Configure cache limits
+        cache.countLimit = 100 // Maximum number of images
+        cache.totalCostLimit = 50 * 1024 * 1024 // 50MB limit
+    }
+    
+    private func getCacheDirectory() -> URL {
+        fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+    }
+    
+    private func getCacheURL(for key: String) -> URL {
+        getCacheDirectory().appendingPathComponent(key)
+    }
+    
+    func cacheImage(_ image: UIImage, for key: String) {
+        // Cache in memory
+        cache.setObject(image, forKey: key as NSString)
+        
+        // Cache on disk
+        let cacheURL = getCacheURL(for: key)
+        if let data = image.jpegData(compressionQuality: 0.7) {
+            try? data.write(to: cacheURL)
+        }
+    }
+    
+    func getCachedImage(for key: String) -> UIImage? {
+        // Try memory cache first
+        if let cachedImage = cache.object(forKey: key as NSString) {
+            return cachedImage
+        }
+        
+        // Try disk cache
+        let cacheURL = getCacheURL(for: key)
+        if let data = try? Data(contentsOf: cacheURL),
+           let image = UIImage(data: data) {
+            // Cache in memory for next time
+            cache.setObject(image, forKey: key as NSString)
+            return image
+        }
+        
+        return nil
+    }
+    
+    func removeCachedImage(for key: String) {
+        // Remove from memory cache
+        cache.removeObject(forKey: key as NSString)
+        
+        // Remove from disk cache
+        let cacheURL = getCacheURL(for: key)
+        try? fileManager.removeItem(at: cacheURL)
+    }
+    
+    func clearCache() {
+        // Clear memory cache
+        cache.removeAllObjects()
+        
+        // Clear disk cache
+        let cacheDirectory = getCacheDirectory()
+        try? fileManager.removeItem(at: cacheDirectory)
+        try? fileManager.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+    }
+}
+
 // MARK: - ColorBlindModeManager
 class ColorBlindModeManager: ObservableObject {
     @Published var isColorBlindMode: Bool {
@@ -25,7 +94,7 @@ extension Color {
 }
 
 struct showProfileView: View {
-    @State private var profileImage: Image = Image("exampleImage")
+    @State private var profileImage: Image?
     @State private var selectedItem: PhotosPickerItem?
     @State private var imageData: Data?
     @Environment(\.dismiss) private var dismiss
@@ -35,6 +104,7 @@ struct showProfileView: View {
     @State private var showPasswordResetAlert = false
     @State private var passwordResetMessage: String?
     @StateObject private var colorBlindManager = ColorBlindModeManager()
+    @State private var isUploadingProfile = false
     
     private let db = Firestore.firestore()
     private let storage = Storage.storage().reference()
@@ -50,16 +120,56 @@ struct showProfileView: View {
     var body: some View {
         NavigationStack {
             Form {
-                ProfileImageSection(
-                    profileImage: $profileImage,
-                    selectedItem: $selectedItem,
-                    imageData: $imageData,
-                    isColorBlindMode: colorBlindManager.isColorBlindMode,
-                    uploadProfileImage: uploadProfileImage,
-                    deleteProfileImage: deleteProfileImage
-                )
+                // Profile Image Section
+                Section {
+                    VStack(spacing: 12) {
+                        if isUploadingProfile {
+                            ProgressView()
+                                .frame(width: 150, height: 150)
+                                .background(Color(UIColor.secondarySystemBackground))
+                                .clipShape(Circle())
+                                .overlay(Circle().stroke(Color.gray.opacity(0.3), lineWidth: 1))
+                        } else if let profileImage = profileImage {
+                            profileImage
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 150, height: 150)
+                                .clipShape(Circle())
+                                .overlay(Circle().stroke(Color.gray.opacity(0.3), lineWidth: 1))
+                        } else {
+                            Image(systemName: "person.circle.fill")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 150, height: 150)
+                                .foregroundColor(.gray)
+                        }
+                        
+                        PhotosPicker(selection: $selectedItem, matching: .images) {
+                            Text("Change Photo")
+                                .font(.subheadline)
+                                .foregroundColor(primaryColor)
+                        }
+                        .onChange(of: selectedItem) { newItem in
+                            Task {
+                                if let data = try? await newItem?.loadTransferable(type: Data.self),
+                                   let image = UIImage(data: data) {
+                                    await uploadProfileImage(image: image)
+                                }
+                            }
+                        }
+                        
+                        if profileImage != nil {
+                            Button("Remove Photo") {
+                                deleteProfileImage()
+                            }
+                            .font(.subheadline)
+                            .foregroundColor(.red)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical)
+                }
                 .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets())
                 
                 Section(header: Text("Fleet Manager Details")) {
                     if isLoading {
@@ -159,58 +269,101 @@ struct showProfileView: View {
         }
     }
     
-    private func uploadProfileImage(data: Data) {
+    private func getCacheKey(for userId: String) -> String {
+        "profile_image_\(userId)"
+    }
+    
+    private func uploadProfileImage(image: UIImage) async {
         guard let userId = Auth.auth().currentUser?.uid else { return }
-        let imageRef = storage.child("profileImages/\(userId).jpg")
+        isUploadingProfile = true
         
-        imageRef.putData(data, metadata: nil) { (metadata, error) in
-            if let error = error {
-                print("Error uploading image: \(error.localizedDescription)")
+        do {
+            // Convert image to data
+            guard let imageData = image.jpegData(compressionQuality: 0.7) else {
+                print("❌ Failed to convert image to data")
+                isUploadingProfile = false
                 return
             }
             
-            imageRef.downloadURL { (url, error) in
-                if let error = error {
-                    print("Error getting download URL: \(error.localizedDescription)")
-                    return
-                }
-                
-                if let downloadURL = url?.absoluteString {
-                    db.collection("users").document(userId).updateData([
-                        "profileImageURL": downloadURL
-                    ])
-                }
+            // Create storage reference
+            let imageRef = storage.child("profileImages/\(userId).jpg")
+            
+            // Upload image
+            _ = try await imageRef.putDataAsync(imageData)
+            
+            // Get download URL
+            let downloadURL = try await imageRef.downloadURL()
+            
+            // Update user document in Firestore
+            try await db.collection("users").document(userId).updateData([
+                "profileImageURL": downloadURL.absoluteString
+            ])
+            
+            // Cache the image
+            ImageCacheManager.shared.cacheImage(image, for: getCacheKey(for: userId))
+            
+            // Update local state
+            DispatchQueue.main.async {
+                self.profileImage = Image(uiImage: image)
+                self.imageData = imageData
+                self.isUploadingProfile = false
+            }
+            
+            print("✅ Successfully uploaded profile image")
+        } catch {
+            print("❌ Error uploading profile image: \(error.localizedDescription)")
+            DispatchQueue.main.async {
+                self.isUploadingProfile = false
             }
         }
-        
-        UserDefaults.standard.set(data, forKey: "profileImage")
     }
     
     private func loadProfileImage() {
         guard let userId = Auth.auth().currentUser?.uid else { return }
         
-        if let savedData = UserDefaults.standard.data(forKey: "profileImage"),
-           let uiImage = UIImage(data: savedData) {
-            profileImage = Image(uiImage: uiImage)
-            imageData = savedData
+        // Try loading from cache first
+        if let cachedImage = ImageCacheManager.shared.getCachedImage(for: getCacheKey(for: userId)) {
+            profileImage = Image(uiImage: cachedImage)
+            imageData = cachedImage.jpegData(compressionQuality: 0.7)
             return
         }
         
+        // If not in cache, load from Firestore/Storage
         db.collection("users").document(userId).getDocument { (document, error) in
-            if let document = document, document.exists,
-               let data = document.data(),
-               let imageURL = data["profileImageURL"] as? String,
-               let url = URL(string: imageURL) {
-                URLSession.shared.dataTask(with: url) { (data, response, error) in
-                    if let data = data, let uiImage = UIImage(data: data) {
-                        DispatchQueue.main.async {
-                            self.profileImage = Image(uiImage: uiImage)
-                            self.imageData = data
-                            UserDefaults.standard.set(data, forKey: "profileImage")
-                        }
-                    }
-                }.resume()
+            if let error = error {
+                print("❌ Error fetching user document: \(error.localizedDescription)")
+                return
             }
+            
+            guard let document = document,
+                  document.exists,
+                  let data = document.data(),
+                  let imageURL = data["profileImageURL"] as? String,
+                  let url = URL(string: imageURL) else {
+                print("❌ No profile image URL found")
+                return
+            }
+            
+            URLSession.shared.dataTask(with: url) { (data, response, error) in
+                if let error = error {
+                    print("❌ Error downloading image: \(error.localizedDescription)")
+                    return
+                }
+                
+                guard let data = data,
+                      let uiImage = UIImage(data: data) else {
+                    print("❌ Invalid image data")
+                    return
+                }
+                
+                // Cache the downloaded image
+                ImageCacheManager.shared.cacheImage(uiImage, for: getCacheKey(for: userId))
+                
+                DispatchQueue.main.async {
+                    self.profileImage = Image(uiImage: uiImage)
+                    self.imageData = data
+                }
+            }.resume()
         }
     }
     
@@ -218,22 +371,29 @@ struct showProfileView: View {
         guard let userId = Auth.auth().currentUser?.uid else { return }
         let imageRef = storage.child("profileImages/\(userId).jpg")
         
-        imageRef.delete { error in
-            if let error = error {
-                print("Error deleting image: \(error.localizedDescription)")
-                return
-            }
-            
-            db.collection("users").document(userId).updateData([
-                "profileImageURL": FieldValue.delete()
-            ])
-            
-            UserDefaults.standard.removeObject(forKey: "profileImage")
-            
-            DispatchQueue.main.async {
-                self.profileImage = Image("exampleImage")
-                self.imageData = nil
-                self.selectedItem = nil
+        Task {
+            do {
+                // Delete from Storage
+                try await imageRef.delete()
+                
+                // Update Firestore
+                try await db.collection("users").document(userId).updateData([
+                    "profileImageURL": FieldValue.delete()
+                ])
+                
+                // Remove from cache
+                ImageCacheManager.shared.removeCachedImage(for: getCacheKey(for: userId))
+                
+                // Clear local state
+                DispatchQueue.main.async {
+                    self.profileImage = nil
+                    self.imageData = nil
+                    self.selectedItem = nil
+                }
+                
+                print("✅ Successfully deleted profile image")
+            } catch {
+                print("❌ Error deleting profile image: \(error.localizedDescription)")
             }
         }
     }

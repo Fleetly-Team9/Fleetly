@@ -28,6 +28,7 @@ struct DriverProfileView: View {
     @State private var isLoadingLicense = false
     @State private var isLoadingMedical = false
     @State private var isUploadingMedical = false
+    @State private var isUploadingProfile = false
     
     var body: some View {
         NavigationStack {
@@ -40,7 +41,13 @@ struct DriverProfileView: View {
                     VStack(spacing: 0) {
                         // Profile photo section
                         VStack(spacing: 12) {
-                            if let profileImage = profileImage {
+                            if isUploadingProfile {
+                                ProgressView()
+                                    .frame(width: 150, height: 150)
+                                    .background(Color(UIColor.secondarySystemBackground))
+                                    .clipShape(Circle())
+                                    .overlay(Circle().stroke(Color.gray.opacity(0.3), lineWidth: 1))
+                            } else if let profileImage = profileImage {
                                 profileImage
                                     .resizable()
                                     .scaledToFill()
@@ -59,6 +66,14 @@ struct DriverProfileView: View {
                                 PhotosPicker(selection: $selectedProfileItem, matching: .images) {
                                     Text("Change Photo")
                                         .font(.subheadline)
+                                }
+                                .onChange(of: selectedProfileItem) { newItem in
+                                    Task {
+                                        if let data = try? await newItem?.loadTransferable(type: Data.self),
+                                           let image = UIImage(data: data) {
+                                            await uploadProfileImage(image: image)
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -338,7 +353,10 @@ struct DriverProfileView: View {
                 }
             }
             .onAppear {
-                loadDocuments()
+                loadProfileImage()
+                loadAadharImage()
+                loadLicenseImage()
+                loadMedicalInsuranceImage()
             }
         }
     }
@@ -573,6 +591,87 @@ struct DriverProfileView: View {
                 self.isUploadingMedical = false
             }
         }
+    }
+    
+    private func uploadProfileImage(image: UIImage) async {
+        guard let user = authVM.user else { return }
+        isUploadingProfile = true
+        
+        do {
+            // Convert image to data
+            guard let imageData = image.jpegData(compressionQuality: 0.7) else {
+                print("❌ Failed to convert image to data")
+                isUploadingProfile = false
+                return
+            }
+            
+            // Create storage reference
+            let storageRef = Storage.storage().reference()
+            let profileRef = storageRef.child("users/\(user.id)/profile.jpg")
+            
+            // Upload image
+            _ = try await profileRef.putDataAsync(imageData)
+            
+            // Get download URL
+            let downloadURL = try await profileRef.downloadURL()
+            
+            // Update user document in Firestore
+            let db = Firestore.firestore()
+            try await db.collection("users").document(user.id).updateData([
+                "profileImageUrl": downloadURL.absoluteString
+            ])
+            
+            // Update local user object
+            DispatchQueue.main.async {
+                self.authVM.user?.profileImageUrl = downloadURL.absoluteString
+                self.profileImage = Image(uiImage: image)
+                self.isUploadingProfile = false
+            }
+            
+            print("✅ Successfully uploaded profile image")
+        } catch {
+            print("❌ Error uploading profile image: \(error.localizedDescription)")
+            DispatchQueue.main.async {
+                self.isUploadingProfile = false
+            }
+        }
+    }
+    
+    private func loadProfileImage() {
+        guard let user = authVM.user,
+              let profileImageUrl = user.profileImageUrl,
+              let url = URL(string: profileImageUrl) else {
+            return
+        }
+        
+        URLSession.shared.dataTask(with: url) { data, response, error in
+            if let error = error {
+                print("❌ Error loading profile image: \(error.localizedDescription)")
+                return
+            }
+            
+            guard let data = data,
+                  let uiImage = UIImage(data: data) else {
+                print("❌ Failed to create image from data")
+                return
+            }
+            
+            DispatchQueue.main.async {
+                self.profileImage = Image(uiImage: uiImage)
+            }
+        }.resume()
+    }
+    
+    private func loadAadharImage() {
+        loadDocuments()
+    }
+    
+    private func loadLicenseImage() {
+        loadDocuments()
+    }
+    
+    private func loadMedicalInsuranceImage() {
+        loadDocuments()
     }
     
     // Custom section to replace Form/Section
