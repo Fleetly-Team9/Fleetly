@@ -387,6 +387,8 @@ struct PostInspectionView: View {
                     }
                 }
             }
+            .dismissKeyboardOnTap()
+            .dismissKeyboardOnScroll()
             
             Button(action: {
                 if overallCheckStatus == "Verified" {

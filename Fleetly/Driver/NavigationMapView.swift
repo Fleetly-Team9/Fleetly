@@ -592,6 +592,41 @@ struct NavigationMapView: View {
                         
                         // Request call permission when view appears
                         requestCallPermission()
+                        
+                        // Set up app lifecycle notifications
+                        NotificationCenter.default.addObserver(
+                            forName: UIApplication.willResignActiveNotification,
+                            object: nil,
+                            queue: .main
+                        ) { _ in
+                            wasMinimized = true
+                            print("App will resign active")
+                        }
+                        
+                        NotificationCenter.default.addObserver(
+                            forName: UIApplication.didBecomeActiveNotification,
+                            object: nil,
+                            queue: .main
+                        ) { _ in
+                            if wasMinimized {
+                                minimizedAndReopened = true
+                                wasMinimized = false
+                                print("App did become active, minimizedAndReopened set to true")
+                            }
+                        }
+                    }
+                    .onDisappear {
+                        // Clean up notification observers
+                        NotificationCenter.default.removeObserver(
+                            self,
+                            name: UIApplication.willResignActiveNotification,
+                            object: nil
+                        )
+                        NotificationCenter.default.removeObserver(
+                            self,
+                            name: UIApplication.didBecomeActiveNotification,
+                            object: nil
+                        )
                     }
                 
                 floatingButtons
@@ -635,20 +670,7 @@ struct NavigationMapView: View {
             }
             .navigationBarTitle("Navigation", displayMode: .inline)
             .toolbar(.hidden, for: .tabBar)
-            .background(
-                NavigationLink(
-                    destination: PostInspectionView(
-                        authVM: authVM,
-                        dropoffLocation: trip.endLocation,
-                        vehicleNumber: vehicleNumber,
-                        tripID: trip.id,
-                        vehicleID: trip.vehicleId
-                    ),
-                    isActive: $navigateToPostInspection
-                ) {
-                    EmptyView()
-                }
-            )
+            .dismissKeyboard() // Apply keyboard dismissal at the root level
         }
     }
     
@@ -1059,6 +1081,8 @@ struct ExpenseModalView: View {
                 .padding(.horizontal, 16)
             }
             .padding(.bottom, 15)
+            .dismissKeyboardOnTap()
+            .dismissKeyboardOnScroll()
             
             // Payment proof section
             VStack(alignment: .leading, spacing: 15) {
@@ -1859,53 +1883,7 @@ struct NavigationMapView: View {
             }
             .navigationBarTitle("Navigation", displayMode: .inline)
             .toolbar(.hidden, for: .tabBar)
-            .background(
-                NavigationLink(
-                    destination: PostInspectionView(
-                        authVM: authVM,
-                        dropoffLocation: trip.endLocation,
-                        vehicleNumber: vehicleNumber,
-                        tripID: trip.id,
-                        vehicleID: trip.vehicleId
-                    ),
-                    isActive: $navigateToPostInspection
-                ) {
-                    EmptyView()
-                }
-            )
-            .alert(isPresented: Binding(
-                get: { minimizedAndReopened && isTripStarted },
-                set: { _ in }
-            )) {
-                Alert(
-                    title: Text("Continue trip?"),
-                    primaryButton: .default(Text("Resume")) {
-                        minimizedAndReopened = false
-                        print("User chose to resume trip")
-                    },
-                    secondaryButton: .destructive(Text("Cancel")) {
-                        minimizedAndReopened = false
-                        isTripStarted = false
-                        let endTime = Date()
-                        FirebaseManager.shared.saveEndClicked(tripId: trip.id, timestamp: endTime) { result in
-                            switch result {
-                            case .success:
-                                print("Successfully saved EndClicked")
-                            case .failure(let error):
-                                print("Error saving EndClicked: \(error)")
-                            }
-                        }
-                        showMainView = true
-                        print("User chose to cancel trip, presenting MainView")
-                    }
-                )
-            }
-            .fullScreenCover(isPresented: $showMainView, onDismiss: nil) {
-                MainView(authVM: authVM)
-                    .onAppear {
-                        resetRootView(to: MainView(authVM: authVM))
-                    }
-            }
+            .dismissKeyboard() // Apply keyboard dismissal at the root level
         }
     }
     
@@ -2324,7 +2302,10 @@ struct ExpenseModalView: View {
                 .padding(.horizontal, 16)
             }
             .padding(.bottom, 15)
+            .dismissKeyboardOnTap()
+            .dismissKeyboardOnScroll()
             
+            // Payment proof section
             VStack(alignment: .leading, spacing: 15) {
                 Text("Payment Proof")
                     .font(.headline)
@@ -2400,6 +2381,7 @@ struct ExpenseModalView: View {
                     }
                 }
                 
+                // Description field
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Description (Optional)")
                         .font(.subheadline)

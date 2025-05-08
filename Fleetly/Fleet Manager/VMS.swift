@@ -798,6 +798,8 @@ struct VehicleFormView: View {
                     }
                 }
             }
+            .dismissKeyboardOnTap()
+            .dismissKeyboardOnScroll()
             .alert(isPresented: $showAlert) {
                 Alert(
                     title: Text("Error"),

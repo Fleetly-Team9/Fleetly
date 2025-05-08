@@ -315,6 +315,8 @@ struct PreInspectionView: View {
                     }
                 }
             }
+            .dismissKeyboardOnTap()
+            .dismissKeyboardOnScroll()
             
             Button(action: {
                 if overallCheckStatus == "Verified" {
