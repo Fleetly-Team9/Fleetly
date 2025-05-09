@@ -424,7 +424,7 @@ class DriverStatsViewModel: ObservableObject {
     }
 }
 
-// Chart Data Models (unchanged, no colors)
+// Chart Data Models
 struct VehicleStatusData: Identifiable {
     let id = UUID()
     let status: String
@@ -437,17 +437,27 @@ struct MaintenanceTaskData: Identifiable {
     let count: Int
 }
 
-struct TripData: Identifiable {
-    let id = UUID()
-    let date: Date
-    let count: Int
-}
+// ChartType Enum
+enum ChartType: String, CaseIterable {
+    case vehicleStatus = "Vehicle Status"
+    case maintenance = "Maintenance"
 
-struct ExpenseData: Identifiable {
-    let id = UUID()
-    let category: String
-    let amount: Double
-    let date: Date
+    var icon: String {
+        switch self {
+        case .vehicleStatus: return "car.2.fill"
+        case .maintenance: return "wrench.fill"
+        }
+    }
+
+    func color(isColorBlindMode: Bool) -> Color {
+        if isColorBlindMode {
+            return .cbBlue
+        }
+        switch self {
+        case .vehicleStatus: return .blue
+        case .maintenance: return .orange
+        }
+    }
 }
 
 // VehicleStatusChart
@@ -512,139 +522,6 @@ struct MaintenanceTaskChart: View {
     }
 }
 
-
-// TripTrendChart
-struct TripTrendChart: View {
-    let data: [TripData]
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Trip Trends")
-                .font(.headline)
-            
-            Chart(data) { item in
-                LineMark(
-                    x: .value("Date", item.date),
-                    y: .value("Trips", item.count)
-                )
-                .foregroundStyle(.blue)
-                
-                AreaMark(
-                    x: .value("Date", item.date),
-                    y: .value("Trips", item.count)
-                )
-                .foregroundStyle(.blue.opacity(0.1))
-                
-                PointMark(
-                    x: .value("Date", item.date),
-                    y: .value("Trips", item.count)
-                )
-                .foregroundStyle(.blue)
-                .annotation(position: .top) {
-                    Text("\(item.count)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-            .frame(height: 200)
-        }
-        .padding()
-        .background(Color(.secondarySystemBackground))
-        .cornerRadius(30)
-        .shadow(color: .gray.opacity(0.1), radius: 0, x: 0, y: 5) // Added shadow
-    }
-}
-
-// ExpenseChart
-struct ExpenseChart: View {
-    let data: [ExpenseData]
-    @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Expense Overview")
-                .font(.headline)
-            
-            if data.isEmpty {
-                VStack(spacing: 8) {
-                    Text("No expense data available")
-                        .foregroundColor(.gray)
-                    Text("Add expenses to see the chart")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                }
-                .frame(maxWidth: .infinity, minHeight: 200)
-                .background(Color(.secondarySystemBackground))
-            } else {
-                Chart {
-                    ForEach(data) { item in
-                        BarMark(
-                            x: .value("Category", item.category),
-                            y: .value("Amount", item.amount)
-                        )
-                        .foregroundStyle(by: .value("Category", item.category))
-                        .cornerRadius(8) // Added corner radius to bars
-                        .annotation(position: .top) {
-                            Text("₹\(String(format: "%.2f", item.amount))")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                }
-                .frame(height: 200)
-                .chartForegroundStyleScale([
-                    "Fuel": isColorBlindMode ? .blue : .yellow,
-                    "Toll": .orange,
-                    "Miscellaneous": isColorBlindMode ? .blue : .purple,
-                    "Parts": isColorBlindMode ? .orange : .blue,
-                    "Labor": isColorBlindMode ? .blue : .green
-                ])
-            }
-        }
-        .padding()
-        .background(Color(.secondarySystemBackground))
-        .cornerRadius(30)
-        .shadow(color: .gray.opacity(0.1), radius: 0, x: 0, y: 5) // Added shadow
-    }
-}
-
-// ExpenseData (for reference)
-//struct ExpenseData: Identifiable {
-//    let id = UUID()
-//    let category: String
-//    let amount: Double
-//    let date: Date
-//}
-
-// ChartType Enum
-enum ChartType: String, CaseIterable {
-    case vehicleStatus = "Vehicle Status"
-    case maintenance = "Maintenance"
-    case trips = "Trips"
-    case expenses = "Expenses"
-
-    var icon: String {
-        switch self {
-        case .vehicleStatus: return "car.2.fill"
-        case .maintenance: return "wrench.fill"
-        case .trips: return "map.fill"
-        case .expenses: return "dollarsign.circle.fill"
-        }
-    }
-
-    func color(isColorBlindMode: Bool) -> Color {
-        if isColorBlindMode {
-            return .cbBlue
-        }
-        switch self {
-        case .vehicleStatus: return .blue
-        case .maintenance: return .orange
-        case .trips: return .green
-        case .expenses: return .purple
-        }
-    }
-}
-
 // Add new AllDeviationsView
 struct AllDeviationsView: View {
     @ObservedObject var dashboardVM: DashboardViewModel
@@ -702,8 +579,6 @@ struct DashboardHomeView: View {
     @StateObject private var driverCountViewModel = DriverStatsViewModel()
     @State private var vehicleStatusData: [VehicleStatusData] = []
     @State private var maintenanceTaskData: [MaintenanceTaskData] = []
-    @State private var tripData: [TripData] = []
-    @State private var expenseData: [ExpenseData] = []
     @State private var selectedChart: ChartType = .vehicleStatus
     @State private var showingAllDeviations = false
     @AppStorage("isColorBlindMode") private var isColorBlindMode: Bool = false
@@ -793,34 +668,49 @@ struct DashboardHomeView: View {
                             .font(.title2)
                             .fontWeight(.bold)
                             .padding(.horizontal)
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 12) {
-                                ForEach(ChartType.allCases, id: \.self) { type in
-                                    Button(action: {
-                                        withAnimation(.spring()) {
-                                            selectedChart = type
-                                        }
-                                    }) {
-                                        VStack(spacing: 8) {
-                                            Image(systemName: type.icon)
-                                                .font(.system(size: 20))
-                                            Text(type.rawValue)
-                                                .font(.caption)
-                                        }
-                                        .frame(width: 100)
-                                        .padding(.vertical, 12)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 20)
-                                                .fill(selectedChart == type ? type.color(isColorBlindMode: isColorBlindMode).opacity(0.2) : Color(.systemGray6))
-                                        )
-                                        .foregroundColor(selectedChart == type ? type.color(isColorBlindMode: isColorBlindMode) : (isColorBlindMode ? .cbBlue : .gray))
+                        
+                        // Chart Selection Buttons
+                        HStack(spacing: 12) {
+                            ForEach(ChartType.allCases, id: \.self) { type in
+                                Button(action: {
+                                    withAnimation(.spring()) {
+                                        selectedChart = type
                                     }
+                                }) {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: type.icon)
+                                            .font(.system(size: 16, weight: .semibold))
+                                        Text(type.rawValue)
+                                            .font(.subheadline)
+                                            .fontWeight(.medium)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 12)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(selectedChart == type ? 
+                                                type.color(isColorBlindMode: isColorBlindMode).opacity(0.15) : 
+                                                Color(.systemGray6))
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(
+                                                selectedChart == type ? 
+                                                    type.color(isColorBlindMode: isColorBlindMode) : 
+                                                    Color.clear,
+                                                lineWidth: 1.5
+                                            )
+                                    )
+                                    .foregroundColor(selectedChart == type ? 
+                                        type.color(isColorBlindMode: isColorBlindMode) : 
+                                        (isColorBlindMode ? .cbBlue : .gray))
                                 }
                             }
-                            .padding(.horizontal)
                         }
+                        .padding(.horizontal)
                         .padding(.vertical, 8)
-                        .shadow(color: .gray.opacity(0.1), radius: 0, x: 0, y: 5) // Added shadow
+                        .shadow(color: .gray.opacity(0.1), radius: 0, x: 0, y: 5)
 
                         switch selectedChart {
                         case .vehicleStatus:
@@ -829,14 +719,6 @@ struct DashboardHomeView: View {
                                 .transition(.opacity)
                         case .maintenance:
                             MaintenanceTaskChart(data: maintenanceTaskData)
-                                .padding(.horizontal)
-                                .transition(.opacity)
-                        case .trips:
-                            TripTrendChart(data: tripData)
-                                .padding(.horizontal)
-                                .transition(.opacity)
-                        case .expenses:
-                            ExpenseChart(data: expenseData)
                                 .padding(.horizontal)
                                 .transition(.opacity)
                         }
@@ -894,157 +776,55 @@ struct DashboardHomeView: View {
                 dashboardVM.fetchVehicleStats()
                 dashboardVM.fetchRecentDeviations()
                 fetchChartData()
-                fetchExpenseData()
             }
         }
     }
     
-    // Update fetchExpenseData in DashboardHomeView
-    private func fetchExpenseData() {
-            let db = Firestore.firestore()
-            let calendar = Calendar.current
-            let endDate = Date()
-            let startDate = calendar.date(byAdding: .day, value: -30, to: endDate)!
-            let group = DispatchGroup()
-            var allExpenses: [ExpenseData] = []
-
-            group.enter()
-            db.collection("trips")
-                .whereField("startTime", isGreaterThanOrEqualTo: startDate)
-                .whereField("startTime", isLessThanOrEqualTo: endDate)
-                .getDocuments { snapshot, error in
-                    defer { group.leave() }
-                    if let error = error {
-                        print("Error fetching trip expenses: \(error.localizedDescription)")
-                        return
-                    }
-                    if let documents = snapshot?.documents {
-                        for document in documents {
-                            if let tripCharges = document.data()["tripCharges"] as? [String: Any] {
-                                if let fuelAmount = tripCharges["fuelLog"] as? Double {
-                                    allExpenses.append(ExpenseData(
-                                        category: "Fuel",
-                                        amount: fuelAmount,
-                                        date: document.data()["startTime"] as? Date ?? Date()
-                                    ))
-                                }
-                                if let tollAmount = tripCharges["tollFees"] as? Double {
-                                    allExpenses.append(ExpenseData(
-                                        category: "Toll",
-                                        amount: tollAmount,
-                                        date: document.data()["startTime"] as? Date ?? Date()
-                                    ))
-                                }
-                                if let miscAmount = tripCharges["misc"] as? Double {
-                                    allExpenses.append(ExpenseData(
-                                        category: "Miscellaneous",
-                                        amount: miscAmount,
-                                        date: document.data()["startTime"] as? Date ?? Date()
-                                    ))
-                                }
-                            }
-                        }
-                    }
-                }
-
-            group.enter()
-            db.collection("maintenance_tasks")
-                .whereField("completionDate", isGreaterThanOrEqualTo: startDate)
-                .whereField("completionDate", isLessThanOrEqualTo: endDate)
-                .getDocuments { snapshot, error in
-                    defer { group.leave() }
-                    if let error = error {
-                        print("Error fetching maintenance expenses: \(error.localizedDescription)")
-                        return
-                    }
-                    if let documents = snapshot?.documents {
-                        for document in documents {
-                            if let partsCost = document.data()["partsCost"] as? Double {
-                                allExpenses.append(ExpenseData(
-                                    category: "Parts",
-                                    amount: partsCost,
-                                    date: document.data()["completionDate"] as? Date ?? Date()
-                                ))
-                            }
-                            if let laborCost = document.data()["laborCost"] as? Double {
-                                allExpenses.append(ExpenseData(
-                                    category: "Labor",
-                                    amount: laborCost,
-                                    date: document.data()["completionDate"] as? Date ?? Date()
-                                ))
-                            }
-                        }
-                    }
-                }
-
-            group.notify(queue: .main) {
-                if allExpenses.isEmpty {
-                    print("No expenses found, using sample data")
-                    self.expenseData = [
-                        ExpenseData(category: "Fuel", amount: 2500.0, date: Date()),
-                        ExpenseData(category: "Toll", amount: 800.0, date: Date()),
-                        ExpenseData(category: "Miscellaneous", amount: 500.0, date: Date()),
-                        ExpenseData(category: "Parts", amount: 1800.0, date: Date()),
-                        ExpenseData(category: "Labor", amount: 1200.0, date: Date())
-                    ]
-                } else {
-                    print("Found \(allExpenses.count) expenses")
-                    let groupedExpenses = Dictionary(grouping: allExpenses) { $0.category }
-                        .mapValues { expenses in
-                            expenses.reduce(0) { $0 + $1.amount }
-                        }
-                    self.expenseData = groupedExpenses.map { category, amount in
-                        ExpenseData(
-                            category: category.trimmingCharacters(in: .whitespacesAndNewlines).capitalized,
-                            amount: amount,
-                            date: Date()
-                        )
-                    }
-                    print("Updated expenseData with \(self.expenseData.count) categories: \(self.expenseData.map { $0.category })")
-                }
-            }
-        }
-
     private func fetchChartData() {
+        // Fetch vehicle status data
         let db = Firestore.firestore()
         db.collection("vehicles").getDocuments { snapshot, error in
-            if let documents = snapshot?.documents {
-                let vehicles = documents.compactMap { try? $0.data(as: Vehicle.self) }
-                let statusCounts = Dictionary(grouping: vehicles) { $0.status.rawValue }
-                    .mapValues { $0.count }
-                vehicleStatusData = statusCounts.map { VehicleStatusData(status: $0.key, count: $0.value) }
+            if let error = error {
+                print("Error fetching vehicle status: \(error.localizedDescription)")
+                return
             }
-        }
-        db.collection("maintenance_tasks").getDocuments { snapshot, error in
+            
+            var statusCounts: [String: Int] = [:]
             if let documents = snapshot?.documents {
-                let tasks = documents.compactMap { try? $0.data(as: MaintenanceTask.self) }
-                let statusCounts = Dictionary(grouping: tasks) { $0.status.rawValue }
-                    .mapValues { $0.count }
-                maintenanceTaskData = statusCounts.map { MaintenanceTaskData(category: $0.key, count: $0.value) }
-            }
-        }
-        let calendar = Calendar.current
-        let endDate = Date()
-        let startDate = calendar.date(byAdding: .day, value: -7, to: endDate)!
-        db.collection("trips")
-            .whereField("startTime", isGreaterThanOrEqualTo: startDate)
-            .whereField("startTime", isLessThanOrEqualTo: endDate)
-            .getDocuments { snapshot, error in
-                if let documents = snapshot?.documents {
-                    let trips = documents.compactMap { try? $0.data(as: Ride.self) }
-                    let dateFormatter = DateFormatter()
-                    dateFormatter.dateFormat = "yyyy-MM-dd"
-                    let tripCounts = Dictionary(grouping: trips) { trip in
-                        dateFormatter.string(from: trip.startTime)
-                    }.mapValues { $0.count }
-                    tripData = tripCounts.map { dateString, count in
-                        TripData(
-                            date: dateFormatter.date(from: dateString) ?? Date(),
-                            count: count
-                        )
-                    }.sorted { $0.date < $1.date }
+                for document in documents {
+                    if let status = document.data()["status"] as? String,
+                       status.lowercased() != "archived" {
+                        statusCounts[status, default: 0] += 1
+                    }
                 }
             }
+            
+            self.vehicleStatusData = statusCounts.map { status, count in
+                VehicleStatusData(status: status, count: count)
+            }
+        }
+        
+        // Fetch maintenance task data
+        db.collection("maintenance_tasks").getDocuments { snapshot, error in
+            if let error = error {
+                print("Error fetching maintenance tasks: \(error.localizedDescription)")
+                return
+            }
+            
+            var taskCounts: [String: Int] = [:]
+            if let documents = snapshot?.documents {
+                for document in documents {
+                    if let status = document.data()["status"] as? String,
+                       status.lowercased() != "archived" {
+                        taskCounts[status, default: 0] += 1
+                    }
+                }
+            }
+            
+            self.maintenanceTaskData = taskCounts.map { status, count in
+                MaintenanceTaskData(category: status, count: count)
+            }
+        }
     }
 
     private func timeAgoString(from date: Date) -> String {
