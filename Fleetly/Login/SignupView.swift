@@ -24,6 +24,7 @@ struct SignupView: View {
     @State private var isUploadingAadhar = false
     @State private var isUploadingLicense = false
     @State private var passwordValidation = PasswordValidation()
+    @State private var showPassword = false
     
     let genders = ["Male", "Female"]
     
@@ -119,13 +120,24 @@ struct SignupView: View {
                             }
                             
                             VStack(alignment: .leading) {
-                                SecureField("Password", text: $password)
-                                    .textFieldStyle(.plain)
-                                    .padding()
-                                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-                                    .onChange(of: password) { newValue in
-                                        passwordValidation.validate(newValue)
+                                HStack {
+                                    if showPassword {
+                                        TextField("Password", text: $password)
+                                            .textFieldStyle(.plain)
+                                    } else {
+                                        SecureField("Password", text: $password)
+                                            .textFieldStyle(.plain)
                                     }
+                                    Button(action: { showPassword.toggle() }) {
+                                        Image(systemName: showPassword ? "eye.slash.fill" : "eye.fill")
+                                            .foregroundColor(.gray)
+                                    }
+                                }
+                                .padding()
+                                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                                .onChange(of: password) { newValue in
+                                    passwordValidation.validate(newValue)
+                                }
                                 
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("Password must contain:")
