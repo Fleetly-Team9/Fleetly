@@ -953,6 +953,7 @@ extension MKPolyline {
 import SwiftUI
 import MapKit
 import CoreLocation
+
 struct MainView: View {
     @ObservedObject var authVM: AuthViewModel
     @State private var showProfile = false
@@ -975,7 +976,7 @@ struct MainView: View {
         .sheet(isPresented: $showProfile) {
             DriverProfileView(authVM: authVM)
         }
-        .environmentObject(authVM) // Inject AuthViewModel into the environment for all tabs
+        .environmentObject(authVM)
     }
 }
 
@@ -996,6 +997,11 @@ struct DriverHomePage: View {
     @StateObject private var assignedTripsVM = AssignedTripsViewModel()
     @State private var didStartListener = false
     @State private var profileImage: Image?
+    @State private var poiAnnotations: [CustomPointAnnotation] = []
+    @State private var selectedFilter: FilterType = .none
+    @State private var showAddStopAlert = false
+    @State private var tappedAnnotation: CustomPointAnnotation?
+    @State private var selectedTripId: String?
 
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     let hours = (0...12).map { $0 == 0 ? "0hr" : "\($0)hr\($0 == 1 ? "" : "s")" }
@@ -1014,10 +1020,20 @@ struct DriverHomePage: View {
     static let initialCapsuleColor = Color(.systemGray5)
     
     private var maxX: CGFloat {
-        return 363.0 - 53.0 // Capsule width - Circle diameter
+        return 363.0 - 53.0
     }
     
     @Environment(\.colorScheme) var colorScheme
+    
+    enum FilterType: String {
+        case none = "None"
+        case hospital = "Hospitals"
+        case petrolPump = "Petrol Pumps"
+        case mechanics = "Mechanics"
+        case pickup = "Pickup"
+        case drop = "Drop"
+        case car = "Car"
+    }
     
     private func initializeData() {
         guard let driverId = authVM.user?.id else { return }
@@ -1046,7 +1062,6 @@ struct DriverHomePage: View {
             }
         }
         
-        // Load profile image from UserDefaults
         if let data = UserDefaults.standard.data(forKey: profileImageKey),
            let uiImage = UIImage(data: data) {
             profileImage = Image(uiImage: uiImage)
@@ -1098,7 +1113,7 @@ struct DriverHomePage: View {
             }
             Spacer()
             Button(action: {
-                print("Profile image tapped") // Debug
+                print("Profile image tapped")
                 showProfile = true
             }) {
                 Group {
@@ -1115,7 +1130,7 @@ struct DriverHomePage: View {
                             .foregroundStyle(Color.primary)
                     }
                 }
-                .contentShape(Circle()) // Ensure entire circle is tappable
+                .contentShape(Circle())
             }
         }
         .padding(.horizontal)
@@ -1338,7 +1353,8 @@ struct DriverHomePage: View {
         var region: MKCoordinateRegion
         var pickup: Location?
         var drop: Location?
-        var route: MKRoute?
+        var route: CustomRoute?
+        var selectedStop: CustomPointAnnotation?
         
         init() {
             self.region = MKCoordinateRegion(
@@ -1348,6 +1364,7 @@ struct DriverHomePage: View {
             self.pickup = nil
             self.drop = nil
             self.route = nil
+            self.selectedStop = nil
         }
     }
     
@@ -1377,34 +1394,167 @@ struct DriverHomePage: View {
                 let pickup = Location(name: trip.startLocation, coordinate: startLocation.coordinate)
                 let drop = Location(name: trip.endLocation, coordinate: endLocation.coordinate)
                 
-                let request = MKDirections.Request()
-                request.source = MKMapItem(placemark: MKPlacemark(coordinate: startLocation.coordinate))
-                request.destination = MKMapItem(placemark: MKPlacemark(coordinate: endLocation.coordinate))
-                request.transportType = .automobile
-                
-                let directions = MKDirections(request: request)
-                directions.calculate { response, error in
-                    guard let route = response?.routes.first else {
-                        print("Failed to calculate route: \(String(describing: error))")
-                        return
+                if let stop = tripMapData[trip.id]?.selectedStop {
+                    // Calculate route: pickup -> stop -> drop
+                    let request1 = MKDirections.Request()
+                    request1.source = MKMapItem(placemark: MKPlacemark(coordinate: startLocation.coordinate))
+                    request1.destination = MKMapItem(placemark: MKPlacemark(coordinate: stop.coordinate))
+                    request1.transportType = .automobile
+                    
+                    let directions1 = MKDirections(request: request1)
+                    directions1.calculate { response1, error1 in
+                        guard let route1 = response1?.routes.first else {
+                            print("Failed to calculate route pickup -> stop: \(String(describing: error1))")
+                            return
+                        }
+                        
+                        let request2 = MKDirections.Request()
+                        request2.source = MKMapItem(placemark: MKPlacemark(coordinate: stop.coordinate))
+                        request2.destination = MKMapItem(placemark: MKPlacemark(coordinate: endLocation.coordinate))
+                        request2.transportType = .automobile
+                        
+                        let directions2 = MKDirections(request: request2)
+                        directions2.calculate { response2, error2 in
+                            guard let route2 = response2?.routes.first else {
+                                print("Failed to calculate route stop -> drop: \(String(describing: error2))")
+                                return
+                            }
+                            
+                            // Combine routes
+                            let combinedCoordinates = route1.polyline.coordinates + route2.polyline.coordinates
+                            let combinedPolyline = MKPolyline(coordinates: combinedCoordinates, count: combinedCoordinates.count)
+                            let combinedSteps = route1.steps + route2.steps
+                            let combinedDistance = route1.distance + route2.distance
+                            let combinedTravelTime = route1.expectedTravelTime + route2.expectedTravelTime
+                            
+                            let customRoute = CustomRoute(
+                                polyline: combinedPolyline,
+                                steps: combinedSteps,
+                                distance: combinedDistance,
+                                expectedTravelTime: combinedTravelTime
+                            )
+                            
+                            let region = MKCoordinateRegion(coordinates: combinedCoordinates, latitudinalMetersPadding: 1000, longitudinalMetersPadding: 1000)
+                            
+                            DispatchQueue.main.async {
+                                tripMapData[trip.id]?.region = region
+                                tripMapData[trip.id]?.pickup = pickup
+                                tripMapData[trip.id]?.drop = drop
+                                tripMapData[trip.id]?.route = customRoute
+                            }
+                        }
                     }
+                } else {
+                    // Calculate direct route: pickup -> drop
+                    let request = MKDirections.Request()
+                    request.source = MKMapItem(placemark: MKPlacemark(coordinate: startLocation.coordinate))
+                    request.destination = MKMapItem(placemark: MKPlacemark(coordinate: endLocation.coordinate))
+                    request.transportType = .automobile
                     
-                    let coordinates = route.polyline.coordinates
-                    let region = MKCoordinateRegion(coordinates: coordinates, latitudinalMetersPadding: 1000, longitudinalMetersPadding: 1000)
-                    
-                    DispatchQueue.main.async {
-                        tripMapData[trip.id]?.region = region
-                        tripMapData[trip.id]?.pickup = pickup
-                        tripMapData[trip.id]?.drop = drop
-                        tripMapData[trip.id]?.route = route
+                    let directions = MKDirections(request: request)
+                    directions.calculate { response, error in
+                        guard let route = response?.routes.first else {
+                            print("Failed to calculate route: \(String(describing: error))")
+                            return
+                        }
+                        
+                        let customRoute = CustomRoute(route: route)
+                        let coordinates = route.polyline.coordinates
+                        let region = MKCoordinateRegion(coordinates: coordinates, latitudinalMetersPadding: 1000, longitudinalMetersPadding: 1000)
+                        
+                        DispatchQueue.main.async {
+                            tripMapData[trip.id]?.region = region
+                            tripMapData[trip.id]?.pickup = pickup
+                            tripMapData[trip.id]?.drop = drop
+                            tripMapData[trip.id]?.route = customRoute
+                        }
                     }
                 }
             }
         }
     }
     
+    private func searchNearbyPOIs(filter: FilterType, trip: Trip) {
+        guard let pickup = tripMapData[trip.id]?.pickup?.coordinate,
+              let drop = tripMapData[trip.id]?.drop?.coordinate else {
+            print("No valid pickup or drop coordinates for trip: \(trip.id)")
+            poiAnnotations = []
+            return
+        }
+        
+        let searchTerm: String
+        switch filter {
+        case .hospital:
+            searchTerm = "hospital, local hospital, clinic, medical center, urgent care, emergency room, health clinic"
+        case .petrolPump:
+            searchTerm = "gas station, fuel, petrol station, service station"
+        case .mechanics:
+            searchTerm = "auto repair, car repair, mechanic shop, automotive service, vehicle repair, auto service, garage"
+        case .none, .pickup, .drop, .car:
+            poiAnnotations = []
+            return
+        }
+        
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = searchTerm
+        request.resultTypes = .pointOfInterest
+        
+        let coordinates = [pickup, drop]
+        let minLat = coordinates.map { $0.latitude }.min()!
+        let maxLat = coordinates.map { $0.latitude }.max()!
+        let minLon = coordinates.map { $0.longitude }.min()!
+        let maxLon = coordinates.map { $0.longitude }.max()!
+        
+        let center = CLLocationCoordinate2D(
+            latitude: (minLat + maxLat) / 2,
+            longitude: (minLon + maxLon) / 2
+        )
+        
+        let baseLatDelta = maxLat - minLat
+        let baseLonDelta = maxLon - minLon
+        let minDelta = 0.1
+        let span = MKCoordinateSpan(
+            latitudeDelta: max(baseLatDelta * 2.0, minDelta),
+            longitudeDelta: max(baseLonDelta * 2.0, minDelta)
+        )
+        request.region = MKCoordinateRegion(center: center, span: span)
+        
+        let search = MKLocalSearch(request: request)
+        search.start { response, error in
+            guard let response = response, error == nil else {
+                print("Error searching for \(searchTerm): \(error?.localizedDescription ?? "Unknown error")")
+                self.poiAnnotations = []
+                return
+            }
+            
+            print("Found \(response.mapItems.count) results for \(searchTerm) in region: \(request.region)")
+            
+            self.poiAnnotations = response.mapItems.map { item in
+                let annotation = CustomPointAnnotation()
+                annotation.coordinate = item.placemark.coordinate
+                annotation.title = item.name
+                switch filter {
+                case .hospital:
+                    annotation.annotationType = .hospital
+                case .petrolPump:
+                    annotation.annotationType = .petrolPump
+                case .mechanics:
+                    annotation.annotationType = .mechanics
+                default:
+                    annotation.annotationType = .none
+                }
+                return annotation
+            }
+            
+            print("\(filter.rawValue) found: \(self.poiAnnotations.map { $0.title ?? "Unnamed" })")
+        }
+    }
+    
     private struct TripMapSection: View {
         let mapData: TripMapData
+        @Binding var selectedStop: CustomPointAnnotation?
+        let poiAnnotations: [CustomPointAnnotation]
+        let onAnnotationTap: (MKAnnotation) -> Void
         
         var body: some View {
             MapViewWithRoute(
@@ -1415,7 +1565,9 @@ struct DriverHomePage: View {
                 mapStyle: .constant(.standard),
                 isTripStarted: false,
                 userLocationCoordinate: nil,
-                poiAnnotations: []
+                poiAnnotations: poiAnnotations,
+                selectedStop: $selectedStop,
+                onAnnotationTap: onAnnotationTap
             )
             .frame(width: 363, height: 150)
             .cornerRadius(12)
@@ -1424,10 +1576,33 @@ struct DriverHomePage: View {
 
     private struct TripLocationSection: View {
         let trip: Trip
+        let selectedStop: CustomPointAnnotation?
+        let onRemoveStop: () -> Void
         
         var body: some View {
-            VStack(alignment: .leading, spacing: 6) { // Reduced spacing from 8 to 6
+            VStack(alignment: .leading, spacing: 6) {
                 LocationRow(icon: "location.fill", color: .green, label: "From", value: trip.startLocation)
+                if let stop = selectedStop {
+                    HStack {
+                        Image(systemName: "mappin.circle.fill")
+                            .foregroundColor(.purple)
+                            .frame(width: 20)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Stop")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            Text(stop.title ?? "Stop")
+                                .font(.headline)
+                                .lineLimit(1)
+                        }
+                        Spacer()
+                        Button(action: onRemoveStop) {
+                            Image(systemName: "trash.circle.fill")
+                                .foregroundColor(.red)
+                                .frame(width: 20)
+                        }
+                    }
+                }
                 LocationRow(icon: "location.fill", color: .red, label: "To", value: trip.endLocation)
             }
         }
@@ -1478,7 +1653,7 @@ struct DriverHomePage: View {
         let value: String
         
         var body: some View {
-            VStack(alignment: .leading, spacing: 2) { // Reduced spacing from 4 to 2
+            VStack(alignment: .leading, spacing: 2) {
                 Text(label)
                     .font(.subheadline)
                     .foregroundStyle(Color.secondary)
@@ -1635,31 +1810,45 @@ struct DriverHomePage: View {
         let mapData = tripMapData[trip.id] ?? TripMapData()
         
         return VStack(spacing: 0) {
-            // Card wrapper that includes the map
             ZStack(alignment: .top) {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(colorScheme == .dark ? Color(UIColor.systemGray4) : Color.white)
                     .shadow(color: colorScheme == .dark ? Color.black.opacity(0.3) : Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
                 
                 VStack(spacing: 0) {
-                    // Map is now inside the card
-                    MapViewWithRoute(
-                        region: .constant(mapData.region),
-                        pickup: mapData.pickup ?? Location(name: "Default Start", coordinate: CLLocationCoordinate2D(latitude: 12.9716, longitude: 77.5946)),
-                        drop: mapData.drop ?? Location(name: "Default End", coordinate: CLLocationCoordinate2D(latitude: 22.5726, longitude: 88.3639)),
-                        route: mapData.route,
-                        mapStyle: .constant(.standard),
-                        isTripStarted: false,
-                        userLocationCoordinate: nil,
-                        poiAnnotations: []
-                    )
-                    .frame(width: 363, height: 150)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    ZStack(alignment: .topTrailing) {
+                        TripMapSection(
+                            mapData: mapData,
+                            selectedStop: Binding(
+                                get: { tripMapData[trip.id]?.selectedStop },
+                                set: { tripMapData[trip.id]?.selectedStop = $0 }
+                            ),
+                            poiAnnotations: poiAnnotations,
+                            onAnnotationTap: { annotation in
+                                if let customAnnotation = annotation as? CustomPointAnnotation,
+                                   [.hospital, .petrolPump, .mechanics].contains(customAnnotation.annotationType) {
+                                    tappedAnnotation = customAnnotation
+                                    selectedTripId = trip.id
+                                    showAddStopAlert = true
+                                }
+                            }
+                        )
+                        Button(action: {
+                            selectedFilter = selectedFilter == .none ? .petrolPump : .none
+                            searchNearbyPOIs(filter: selectedFilter, trip: trip)
+                        }) {
+                            Image(systemName: "line.3.horizontal.decrease.circle")
+                                .padding(8)
+                                .background(Color.white)
+                                .foregroundColor(.blue)
+                                .clipShape(Circle())
+                                .shadow(color: Color.black.opacity(0.2), radius: 3)
+                        }
+                        .padding(8)
+                    }
                     
                     VStack(alignment: .leading, spacing: 16) {
-                        // Trip Details Section
                         VStack(alignment: .leading, spacing: 12) {
-                            // Date and Time Row
                             HStack(spacing: 24) {
                                 HStack(spacing: 8) {
                                     Image(systemName: "calendar")
@@ -1682,7 +1871,6 @@ struct DriverHomePage: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             
-                            // Vehicle Type and Capacity Row
                             HStack(spacing: 24) {
                                 HStack(spacing: 8) {
                                     Image(systemName: "car.fill")
@@ -1723,17 +1911,19 @@ struct DriverHomePage: View {
                         Divider()
                             .padding(.horizontal, 20)
                         
-                        // Location Details Section
-                        VStack(alignment: .leading, spacing: 12) {
-                            LocationRow(icon: "location.fill", color: .green, label: "From", value: trip.startLocation)
-                            LocationRow(icon: "location.fill", color: .red, label: "To", value: trip.endLocation)
-                        }
+                        TripLocationSection(
+                            trip: trip,
+                            selectedStop: tripMapData[trip.id]?.selectedStop,
+                            onRemoveStop: {
+                                tripMapData[trip.id]?.selectedStop = nil
+                                fetchRoute(for: trip)
+                            }
+                        )
                         .padding(.horizontal, 20)
                         
                         Divider()
                             .padding(.horizontal, 20)
                         
-                        // Action Button
                         TripActionButton(
                             trip: trip,
                             navigatingTripId: $navigatingTripId,
@@ -1756,15 +1946,28 @@ struct DriverHomePage: View {
         .onAppear {
             fetchRoute(for: trip)
         }
+        .alert(isPresented: $showAddStopAlert) {
+            Alert(
+                title: Text("Add Stop"),
+                message: Text("Add \(tappedAnnotation?.title ?? "this location") as a stop?"),
+                primaryButton: .default(Text("Add")) {
+                    if let annotation = tappedAnnotation, let tripId = selectedTripId {
+                        tripMapData[tripId]?.selectedStop = annotation
+                        if let trip = assignedTripsVM.assignedTrips.first(where: { $0.id == tripId }) {
+                            fetchRoute(for: trip)
+                        }
+                    }
+                },
+                secondaryButton: .cancel()
+            )
+        }
     }
     
     private var tripsListView: some View {
         Group {
             if assignedTripsVM.assignedTrips.count == 1 {
-                // Single trip: Display without ScrollView, aligned like Clock Card
                 tripCardView(for: assignedTripsVM.assignedTrips[0])
             } else {
-                // Multiple trips: Use ScrollView for horizontal scrolling
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
                         ForEach(assignedTripsVM.assignedTrips.sorted(by: { $0.startTime < $1.startTime })) { trip in
@@ -1900,4 +2103,3 @@ extension MKPolyline {
         return coords
     }
 }
-
