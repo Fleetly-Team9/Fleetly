@@ -3,10 +3,48 @@ import MapKit
 import CoreLocation
 import Firebase
 
+// Custom route struct to hold combined route data
+struct CustomRoute: Equatable {
+    let polyline: MKPolyline
+    let steps: [MKRoute.Step]
+    let distance: CLLocationDistance
+    let expectedTravelTime: TimeInterval
+    
+    init(polyline: MKPolyline, steps: [MKRoute.Step], distance: CLLocationDistance, expectedTravelTime: TimeInterval) {
+        self.polyline = polyline
+        self.steps = steps
+        self.distance = distance
+        self.expectedTravelTime = expectedTravelTime
+    }
+    
+    // Convenience initializer for a single MKRoute
+    init(route: MKRoute) {
+        self.polyline = route.polyline
+        self.steps = route.steps
+        self.distance = route.distance
+        self.expectedTravelTime = route.expectedTravelTime
+    }
+    
+    // Equatable conformance
+    static func == (lhs: CustomRoute, rhs: CustomRoute) -> Bool {
+        // Compare coordinates of polyline
+        let lhsCoordinates = lhs.polyline.coordinates
+        let rhsCoordinates = rhs.polyline.coordinates
+        guard lhsCoordinates.count == rhsCoordinates.count else { return false }
+        for (lhsCoord, rhsCoord) in zip(lhsCoordinates, rhsCoordinates) {
+            if lhsCoord.latitude != rhsCoord.latitude || lhsCoord.longitude != rhsCoord.longitude {
+                return false
+            }
+        }
+        // Compare distance and expectedTravelTime
+        return lhs.distance == rhs.distance && lhs.expectedTravelTime == rhs.expectedTravelTime
+    }
+}
+
 class NavigationViewModel: NSObject, ObservableObject {
     @Published var trip: Trip?
     @Published var userLocation: CLLocationCoordinate2D?
-    @Published var route: MKRoute?
+    @Published var route: CustomRoute?
     @Published var isLoading = false
     @Published var fuelExpense: Double = 0
     @Published var tollExpense: Double = 0
@@ -15,6 +53,7 @@ class NavigationViewModel: NSObject, ObservableObject {
     @Published var startTime: Date?
     @Published var pickupLocation: Location?
     @Published var dropLocation: Location?
+    @Published var selectedStop: CustomPointAnnotation?
     @Published var hasDeviatedFromRoute = false
     @Published var deviationDistance: CLLocationDistance = 0
     @Published var lastDeviationTime: Date?
@@ -51,7 +90,7 @@ class NavigationViewModel: NSObject, ObservableObject {
         
         // Set up deviation callback
         routeGeofenceManager.onDeviationDetected = { [weak self] location, distance in
-            DispatchQueue.main.async(execute: DispatchWorkItem {
+            DispatchQueue.main.async {
                 self?.hasDeviatedFromRoute = true
                 self?.deviationDistance = distance
                 self?.lastDeviationTime = Date()
@@ -74,7 +113,7 @@ class NavigationViewModel: NSObject, ObservableObject {
                         }
                     }
                 }
-            })
+            }
         }
     }
     
@@ -112,6 +151,7 @@ class NavigationViewModel: NSObject, ObservableObject {
         self.hasDeviatedFromRoute = false
         self.deviationDistance = 0
         self.lastDeviationTime = nil
+        self.selectedStop = nil
         geocodeLocations()
     }
     
@@ -149,37 +189,114 @@ class NavigationViewModel: NSObject, ObservableObject {
                 self.dropLocation = Location(name: trip.endLocation, coordinate: coordinate)
                 
                 // Fetch route after both locations are geocoded
-                self.fetchRoute()
+                self.fetchRoute { }
             }
         }
     }
     
-    private func fetchRoute() {
+    private func fetchRoute(completion: @escaping () -> Void) {
         guard let pickup = pickupLocation, let drop = dropLocation else {
             isLoading = false
+            completion()
             return
         }
         
-        let request = MKDirections.Request()
-        let pickupPlacemark = MKPlacemark(coordinate: pickup.coordinate)
-        let dropPlacemark = MKPlacemark(coordinate: drop.coordinate)
-        request.source = MKMapItem(placemark: pickupPlacemark)
-        request.destination = MKMapItem(placemark: dropPlacemark)
-        request.transportType = .automobile
-        
-        let directions = MKDirections(request: request)
-        directions.calculate { [weak self] response, error in
-            guard let self = self else { return }
-            self.isLoading = false
-            if let error = error {
-                print("Error calculating route: \(error.localizedDescription)")
-                return
+        if let stop = selectedStop {
+            // Calculate route: pickup -> stop -> drop
+            let request1 = MKDirections.Request()
+            request1.source = MKMapItem(placemark: MKPlacemark(coordinate: pickup.coordinate))
+            request1.destination = MKMapItem(placemark: MKPlacemark(coordinate: stop.coordinate))
+            request1.transportType = .automobile
+            
+            let directions1 = MKDirections(request: request1)
+            directions1.calculate { [weak self] response1, error1 in
+                guard let self = self else {
+                    completion()
+                    return
+                }
+                guard let route1 = response1?.routes.first else {
+                    print("Failed to calculate route pickup -> stop: \(String(describing: error1))")
+                    self.isLoading = false
+                    completion()
+                    return
+                }
+                
+                let request2 = MKDirections.Request()
+                request2.source = MKMapItem(placemark: MKPlacemark(coordinate: stop.coordinate))
+                request2.destination = MKMapItem(placemark: MKPlacemark(coordinate: drop.coordinate))
+                request2.transportType = .automobile
+                
+                let directions2 = MKDirections(request: request2)
+                directions2.calculate { [weak self] response2, error2 in
+                    guard let self = self else {
+                        completion()
+                        return
+                    }
+                    self.isLoading = false
+                    guard let route2 = response2?.routes.first else {
+                        print("Failed to calculate route stop -> drop: \(String(describing: error2))")
+                        completion()
+                        return
+                    }
+                    
+                    // Combine routes into CustomRoute
+                    let combinedCoordinates = route1.polyline.coordinates + route2.polyline.coordinates
+                    let combinedPolyline = MKPolyline(coordinates: combinedCoordinates, count: combinedCoordinates.count)
+                    let combinedSteps = route1.steps + route2.steps
+                    let totalDistance = route1.distance + route2.distance
+                    let totalTravelTime = route1.expectedTravelTime + route2.expectedTravelTime
+                    
+                    let combinedRoute = CustomRoute(
+                        polyline: combinedPolyline,
+                        steps: combinedSteps,
+                        distance: totalDistance,
+                        expectedTravelTime: totalTravelTime
+                    )
+                    
+                    self.route = combinedRoute
+                    self.routeGeofenceManager.startMonitoring(route: route1) // Use route1 for geofencing as a simplification
+                    print("Updated route with stop: Distance = \(totalDistance) meters, ETA = \(totalTravelTime) seconds")
+                    completion()
+                }
             }
-            if let route = response?.routes.first {
-                self.route = route
-                // Start monitoring the route with geofencing automatically
-                self.routeGeofenceManager.startMonitoring(route: route)
+        } else {
+            // Calculate direct route: pickup -> drop
+            let request = MKDirections.Request()
+            request.source = MKMapItem(placemark: MKPlacemark(coordinate: pickup.coordinate))
+            request.destination = MKMapItem(placemark: MKPlacemark(coordinate: drop.coordinate))
+            request.transportType = .automobile
+            
+            let directions = MKDirections(request: request)
+            directions.calculate { [weak self] response, error in
+                guard let self = self else {
+                    completion()
+                    return
+                }
+                self.isLoading = false
+                if let error = error {
+                    print("Error calculating route: \(error.localizedDescription)")
+                    completion()
+                    return
+                }
+                if let route = response?.routes.first {
+                    self.route = CustomRoute(route: route)
+                    self.routeGeofenceManager.startMonitoring(route: route)
+                    print("Updated direct route: Distance = \(route.distance) meters, ETA = \(route.expectedTravelTime) seconds")
+                    completion()
+                } else {
+                    completion()
+                }
             }
+        }
+    }
+    
+    func updateRouteWithStop(stop: CustomPointAnnotation?, completion: @escaping () -> Void) {
+        self.selectedStop = stop
+        if pickupLocation != nil && dropLocation != nil {
+            isLoading = true
+            fetchRoute(completion: completion)
+        } else {
+            completion()
         }
     }
     
@@ -192,6 +309,35 @@ class NavigationViewModel: NSObject, ObservableObject {
         hasDeviatedFromRoute = false
         deviationDistance = 0
         lastDeviationTime = nil
+    }
+    
+    func resetTrip() {
+        // Stop geofencing
+        stopGeofencing()
+        
+        // Reset trip-related state
+        trip = nil
+        route = nil
+        pickupLocation = nil
+        dropLocation = nil
+        selectedStop = nil
+        userLocation = nil
+        fuelExpense = 0.0
+        tollExpense = 0.0
+        miscExpense = 0.0
+        totalExpenses = 0.0
+        fuelReceipt = nil
+        tollReceipt = nil
+        miscReceipt = nil
+        hasFuelReceipt = false
+        hasTollReceipt = false
+        hasMiscReceipt = false
+        fuelReceiptDescription = ""
+        tollReceiptDescription = ""
+        miscReceiptDescription = ""
+        startTime = nil
+        hasDeviatedFromRoute = false
+        deviationDistance = 0.0
     }
 }
 
@@ -232,4 +378,7 @@ extension NavigationViewModel: CLLocationManagerDelegate {
         }
     }
 }
+
+
+
 
