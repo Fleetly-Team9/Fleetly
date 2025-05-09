@@ -13,6 +13,17 @@ struct MaintenanceCompletionView: View {
     @State private var showingError = false
     @State private var errorMessage = ""
     
+    private func partQuantityBinding(for partId: String) -> Binding<Int> {
+        Binding(
+            get: {
+                return self.partQuantities[partId] ?? 1
+            },
+            set: { newValue in
+                self.partQuantities[partId] = newValue
+            }
+        )
+    }
+    
     var body: some View {
         NavigationStack {
             Form {
@@ -30,24 +41,10 @@ struct MaintenanceCompletionView: View {
                             Spacer()
                             
                             HStack {
-                                Button(action: {
-                                    if let currentQty = partQuantities[part.id], currentQty > 1 {
-                                        partQuantities[part.id] = currentQty - 1
-                                    }
-                                }) {
-                                    Image(systemName: "minus.circle.fill")
-                                        .foregroundColor(.blue)
-                                }
-                                
                                 Text("\(partQuantities[part.id] ?? 1)")
-                                    .frame(minWidth: 30)
-                                
-                                Button(action: {
-                                    partQuantities[part.id] = (partQuantities[part.id] ?? 1) + 1
-                                }) {
-                                    Image(systemName: "plus.circle.fill")
-                                        .foregroundColor(.blue)
-                                }
+                                    .frame(minWidth: 30, alignment: .center)
+                                Stepper("", value: partQuantityBinding(for: part.id), in: 1...(part.units > 0 ? part.units : 1))
+                                    .labelsHidden()
                             }
                         }
                     }
@@ -322,4 +319,3 @@ class MaintenanceCompletionViewModel: ObservableObject {
         }
     }
 }
-
