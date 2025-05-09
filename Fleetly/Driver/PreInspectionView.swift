@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import PhotosUI
 import FirebaseFirestore
+import UIKit // Import UIKit for keyboard handling
 
 struct PreInspectionView: View {
     @Environment(\.presentationMode) var presentationMode
@@ -32,6 +33,11 @@ struct PreInspectionView: View {
     @State private var ticketDescription = ""
     @State private var ticketPriority = "Medium"
     @State private var ticketType = "Maintenance"
+    
+    // Track focused state for all text fields
+    @FocusState private var isTyrePressureRemarksFocused: Bool
+    @FocusState private var isBrakeRemarksFocused: Bool
+    @FocusState private var isTicketDescriptionFocused: Bool
     
     @ObservedObject var authVM: AuthViewModel
     let dropoffLocation: String
@@ -97,6 +103,13 @@ struct PreInspectionView: View {
     
     private var isAllChecked: Bool {
         return oilCheck && hornCheck && clutchCheck && airbagsCheck && physicalDamageCheck && tyrePressureCheck && brakesCheck && selectedImages.count == 4
+    }
+    
+    // Function to dismiss keyboard
+    private func dismissKeyboard() {
+        isTyrePressureRemarksFocused = false
+        isBrakeRemarksFocused = false
+        isTicketDescriptionFocused = false
     }
     
     var body: some View {
@@ -205,6 +218,11 @@ struct PreInspectionView: View {
                             .lineLimit(2...4)
                             .textFieldStyle(RoundedBorderTextFieldStyle())
                             .font(.caption)
+                            .focused($isTyrePressureRemarksFocused)
+                            .submitLabel(.done)
+                            .onSubmit {
+                                dismissKeyboard()
+                            }
                         }
                     }
                     .padding(.vertical, 8)
@@ -233,6 +251,11 @@ struct PreInspectionView: View {
                             .lineLimit(2...4)
                             .textFieldStyle(RoundedBorderTextFieldStyle())
                             .font(.caption)
+                            .focused($isBrakeRemarksFocused)
+                            .submitLabel(.done)
+                            .onSubmit {
+                                dismissKeyboard()
+                            }
                         }
                     }
                     .padding(.vertical, 8)
@@ -312,6 +335,17 @@ struct PreInspectionView: View {
                         .pickerStyle(.menu)
                         .foregroundStyle(overallCheckStatus == "Verified" ? Color.green : Color.red)
                         .disabled(!isAllChecked)
+                    }
+                }
+            }
+            .onTapGesture {
+                dismissKeyboard()
+            }
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        dismissKeyboard()
                     }
                 }
             }
@@ -405,6 +439,11 @@ struct PreInspectionView: View {
                     Section(header: Text("Ticket Details")) {
                         TextField("Description", text: $ticketDescription, axis: .vertical)
                             .lineLimit(3...6)
+                            .focused($isTicketDescriptionFocused)
+                            .submitLabel(.done)
+                            .onSubmit {
+                                isTicketDescriptionFocused = false
+                            }
                         
                         Picker("Priority", selection: $ticketPriority) {
                             ForEach(priorityOptions, id: \.self) { priority in
@@ -419,18 +458,29 @@ struct PreInspectionView: View {
                         }
                     }
                 }
+                .onTapGesture {
+                    isTicketDescriptionFocused = false
+                }
                 .navigationTitle("Add Ticket")
                 .navigationBarItems(
                     leading: Button("Cancel") {
+                        dismissKeyboard()
                         showAddTicketSheet = false
                     },
                     trailing: Button("Submit") {
+                        dismissKeyboard()
                         submitTicket()
                         showAddTicketSheet = false
                     }
                 )
             }
         }
+        .gesture(
+            DragGesture()
+                .onChanged { _ in
+                    dismissKeyboard()
+                }
+        )
         .overlay {
             if let index = expandedImageIndex {
                 ZStack {
