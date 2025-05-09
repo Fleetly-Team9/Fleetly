@@ -59,7 +59,7 @@ class DashboardViewModel: ObservableObject {
     private func scheduleDeviationNotification(for deviation: GeofenceDeviation) {
         let content = UNMutableNotificationContent()
         content.title = "Route Deviation Detected"
-        content.body = "\(deviation.driverName) deviated from route in \(deviation.vehicleNumber) by \(Int(deviation.distance))m"
+        content.body = "\(deviation.driverName) deviated from route in \(deviation.vehicleNumber) by \(String(format: "%.1f", deviation.distance))m"
         content.sound = .default
         
         // Create a unique identifier for this notification
