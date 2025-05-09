@@ -10,6 +10,7 @@ struct LoginView: View {
     @State private var isLoading = false
     @State private var showSignUp = false
     @State private var showForgotPassword = false
+    @State private var showPassword = false
 
     var body: some View {
         ZStack {
@@ -44,10 +45,21 @@ struct LoginView: View {
                         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
 
                     // Password Field
-                    SecureField("Password", text: $password)
-                        .textFieldStyle(.plain)
-                        .padding()
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                    HStack {
+                        if showPassword {
+                            TextField("Password", text: $password)
+                                .textFieldStyle(.plain)
+                        } else {
+                            SecureField("Password", text: $password)
+                                .textFieldStyle(.plain)
+                        }
+                        Button(action: { showPassword.toggle() }) {
+                            Image(systemName: showPassword ? "eye.slash.fill" : "eye.fill")
+                                .foregroundColor(.gray)
+                        }
+                    }
+                    .padding()
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
 
                     // Forgot Password Link
                     Button("Forgot Password?") {
