@@ -1,9 +1,3 @@
-//
-//  MapViewWithRoute.swift
-//  FleetlyDriver
-//
-//  Created by Sayal Singh on 25/04/25.
-//
 import SwiftUI
 import MapKit
 
@@ -11,11 +5,13 @@ struct MapViewWithRoute: UIViewRepresentable {
     @Binding var region: MKCoordinateRegion
     let pickup: Location
     let drop: Location
-    let route: MKRoute?
+    let route: CustomRoute?
     @Binding var mapStyle: MapStyle
     let isTripStarted: Bool
     let userLocationCoordinate: CLLocationCoordinate2D?
     let poiAnnotations: [CustomPointAnnotation]
+    @Binding var selectedStop: CustomPointAnnotation?
+    let onAnnotationTap: (MKAnnotation) -> Void
     
     private let carAnnotationIdentifier = "carAnnotation"
     
@@ -56,6 +52,14 @@ struct MapViewWithRoute: UIViewRepresentable {
         
         var annotationsToAdd = [pickupAnnotation, dropAnnotation]
         annotationsToAdd.append(contentsOf: poiAnnotations)
+        
+        if let stop = selectedStop {
+            let stopAnnotation = CustomPointAnnotation()
+            stopAnnotation.coordinate = stop.coordinate
+            stopAnnotation.title = stop.title
+            stopAnnotation.annotationType = stop.annotationType
+            annotationsToAdd.append(stopAnnotation)
+        }
         
         mapView.addAnnotations(annotationsToAdd)
         
@@ -103,21 +107,18 @@ struct MapViewWithRoute: UIViewRepresentable {
         }
     }
     
-    private func createGeofenceCorridor(from route: MKRoute) -> MKPolygon? {
+    private func createGeofenceCorridor(from route: CustomRoute) -> MKPolygon? {
         let coordinates = route.polyline.coordinates
         var corridorPoints: [CLLocationCoordinate2D] = []
         let maxDeviationDistance: CLLocationDistance = 100 // meters
         
-        // Create points for both sides of the corridor
         for i in 0..<coordinates.count - 1 {
             let current = coordinates[i]
             let next = coordinates[i + 1]
             
-            // Calculate perpendicular offset
             let bearing = calculateBearing(from: current, to: next)
-            let offset = maxDeviationDistance / 111000 // Convert meters to degrees (approximate)
+            let offset = maxDeviationDistance / 111000
             
-            // Add points for both sides of the corridor
             let leftPoint = calculateOffsetPoint(from: current, bearing: bearing - 90, distance: offset)
             let rightPoint = calculateOffsetPoint(from: current, bearing: bearing + 90, distance: offset)
             
@@ -125,7 +126,6 @@ struct MapViewWithRoute: UIViewRepresentable {
             corridorPoints.append(rightPoint)
         }
         
-        // Create polygon from corridor points
         return MKPolygon(coordinates: corridorPoints, count: corridorPoints.count)
     }
     
@@ -158,10 +158,17 @@ struct MapViewWithRoute: UIViewRepresentable {
     }
     
     func makeCoordinator() -> Coordinator {
-        Coordinator()
+        Coordinator(parent: self)
     }
     
     class Coordinator: NSObject, MKMapViewDelegate {
+        let parent: MapViewWithRoute
+        
+        init(parent: MapViewWithRoute) {
+            self.parent = parent
+            super.init()
+        }
+        
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
             if let customAnnotation = annotation as? CustomPointAnnotation {
                 switch customAnnotation.annotationType {
@@ -270,6 +277,13 @@ struct MapViewWithRoute: UIViewRepresentable {
                 return renderer
             }
             return MKOverlayRenderer(overlay: overlay)
+        }
+        
+        func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView) {
+            if let annotation = view.annotation {
+                parent.onAnnotationTap(annotation)
+                mapView.deselectAnnotation(annotation, animated: true)
+            }
         }
     }
 }
