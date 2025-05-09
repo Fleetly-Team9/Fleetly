@@ -465,6 +465,7 @@ struct VehicleStatusChart: View {
                     y: .value("Status", item.status)
                 )
                 .foregroundStyle(by: .value("Status", item.status))
+                .cornerRadius(8) // Added corner radius to bars
                 .annotation(position: .trailing) {
                     Text("\(item.count)")
                         .font(.caption)
@@ -475,7 +476,8 @@ struct VehicleStatusChart: View {
         }
         .padding()
         .background(Color(.secondarySystemBackground))
-        .cornerRadius(12)
+        .cornerRadius(30)
+        .shadow(color: .gray.opacity(0.1), radius: 0, x: 0, y: 5) // Added shadow
     }
 }
 
@@ -505,7 +507,8 @@ struct MaintenanceTaskChart: View {
         }
         .padding()
         .background(Color(.secondarySystemBackground))
-        .cornerRadius(12)
+        .cornerRadius(30)
+        .shadow(color: .gray.opacity(0.1), radius: 0, x: 0, y: 5) // Added shadow
     }
 }
 
@@ -547,7 +550,8 @@ struct TripTrendChart: View {
         }
         .padding()
         .background(Color(.secondarySystemBackground))
-        .cornerRadius(12)
+        .cornerRadius(30)
+        .shadow(color: .gray.opacity(0.1), radius: 0, x: 0, y: 5) // Added shadow
     }
 }
 
@@ -579,6 +583,7 @@ struct ExpenseChart: View {
                             y: .value("Amount", item.amount)
                         )
                         .foregroundStyle(by: .value("Category", item.category))
+                        .cornerRadius(8) // Added corner radius to bars
                         .annotation(position: .top) {
                             Text("₹\(String(format: "%.2f", item.amount))")
                                 .font(.caption)
@@ -598,7 +603,8 @@ struct ExpenseChart: View {
         }
         .padding()
         .background(Color(.secondarySystemBackground))
-        .cornerRadius(12)
+        .cornerRadius(30)
+        .shadow(color: .gray.opacity(0.1), radius: 0, x: 0, y: 5) // Added shadow
     }
 }
 
@@ -651,12 +657,12 @@ struct AllDeviationsView: View {
                 VStack(spacing: 12) {
                     ForEach(dashboardVM.recentDeviations) { deviation in
                         AlertRowView(
-                            message: "\(deviation.driverName) deviated from route in \(deviation.vehicleNumber) (Trip: \(deviation.formattedTripId)) by \(String(format: "%.1f", deviation.distance).prefix(6))m",
-                            time: timeAgoString(from: deviation.timestamp),
-                            deviation: deviation
-                        )
-                    }
-                }
+                                                    message: "\(deviation.driverName) deviated from route in \(deviation.vehicleNumber) (Trip: \(deviation.formattedTripId)) by \(String(format: "%.1f", deviation.distance).prefix(6))m",
+                                                    time: timeAgoString(from: deviation.timestamp),
+                                                    deviation: deviation
+                                                )
+                                            }
+                                        }
                 .padding()
             }
             .background(Color(.systemGroupedBackground))
@@ -749,6 +755,7 @@ struct DashboardHomeView: View {
                         }
                     }
                     .padding(.horizontal)
+                    .shadow(color: .gray.opacity(0.1), radius: 0, x: 0, y: 5) // Added shadow
 
                     VStack(alignment: .center, spacing: 8) {
                         Text("Quick Actions")
@@ -779,6 +786,7 @@ struct DashboardHomeView: View {
                     .cornerRadius(30)
                     .shadow(color: isColorBlindMode ? Color.cbBlue.opacity(0.08) : Color(.label).opacity(0.08), radius: 4)
                     .padding(.horizontal)
+                    .shadow(color: .gray.opacity(0.3), radius: 10, x: 0, y: 5) // Added shadow
 
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Analytics")
@@ -802,7 +810,7 @@ struct DashboardHomeView: View {
                                         .frame(width: 100)
                                         .padding(.vertical, 12)
                                         .background(
-                                            RoundedRectangle(cornerRadius: 12)
+                                            RoundedRectangle(cornerRadius: 20)
                                                 .fill(selectedChart == type ? type.color(isColorBlindMode: isColorBlindMode).opacity(0.2) : Color(.systemGray6))
                                         )
                                         .foregroundColor(selectedChart == type ? type.color(isColorBlindMode: isColorBlindMode) : (isColorBlindMode ? .cbBlue : .gray))
@@ -812,6 +820,7 @@ struct DashboardHomeView: View {
                             .padding(.horizontal)
                         }
                         .padding(.vertical, 8)
+                        .shadow(color: .gray.opacity(0.1), radius: 0, x: 0, y: 5) // Added shadow
 
                         switch selectedChart {
                         case .vehicleStatus:
@@ -847,13 +856,13 @@ struct DashboardHomeView: View {
                         VStack(spacing: 12) {
                             ForEach(Array(dashboardVM.recentDeviations.prefix(5))) { deviation in
                                 AlertRowView(
-                                    message: "\(deviation.driverName) deviated from route in \(deviation.vehicleNumber) (Trip: \(deviation.formattedTripId)) by \(String(format: "%.1f", deviation.distance).prefix(6))m",
-                                    time: timeAgoString(from: deviation.timestamp),
-                                    deviation: deviation
-                                )
-                            }
-                        }
-                    }
+                                                                    message: "\(deviation.driverName) deviated from route in \(deviation.vehicleNumber) (Trip: \(deviation.formattedTripId)) by \(String(format: "%.1f", deviation.distance).prefix(6))m",
+                                                                    time: timeAgoString(from: deviation.timestamp),
+                                                                    deviation: deviation
+                                                                )
+                                                            }
+                                                        }
+                                                    }
                     .padding()
                     .background(Color(.secondarySystemBackground))
                     .cornerRadius(30)
@@ -1393,13 +1402,13 @@ struct GeofenceDeviationDetailView: View {
                     
                     // Details
                     VStack(spacing: 16) {
-                        DeviationDetailRow(title: "Driver", value: deviation.driverName)
-                        DeviationDetailRow(title: "Vehicle", value: deviation.vehicleNumber)
-                        DeviationDetailRow(title: "Trip ID", value: deviation.formattedTripId)
-                        DeviationDetailRow(title: "Deviation", value: "\(String(format: "%.1f", deviation.distance).prefix(6)) meters")
-                        DeviationDetailRow(title: "Time", value: formatDate(deviation.timestamp))
-                        DeviationDetailRow(title: "Location", value: "\(String(format: "%.6f", deviation.latitude)), \(String(format: "%.6f", deviation.longitude))")
-                    }
+                                            DeviationDetailRow(title: "Driver", value: deviation.driverName)
+                                            DeviationDetailRow(title: "Vehicle", value: deviation.vehicleNumber)
+                                            DeviationDetailRow(title: "Trip ID", value: deviation.formattedTripId)
+                                            DeviationDetailRow(title: "Deviation", value: "\(String(format: "%.1f", deviation.distance).prefix(6)) meters")
+                                            DeviationDetailRow(title: "Time", value: formatDate(deviation.timestamp))
+                                            DeviationDetailRow(title: "Location", value: "\(String(format: "%.6f", deviation.latitude)), \(String(format: "%.6f", deviation.longitude))")
+                                        }
                     .padding()
                     .background(Color(.secondarySystemBackground))
                     .cornerRadius(12)
