@@ -99,9 +99,6 @@ struct AddTicketView: View {
     @ObservedObject var ticketManager: TicketManager
     @StateObject private var viewModel = AddTicketViewModel()
     
-    // Add FocusState for text fields
-    @FocusState private var isDescriptionFocused: Bool
-    
     enum IssueCategory: String, CaseIterable, Identifiable {
         case tripIssue = "Trip Issue"
         case vehicleIssue = "Vehicle Issue"
@@ -137,11 +134,6 @@ struct AddTicketView: View {
             case .high: return "exclamationmark.circle"
             }
         }
-    }
-    
-    // Add dismissKeyboard function
-    private func dismissKeyboard() {
-        isDescriptionFocused = false
     }
     
     var body: some View {
@@ -231,11 +223,6 @@ struct AddTicketView: View {
                             TextEditor(text: $description)
                                 .frame(minHeight: 100)
                                 .background(Color.clear)
-                                .focused($isDescriptionFocused)
-                                .submitLabel(.done)
-                                .onSubmit {
-                                    dismissKeyboard()
-                                }
                         }
                         .textInputAutocapitalization(.sentences)
                     }
@@ -333,23 +320,6 @@ struct AddTicketView: View {
                 }
                 .scrollContentBackground(.hidden)
                 .disabled(isSubmitting)
-                .onTapGesture {
-                    dismissKeyboard()
-                }
-                .gesture(
-                    DragGesture()
-                        .onChanged { _ in
-                            dismissKeyboard()
-                        }
-                )
-                .toolbar {
-                    ToolbarItemGroup(placement: .keyboard) {
-                        Spacer()
-                        Button("Done") {
-                            dismissKeyboard()
-                        }
-                    }
-                }
                 
                 if isSubmitting {
                     Color.black.opacity(0.3)

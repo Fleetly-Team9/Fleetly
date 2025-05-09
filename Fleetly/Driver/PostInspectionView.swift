@@ -2,7 +2,6 @@ import Foundation
 import SwiftUI
 import PhotosUI
 import FirebaseFirestore
-import UIKit // Import UIKit to access keyboard dismissal
 
 struct PostInspectionView: View {
     @Environment(\.presentationMode) var presentationMode
@@ -34,12 +33,6 @@ struct PostInspectionView: View {
     @State private var ticketDescription = ""
     @State private var ticketPriority = "Medium"
     @State private var ticketType = "Maintenance"
-    
-    // Track focused state for all text fields
-    @FocusState private var isTyrePressureRemarksFocused: Bool
-    @FocusState private var isBrakeRemarksFocused: Bool
-    @FocusState private var isMileageFocused: Bool
-    @FocusState private var isTicketDescriptionFocused: Bool
   
     @ObservedObject var authVM: AuthViewModel
     let dropoffLocation: String
@@ -145,14 +138,6 @@ struct PostInspectionView: View {
         return oilCheck && hornCheck && clutchCheck && airbagsCheck && physicalDamageCheck && tyrePressureCheck && brakesCheck && selectedImages.count == 4
     }
     
-    // Function to dismiss keyboard
-    private func dismissKeyboard() {
-        isTyrePressureRemarksFocused = false
-        isBrakeRemarksFocused = false
-        isMileageFocused = false
-        isTicketDescriptionFocused = false
-    }
-    
     var body: some View {
         VStack(spacing: 0) {
             Form {
@@ -248,15 +233,6 @@ struct PostInspectionView: View {
                                     .keyboardType(.numberPad)
                                     .multilineTextAlignment(.leading)
                                     .padding(.trailing, -1)
-                                    .focused($isMileageFocused)
-                                    .toolbar {
-                                        ToolbarItemGroup(placement: .keyboard) {
-                                            Spacer()
-                                            Button("Done") {
-                                                dismissKeyboard()
-                                            }
-                                        }
-                                    }
                                 
                                 Text("KM/L")
                                     .font(.caption)
@@ -301,11 +277,6 @@ struct PostInspectionView: View {
                             .lineLimit(2...4)
                             .textFieldStyle(RoundedBorderTextFieldStyle())
                             .font(.caption)
-                            .focused($isTyrePressureRemarksFocused)
-                            .submitLabel(.done)
-                            .onSubmit {
-                                dismissKeyboard()
-                            }
                         }
                     }
                     .padding(.vertical, 8)
@@ -334,11 +305,6 @@ struct PostInspectionView: View {
                             .lineLimit(2...4)
                             .textFieldStyle(RoundedBorderTextFieldStyle())
                             .font(.caption)
-                            .focused($isBrakeRemarksFocused)
-                            .submitLabel(.done)
-                            .onSubmit {
-                                dismissKeyboard()
-                            }
                         }
                     }
                     .padding(.vertical, 8)
@@ -420,9 +386,6 @@ struct PostInspectionView: View {
                         .disabled(!isAllChecked)
                     }
                 }
-            }
-            .onTapGesture {
-                dismissKeyboard()
             }
             
             Button(action: {
@@ -523,11 +486,6 @@ struct PostInspectionView: View {
                     Section(header: Text("Ticket Details")) {
                         TextField("Description", text: $ticketDescription, axis: .vertical)
                             .lineLimit(3...6)
-                            .focused($isTicketDescriptionFocused)
-                            .submitLabel(.done)
-                            .onSubmit {
-                                isTicketDescriptionFocused = false
-                            }
                         
                         Picker("Priority", selection: $ticketPriority) {
                             ForEach(priorityOptions, id: \.self) { priority in
@@ -542,29 +500,18 @@ struct PostInspectionView: View {
                         }
                     }
                 }
-                .onTapGesture {
-                    isTicketDescriptionFocused = false
-                }
                 .navigationTitle("Add Ticket")
                 .navigationBarItems(
                     leading: Button("Cancel") {
-                        dismissKeyboard()
                         showAddTicketSheet = false
                     },
                     trailing: Button("Submit") {
-                        dismissKeyboard()
                         submitTicket()
                         showAddTicketSheet = false
                     }
                 )
             }
         }
-        .gesture(
-            DragGesture()
-                .onChanged { _ in
-                    dismissKeyboard()
-                }
-        )
     }
     
     private func submitInspectionAndProceed() {
