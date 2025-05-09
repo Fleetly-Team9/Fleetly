@@ -14,10 +14,51 @@ struct DriverTicket: Identifiable {
     let driverName: String
 }
 
+// Manager's Ticket Manager
+class ManagerTicketManager: ObservableObject {
+    @Published var tickets: [Ticket] = []
+    private let db = Firestore.firestore()
+    private var listener: ListenerRegistration?
+    
+    init() {
+        setupTicketListener()
+    }
+    
+    deinit {
+        removeListener()
+    }
+    
+    private func setupTicketListener() {
+        // No user filter for manager view
+        listener = db.collection("tickets")
+            .order(by: "date", descending: true)
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let documents = snapshot?.documents else {
+                    print("Error fetching tickets: \(error?.localizedDescription ?? "Unknown error")")
+                    return
+                }
+                
+                self?.tickets = documents.compactMap { document in
+                    try? document.data(as: Ticket.self)
+                }
+            }
+    }
+    
+    func removeListener() {
+        listener?.remove()
+        listener = nil
+    }
+    
+    func refreshTickets() {
+        removeListener()
+        setupTicketListener()
+    }
+}
+
 // Main View for the Ticket List
 struct TicketListView: View {
     @StateObject private var viewModel = AssignTaskViewModel()
-    @StateObject private var ticketManager = TicketManager()
+    @StateObject private var ticketManager = ManagerTicketManager()  // Use ManagerTicketManager instead
     @State private var isLoading = true
     @State private var selectedTicket: Ticket?
     @State private var driverNames: [String: String] = [:]
@@ -201,7 +242,7 @@ struct TicketListContent: View {
     let isLoading: Bool
     let driverTickets: [DriverTicket]
     @Binding var selectedTicket: Ticket?
-    let ticketManager: TicketManager
+    let ticketManager: ManagerTicketManager
     let driverNames: [String: String]
     
     var body: some View {
@@ -224,7 +265,7 @@ struct TicketListContent: View {
 struct TicketListViewContent: View {
     let driverTickets: [DriverTicket]
     @Binding var selectedTicket: Ticket?
-    let ticketManager: TicketManager
+    let ticketManager: ManagerTicketManager
     
     var body: some View {
         List {

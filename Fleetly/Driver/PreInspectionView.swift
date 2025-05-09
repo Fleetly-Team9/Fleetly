@@ -532,14 +532,16 @@ struct PreInspectionView: View {
         guard let driverId = authVM.user?.id else { return }
         
         let ticket = [
-            "description": ticketDescription,
-            "priority": ticketPriority,
-            "type": ticketType,
+            "category": ticketType,
             "status": "Open",
-            "createdBy": driverId,
             "vehicleId": vehicleID,
-            "vehicleNumber": vehicleNumber,
-            "createdAt": Date(),
+            "vehicleNumber": actualVehicleNumber,
+            "issueType": "Pre-Inspection Issue",
+            "description": ticketDescription,
+            "date": Date(),
+            "priority": ticketPriority,
+            "photos": nil,
+            "createdBy": driverId,
             "tripId": tripID
         ] as [String: Any]
         

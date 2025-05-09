@@ -63,8 +63,14 @@ class TicketManager: ObservableObject {
     }
     
     private func setupTicketListener() {
-        // For manager view, fetch all tickets
+        guard let userId = Auth.auth().currentUser?.uid else {
+            print("No authenticated user found")
+            return
+        }
+        
+        // Filter tickets by the current user's ID
         listener = db.collection("tickets")
+            .whereField("createdBy", isEqualTo: userId)
             .order(by: "date", descending: true)
             .addSnapshotListener { [weak self] snapshot, error in
                 guard let documents = snapshot?.documents else {

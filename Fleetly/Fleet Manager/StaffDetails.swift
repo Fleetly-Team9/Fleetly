@@ -805,9 +805,15 @@ struct UserCard: View {
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
-                        Text(user.isAvailable == true ? "Available" : "Not Available")
-                            .font(.subheadline)
-                            .foregroundColor(getStatusColor())
+                        if user.isApproved == false {
+                            Text("Pending Approval")
+                                .font(.subheadline)
+                                .foregroundColor(viewModel.colorBlindMode ? .colorBlindYellow : .orange)
+                        } else {
+                            Text(user.isAvailable == true ? "Available" : "Not Available")
+                                .font(.subheadline)
+                                .foregroundColor(getStatusColor())
+                        }
                     }
 
                     Spacer()
@@ -822,13 +828,17 @@ struct UserCard: View {
     
     private func getStatusColor() -> Color {
         if viewModel.colorBlindMode {
-            if user.isAvailable == true {
-                return .colorBlindBlue // Always strong blue for available
+            if user.isApproved == false {
+                return .colorBlindYellow
+            } else if user.isAvailable == true {
+                return .colorBlindBlue
             } else {
-                return .colorBlindYellow // Yellow for not available or pending
+                return .colorBlindYellow
             }
         } else {
-            if user.isAvailable == true {
+            if user.isApproved == false {
+                return .orange
+            } else if user.isAvailable == true {
                 return .green
             } else {
                 return .red
