@@ -651,7 +651,7 @@ struct AllDeviationsView: View {
                 VStack(spacing: 12) {
                     ForEach(dashboardVM.recentDeviations) { deviation in
                         AlertRowView(
-                            message: "\(deviation.driverName) deviated from route in \(deviation.vehicleNumber) (Trip: \(deviation.formattedTripId)) by \(Int(deviation.distance))m",
+                            message: "\(deviation.driverName) deviated from route in \(deviation.vehicleNumber) (Trip: \(deviation.formattedTripId)) by \(String(format: "%.1f", deviation.distance).prefix(6))m",
                             time: timeAgoString(from: deviation.timestamp),
                             deviation: deviation
                         )
@@ -847,7 +847,7 @@ struct DashboardHomeView: View {
                         VStack(spacing: 12) {
                             ForEach(Array(dashboardVM.recentDeviations.prefix(5))) { deviation in
                                 AlertRowView(
-                                    message: "\(deviation.driverName) deviated from route in \(deviation.vehicleNumber) (Trip: \(deviation.formattedTripId)) by \(Int(deviation.distance))m",
+                                    message: "\(deviation.driverName) deviated from route in \(deviation.vehicleNumber) (Trip: \(deviation.formattedTripId)) by \(String(format: "%.1f", deviation.distance).prefix(6))m",
                                     time: timeAgoString(from: deviation.timestamp),
                                     deviation: deviation
                                 )
@@ -1396,7 +1396,7 @@ struct GeofenceDeviationDetailView: View {
                         DeviationDetailRow(title: "Driver", value: deviation.driverName)
                         DeviationDetailRow(title: "Vehicle", value: deviation.vehicleNumber)
                         DeviationDetailRow(title: "Trip ID", value: deviation.formattedTripId)
-                        DeviationDetailRow(title: "Deviation", value: "\(Int(deviation.distance)) meters")
+                        DeviationDetailRow(title: "Deviation", value: "\(String(format: "%.1f", deviation.distance).prefix(6)) meters")
                         DeviationDetailRow(title: "Time", value: formatDate(deviation.timestamp))
                         DeviationDetailRow(title: "Location", value: "\(String(format: "%.6f", deviation.latitude)), \(String(format: "%.6f", deviation.longitude))")
                     }

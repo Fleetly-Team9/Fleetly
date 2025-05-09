@@ -23,6 +23,7 @@ struct SignupView: View {
     @State private var showWaitingApproval = false
     @State private var isUploadingAadhar = false
     @State private var isUploadingLicense = false
+    @State private var passwordValidation = PasswordValidation()
     
     let genders = ["Male", "Female"]
     
@@ -122,7 +123,44 @@ struct SignupView: View {
                                     .textFieldStyle(.plain)
                                     .padding()
                                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-                               
+                                    .onChange(of: password) { newValue in
+                                        passwordValidation.validate(newValue)
+                                    }
+                                
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Password must contain:")
+                                        .font(.caption)
+                                        .foregroundColor(.gray)
+                                    HStack {
+                                        Image(systemName: passwordValidation.hasMinLength ? "checkmark.circle.fill" : "circle")
+                                            .foregroundColor(passwordValidation.hasMinLength ? .green : .gray)
+                                        Text("At least 8 characters")
+                                            .font(.caption)
+                                            .foregroundColor(.gray)
+                                    }
+                                    HStack {
+                                        Image(systemName: passwordValidation.hasNumber ? "checkmark.circle.fill" : "circle")
+                                            .foregroundColor(passwordValidation.hasNumber ? .green : .gray)
+                                        Text("At least 1 number")
+                                            .font(.caption)
+                                            .foregroundColor(.gray)
+                                    }
+                                    HStack {
+                                        Image(systemName: passwordValidation.hasUppercase ? "checkmark.circle.fill" : "circle")
+                                            .foregroundColor(passwordValidation.hasUppercase ? .green : .gray)
+                                        Text("At least 1 uppercase letter")
+                                            .font(.caption)
+                                            .foregroundColor(.gray)
+                                    }
+                                    HStack {
+                                        Image(systemName: passwordValidation.hasSpecialChar ? "checkmark.circle.fill" : "circle")
+                                            .foregroundColor(passwordValidation.hasSpecialChar ? .green : .gray)
+                                        Text("At least 1 special character")
+                                            .font(.caption)
+                                            .foregroundColor(.gray)
+                                    }
+                                }
+                                .padding(.horizontal, 4)
                             }
                             
                             VStack(alignment: .leading) {
@@ -364,7 +402,8 @@ struct SignupView: View {
         !gender.isEmpty &&
         isAgeValid &&
         aadharPhotoItem != nil &&
-        licensePhotoItem != nil
+        licensePhotoItem != nil &&
+        passwordValidation.isValid
     }
     
     private func isValidLicenseNumber(_ license: String) -> Bool {
@@ -413,5 +452,23 @@ struct SignupView: View {
                 }
             }
         }
+    }
+}
+
+struct PasswordValidation {
+    var hasMinLength: Bool = false
+    var hasNumber: Bool = false
+    var hasUppercase: Bool = false
+    var hasSpecialChar: Bool = false
+    
+    var isValid: Bool {
+        hasMinLength && hasNumber && hasUppercase && hasSpecialChar
+    }
+    
+    mutating func validate(_ password: String) {
+        hasMinLength = password.count >= 8
+        hasNumber = password.contains { $0.isNumber }
+        hasUppercase = password.contains { $0.isUppercase }
+        hasSpecialChar = password.contains { !$0.isLetter && !$0.isNumber && !$0.isWhitespace }
     }
 }
