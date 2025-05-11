@@ -141,7 +141,7 @@ This project was developed as part of the Infosys internship program by a Team o
 - Aryan Kacker
 - Param Patel
 - Rehmat Singh Chawla
-- Manash Mishra
+- Gunjan Mishra
 - Srijoni
 - Sayal Singh
 - Varun
